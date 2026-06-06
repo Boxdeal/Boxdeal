@@ -1,0 +1,138 @@
+.mobileNav {
+  display: block;
+  border-top: 1px solid #f3f4f6;
+  background-color: white;
+}
+
+@media (min-width: 900px) {
+  .mobileNav {
+    display: none;
+  }
+}
+
+.mobileHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  gap: 1rem;
+}
+
+.hamburgerButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 0.5rem;
+  background-color: transparent;
+  border: none;
+  cursor: pointer;
+  color: #4b5563;
+  transition: background-color 0.2s;
+}
+
+.hamburgerButton:hover {
+  background-color: #f3f4f6;
+}
+
+.dealsButton {
+  flex-shrink: 0;
+  white-space: nowrap;
+  padding: 0.375rem 0.75rem;
+  font-size: 10px;
+  font-weight: 700;
+  color: #dc2626;
+  background-color: transparent;
+  border-radius: 0.375rem;
+  text-decoration: none;
+  transition: color 0.2s, background-color 0.2s;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.dealsButton:hover {
+  background-color: #fee2e2;
+}
+
+.mobileMenu {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.mobileMenu.open {
+  max-height: 1000px;
+}
+
+.menuItem {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid #f3f4f6;
+  font-size: 11px;
+  color: #4b5563;
+  text-decoration: none;
+  display: block;
+  transition: background-color 0.2s, color 0.2s;
+}
+
+.menuItem:hover {
+  background-color: #fafafa;
+  color: #f97316;
+}
+
+.categoryButton {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 0.75rem 1rem;
+  background-color: white;
+  border: none;
+  border-bottom: 1px solid #f3f4f6;
+  font-size: 11px;
+  color: #4b5563;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  text-align: left;
+}
+
+.categoryButton:hover {
+  background-color: #fafafa;
+}
+
+.chevron {
+  width: 0.5rem;
+  height: 0.5rem;
+  flex-shrink: 0;
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.chevron.rotated {
+  transform: rotate(180deg);
+}
+
+.subCategoryList {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  background-color: #fafafa;
+}
+
+.subCategoryList.open {
+  max-height: 500px;
+}
+
+.subCategoryItem {
+  padding: 0.5rem 1rem 0.5rem 2rem;
+  font-size: 10px;
+  color: #6b7280;
+  text-decoration: none;
+  display: block;
+  transition: background-color 0.2s, color 0.2s;
+}
+
+.subCategoryItem:hover {
+  background-color: #f0f0f0;
+  color: #f97316;
+}

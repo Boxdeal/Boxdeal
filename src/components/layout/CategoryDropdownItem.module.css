@@ -1,0 +1,203 @@
+.dropdownContainer {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.triggerLink {
+  display: flex;
+  align-items: center;
+  gap: 0.125rem;
+  white-space: nowrap;
+  padding-left: 0.125rem;
+  padding-right: 0.125rem;
+  padding-top: 0.25rem;
+  padding-bottom: 0.25rem;
+  font-size: 6px;
+  color: #4b5563;
+  transition: color 0.15s;
+}
+
+.triggerLink:hover {
+  color: #f97316;
+}
+
+@media (min-width: 768px) {
+  .triggerLink {
+    padding-left: 0.25rem;
+    padding-right: 0.25rem;
+    font-size: 6px;
+  }
+}
+
+@media (min-width: 900px) and (max-width: 1477px) {
+  .triggerLink {
+    padding-left: 0.5rem;
+    padding-right: 0.5rem;
+    font-size: 8px;
+  }
+}
+
+@media (min-width: 1478px) {
+  .triggerLink {
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
+    font-size: 14px;
+  }
+}
+
+.chevronIcon {
+  height: 0.625rem;
+  width: 0.625rem;
+  transition: transform 0.2s;
+}
+
+.chevronIcon.rotated {
+  transform: rotate(180deg);
+}
+
+@media (min-width: 768px) {
+  .chevronIcon {
+    height: 0.75rem;
+    width: 0.75rem;
+  }
+}
+
+@media (min-width: 900px) and (max-width: 1477px) {
+  .chevronIcon {
+    height: 0.625rem;
+    width: 0.625rem;
+  }
+}
+
+@media (min-width: 1478px) {
+  .chevronIcon {
+    height: 0.875rem;
+    width: 0.875rem;
+  }
+}
+
+.dropdownMenu {
+  position: absolute;
+  left: 0;
+  top: 100%;
+  z-index: 50;
+  padding-top: 0.25rem;
+}
+
+.dropdownContent {
+  min-width: 160px;
+  border-radius: 0.75rem;
+  border: 1px solid #f3f4f6;
+  background-color: white;
+  padding: 0.25rem;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05);
+}
+
+@media (min-width: 768px) {
+  .dropdownContent {
+    min-width: 200px;
+  }
+}
+
+.allCategoryLink {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  border-radius: 0.5rem;
+  padding-left: 0.375rem;
+  padding-right: 0.375rem;
+  padding-top: 0.125rem;
+  padding-bottom: 0.125rem;
+  font-size: 5px;
+  font-weight: 600;
+  color: #ea580c;
+  transition: background-color 0.15s;
+}
+
+.allCategoryLink:hover {
+  background-color: #fed7aa;
+}
+
+@media (min-width: 768px) {
+  .allCategoryLink {
+    padding-left: 0.5rem;
+    padding-right: 0.5rem;
+    padding-top: 0.25rem;
+    padding-bottom: 0.25rem;
+    font-size: 6px;
+  }
+}
+
+@media (min-width: 900px) and (max-width: 1477px) {
+  .allCategoryLink {
+    padding-left: 0.5rem;
+    padding-right: 0.5rem;
+    padding-top: 0.25rem;
+    padding-bottom: 0.25rem;
+    font-size: 7px;
+  }
+}
+
+@media (min-width: 1478px) {
+  .allCategoryLink {
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
+    padding-top: 0.5rem;
+    padding-bottom: 0.5rem;
+    font-size: 14px;
+  }
+}
+
+.divider {
+  margin-top: 0.125rem;
+  margin-bottom: 0.125rem;
+  border-top: 1px solid #f3f4f6;
+}
+
+.subCategoryLink {
+  display: flex;
+  align-items: center;
+  border-radius: 0.5rem;
+  padding-left: 0.375rem;
+  padding-right: 0.375rem;
+  padding-top: 0.125rem;
+  padding-bottom: 0.125rem;
+  font-size: 5px;
+  color: #374151;
+  transition: background-color 0.15s, color 0.15s;
+}
+
+.subCategoryLink:hover {
+  background-color: #f9fafb;
+  color: #ea580c;
+}
+
+@media (min-width: 768px) {
+  .subCategoryLink {
+    padding-left: 0.5rem;
+    padding-right: 0.5rem;
+    padding-top: 0.25rem;
+    padding-bottom: 0.25rem;
+    font-size: 6px;
+  }
+}
+
+@media (min-width: 900px) and (max-width: 1477px) {
+  .subCategoryLink {
+    padding-left: 0.5rem;
+    padding-right: 0.5rem;
+    padding-top: 0.25rem;
+    padding-bottom: 0.25rem;
+    font-size: 7px;
+  }
+}
+
+@media (min-width: 1478px) {
+  .subCategoryLink {
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
+    padding-top: 0.5rem;
+    padding-bottom: 0.5rem;
+    font-size: 14px;
+  }
+}

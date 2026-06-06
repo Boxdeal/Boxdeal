@@ -78,8 +78,7 @@ export function CategoryGrid({ categories }: Props) {
         </div>
 
         <div
-          className="flex gap-3 overflow-x-auto pb-1 scrollbar-hide lg:grid lg:overflow-visible lg:pb-0"
-          style={{ gridTemplateColumns: "repeat(auto-fit, minmax(90px, 1fr))" }}
+          className="grid grid-cols-4 gap-3 pb-1 lg:grid-cols-[repeat(auto-fit,minmax(90px,1fr))] lg:overflow-visible lg:pb-0"
         >
           {categories.map((cat) => {
             const Icon = getCategoryIcon(cat.slug);
@@ -89,13 +88,13 @@ export function CategoryGrid({ categories }: Props) {
                 href={`/products?category=${cat.slug}`}
                 className="group flex flex-shrink-0 flex-col items-center gap-2.5 rounded-xl border border-gray-100 bg-white px-3 py-4 text-center shadow-sm transition-all duration-200 hover:border-brand-200 hover:shadow-md hover:-translate-y-1 lg:flex-shrink"
               >
-                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-orange-50 transition-colors duration-200 group-hover:bg-brand-500">
+                <div className="flex h-10 sm:h-12 w-10 sm:w-12 items-center justify-center rounded-xl bg-orange-50 transition-colors duration-200 group-hover:bg-brand-500">
                   <Icon
-                    className="h-6 w-6 text-brand-500 transition-colors duration-200 group-hover:text-white"
+                    className="h-5 sm:h-6 w-5 sm:w-6 text-brand-500 transition-colors duration-200 group-hover:text-white"
                     strokeWidth={1.5}
                   />
                 </div>
-                <span className="text-[11px] font-semibold leading-tight text-gray-700 transition-colors duration-200 group-hover:text-brand-600">
+                <span className="text-[8px] sm:text-[11px] font-semibold leading-tight text-gray-700 transition-colors duration-200 group-hover:text-brand-600">
                   {cat.name}
                 </span>
               </Link>

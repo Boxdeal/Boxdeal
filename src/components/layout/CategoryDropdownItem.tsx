@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { ChevronDown } from "lucide-react";
+import styles from "./CategoryDropdownItem.module.css";
 
 interface Sub { id: string; name: string; slug: string }
 interface Props {
@@ -16,7 +17,7 @@ export function CategoryDropdownItem({ name, slug, subs }: Props) {
 
   return (
     <div
-      className="relative flex-shrink-0"
+      className={styles.dropdownContainer}
       onMouseEnter={() => setOpen(true)}
       onMouseLeave={(e) => {
         if (!e.currentTarget.contains(e.relatedTarget as Node)) {
@@ -27,35 +28,35 @@ export function CategoryDropdownItem({ name, slug, subs }: Props) {
       {/* Category trigger */}
       <Link
         href={`/products?category=${slug}`}
-        className="flex items-center gap-0.5 whitespace-nowrap px-3 py-2.5 text-sm text-gray-600 transition-colors hover:text-brand-600"
+        className={styles.triggerLink}
       >
         {name}
         {subs.length > 0 && (
           <ChevronDown
-            className={`h-3.5 w-3.5 transition-transform duration-200 ${open ? "rotate-180" : ""}`}
+            className={`${styles.chevronIcon} ${open ? styles.rotated : ""}`}
           />
         )}
       </Link>
 
       {/* Dropdown */}
       {open && subs.length > 0 && (
-        <div className="absolute left-0 top-full z-50 pt-1">
-          <div className="min-w-[200px] rounded-xl border border-gray-100 bg-white p-1.5 shadow-lg shadow-black/8">
+        <div className={styles.dropdownMenu}>
+          <div className={styles.dropdownContent}>
 
             <Link
               href={`/products?category=${slug}`}
-              className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-brand-600 hover:bg-brand-50"
+              className={styles.allCategoryLink}
             >
               All {name}
             </Link>
 
-            <div className="my-1 border-t border-gray-100" />
+            <div className={styles.divider} />
 
             {subs.map((sub) => (
               <Link
                 key={sub.id}
                 href={`/products?subcategory=${sub.slug}`}
-                className="flex items-center rounded-lg px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-brand-600"
+                className={styles.subCategoryLink}
               >
                 {sub.name}
               </Link>

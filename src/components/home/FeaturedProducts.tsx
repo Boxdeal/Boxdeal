@@ -11,9 +11,9 @@ export function FeaturedProducts({ products }: FeaturedProductsProps) {
 
   return (
     <section className="px-4 sm:px-8 lg:px-12">
-      <div className="mb-6 flex items-center justify-between">
-        <h2 className="text-2xl sm:text-3xl font-bold text-gray-900">Featured Products</h2>
-        <Link href="/products?is_featured=true" className="text-sm font-medium text-brand-600 hover:text-brand-700">
+      <div className="mb-4 sm:mb-6 flex items-center justify-between gap-2">
+        <h2 className="text-sm sm:text-base md:text-lg lg:text-2xl xl:text-3xl font-bold text-gray-900">Featured Products</h2>
+        <Link href="/products?is_featured=true" className="text-xs sm:text-sm font-medium text-brand-600 hover:text-brand-700 whitespace-nowrap">
           See all →
         </Link>
       </div>

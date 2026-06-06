@@ -1,9 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { ShoppingCart, Heart, User, Menu, Search } from "lucide-react";
+import { ShoppingCart, Heart, User, Search } from "lucide-react";
 import { useAppDispatch, useAppSelector, useCartItemCount, useUser, useProfile } from "@/store/hooks";
-import { openCart, openMobileMenu, openSearch } from "@/store/slices/uiSlice";
+import { openCart, openSearch } from "@/store/slices/uiSlice";
 import { SearchBar } from "@/components/shared/SearchBar";
 
 export function Header() {
@@ -24,15 +24,6 @@ export function Header() {
       </div>
 
       <div className="mx-auto flex max-w-7xl items-center gap-3 px-4 py-3 sm:gap-4 sm:py-3.5">
-
-        {/* Mobile menu button */}
-        <button
-          onClick={() => dispatch(openMobileMenu())}
-          className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl text-gray-600 transition-colors hover:bg-gray-100 lg:hidden"
-          aria-label="Open menu"
-        >
-          <Menu className="h-5 w-5" />
-        </button>
 
         {/* Logo */}
         <Link href="/" className="flex-shrink-0">
@@ -75,7 +66,7 @@ export function Header() {
           {/* Account */}
           <Link
             href={user ? "/account" : "/login"}
-            className="hidden items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-100 sm:flex"
+            className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-100"
           >
             <div className={
               user
@@ -87,7 +78,7 @@ export function Header() {
                 : <User className="h-4 w-4" />
               }
             </div>
-            <span className="hidden md:inline">
+            <span className="hidden sm:inline">
               {user ? (firstName ?? "Account") : "Sign in"}
             </span>
           </Link>
