@@ -1,0 +1,372 @@
+/* Container */
+.container {
+  border-bottom: 1px solid #e5e7eb;
+  padding: 32px 0;
+}
+
+.container:last-child {
+  border-bottom: none;
+}
+
+/* Header */
+.header {
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+@media (min-width: 640px) {
+  .header {
+    margin-bottom: 24px;
+  }
+}
+
+.title {
+  font-size: 12px;
+  font-weight: bold;
+  color: #111827;
+  margin: 0;
+}
+
+@media (min-width: 640px) {
+  .title {
+    font-size: 14px;
+  }
+}
+
+@media (min-width: 768px) {
+  .title {
+    font-size: 16px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .title {
+    font-size: 18px;
+  }
+}
+
+@media (min-width: 1280px) {
+  .title {
+    font-size: 24px;
+  }
+}
+
+.viewAllLink {
+  font-size: 12px;
+  font-weight: 500;
+  color: #2563eb;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: color 0.2s;
+}
+
+.viewAllLink:hover {
+  color: #1d4ed8;
+}
+
+@media (min-width: 640px) {
+  .viewAllLink {
+    font-size: 14px;
+  }
+}
+
+/* Mobile Layout */
+.mobileWrapper {
+  display: block;
+  position: relative;
+  border-radius: 8px;
+  overflow: hidden;
+  padding: 12px;
+  margin: 0 -12px;
+  margin-bottom: 16px;
+}
+
+@media (min-width: 640px) {
+  .mobileWrapper {
+    padding: 24px;
+    margin: 0 -24px;
+    border-radius: 12px;
+    margin-bottom: 24px;
+  }
+}
+
+@media (min-width: 768px) {
+  .mobileWrapper {
+    display: none;
+  }
+}
+
+.categoryImageContainer {
+  margin-bottom: 16px;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  border-radius: 12px;
+  border: 1px solid #f3f4f6;
+  background-color: #ffffff;
+  overflow: hidden;
+  transition: all 0.2s;
+}
+
+.categoryImageContainer:hover {
+  border-color: #bfdbfe;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+@media (min-width: 640px) {
+  .categoryImageContainer {
+    margin-bottom: 24px;
+  }
+}
+
+.imageWrapper {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 800 / 1067;
+  overflow: hidden;
+  background: linear-gradient(to bottom right, #f3f4f6, #e5e7eb);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.3s;
+}
+
+.categoryImageContainer:hover .image {
+  transform: scale(1.05);
+}
+
+.noImagePlaceholder {
+  text-align: center;
+}
+
+.noImageIcon {
+  font-size: 48px;
+  margin-bottom: 8px;
+}
+
+.noImageText {
+  font-size: 14px;
+  color: #9ca3af;
+}
+
+.categoryNameContainer {
+  display: flex;
+  flex-direction: column;
+  padding: 8px;
+  text-align: center;
+}
+
+@media (min-width: 640px) {
+  .categoryNameContainer {
+    padding: 12px;
+  }
+}
+
+.categoryName {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1f2937;
+  margin: 0;
+}
+
+@media (min-width: 640px) {
+  .categoryName {
+    font-size: 16px;
+  }
+}
+
+.mobileProductsGrid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  position: relative;
+  z-index: 10;
+}
+
+@media (min-width: 640px) {
+  .mobileProductsGrid {
+    gap: 12px;
+  }
+}
+
+/* Desktop Layout */
+.desktopWrapper {
+  display: none;
+  position: relative;
+  border-radius: 8px;
+  overflow: hidden;
+  padding: 12px;
+  margin: 0 -12px;
+  margin-bottom: 16px;
+}
+
+@media (min-width: 640px) {
+  .desktopWrapper {
+    padding: 24px;
+    margin: 0 -24px;
+    border-radius: 12px;
+    margin-bottom: 24px;
+  }
+}
+
+@media (min-width: 768px) {
+  .desktopWrapper {
+    display: block;
+  }
+}
+
+.desktopProductsGrid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  position: relative;
+  z-index: 10;
+  auto-rows: max-content;
+}
+
+@media (min-width: 640px) {
+  .desktopProductsGrid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .desktopProductsGrid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+@media (min-width: 1280px) {
+  .desktopProductsGrid {
+    grid-template-columns: repeat(5, 1fr);
+  }
+}
+
+.productCard {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  border-radius: 12px;
+  border: 1px solid #f3f4f6;
+  background-color: #ffffff;
+  overflow: hidden;
+  transition: all 0.2s;
+}
+
+.productCard:hover {
+  border-color: #bfdbfe;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+.productImageWrapper {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  overflow: hidden;
+  background: linear-gradient(to bottom right, #f3f4f6, #e5e7eb);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.productImage {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.3s;
+}
+
+.productCard:hover .productImage {
+  transform: scale(1.05);
+}
+
+/* Gradient Backgrounds */
+.gradientBlueLtr {
+  background: linear-gradient(to right, #2563eb, #93c5fd, #ffffff);
+}
+
+.gradientBlueRtl {
+  background: linear-gradient(to right, #ffffff, #93c5fd, #2563eb);
+}
+
+.gradientPurpleLtr {
+  background: linear-gradient(to right, #9333ea, #d8b4fe, #ffffff);
+}
+
+.gradientPurpleRtl {
+  background: linear-gradient(to right, #ffffff, #d8b4fe, #9333ea);
+}
+
+.gradientPinkLtr {
+  background: linear-gradient(to right, #ec4899, #fbbbf9, #ffffff);
+}
+
+.gradientPinkRtl {
+  background: linear-gradient(to right, #ffffff, #fbbbf9, #ec4899);
+}
+
+.gradientOrangeLtr {
+  background: linear-gradient(to right, #ea580c, #fed7aa, #ffffff);
+}
+
+.gradientOrangeRtl {
+  background: linear-gradient(to right, #ffffff, #fed7aa, #ea580c);
+}
+
+.gradientGreenLtr {
+  background: linear-gradient(to right, #16a34a, #bbf7d0, #ffffff);
+}
+
+.gradientGreenRtl {
+  background: linear-gradient(to right, #ffffff, #bbf7d0, #16a34a);
+}
+
+.gradientCyanLtr {
+  background: linear-gradient(to right, #0891b2, #a5f3fc, #ffffff);
+}
+
+.gradientCyanRtl {
+  background: linear-gradient(to right, #ffffff, #a5f3fc, #0891b2);
+}
+
+.gradientRedLtr {
+  background: linear-gradient(to right, #dc2626, #fecaca, #ffffff);
+}
+
+.gradientRedRtl {
+  background: linear-gradient(to right, #ffffff, #fecaca, #dc2626);
+}
+
+.gradientIndigoLtr {
+  background: linear-gradient(to right, #4f46e5, #c7d2fe, #ffffff);
+}
+
+.gradientIndigoRtl {
+  background: linear-gradient(to right, #ffffff, #c7d2fe, #4f46e5);
+}
+
+.gradientAmberLtr {
+  background: linear-gradient(to right, #b45309, #fcd34d, #ffffff);
+}
+
+.gradientAmberRtl {
+  background: linear-gradient(to right, #ffffff, #fcd34d, #b45309);
+}
+
+.gradientTealLtr {
+  background: linear-gradient(to right, #0d9488, #99f6e4, #ffffff);
+}
+
+.gradientTealRtl {
+  background: linear-gradient(to right, #ffffff, #99f6e4, #0d9488);
+}

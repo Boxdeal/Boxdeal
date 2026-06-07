@@ -1,0 +1,18 @@
+.swiperContainer :global(.swiper-button-next),
+.swiperContainer :global(.swiper-button-prev) {
+  width: 24px;
+  height: 24px;
+  background-color: transparent;
+  color: #ff6b35;
+  font-size: 16px;
+}
+
+.swiperContainer :global(.swiper-button-next::after),
+.swiperContainer :global(.swiper-button-prev::after) {
+  font-size: 14px;
+}
+
+.swiperContainer :global(.swiper-button-next:hover),
+.swiperContainer :global(.swiper-button-prev:hover) {
+  color: #ff5722;
+}

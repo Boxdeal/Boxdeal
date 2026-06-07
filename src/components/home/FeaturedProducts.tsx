@@ -1,6 +1,13 @@
+"use client";
+
 import Link from "next/link";
 import type { ProductCard } from "@/types";
 import { ProductCard as ProductCardComponent } from "@/components/product/ProductCard";
+import { Swiper, SwiperSlide } from "swiper/react";
+import { Autoplay, Pagination } from "swiper/modules";
+import "swiper/css";
+import "swiper/css/pagination";
+import styles from "./FeaturedProducts.module.css";
 
 interface FeaturedProductsProps {
   products: ProductCard[];
@@ -17,11 +24,27 @@ export function FeaturedProducts({ products }: FeaturedProductsProps) {
           See all →
         </Link>
       </div>
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+      <Swiper
+        modules={[Autoplay, Pagination]}
+        spaceBetween={12}
+        breakpoints={{
+          0: { slidesPerView: 2, slidesPerGroup: 1 },
+          640: { slidesPerView: 3, slidesPerGroup: 1 },
+          1024: { slidesPerView: 4, slidesPerGroup: 1 },
+          1280: { slidesPerView: 5, slidesPerGroup: 1 },
+        }}
+        autoplay={{ delay: 2000, disableOnInteraction: false }}
+        pagination={{ clickable: true }}
+        className={styles.swiperContainer}
+      >
         {products.slice(0, 5).map((p) => (
-          <ProductCardComponent key={p.id} product={p} />
+          <SwiperSlide key={p.id} className="!h-auto">
+            <div className="h-80 flex flex-col">
+              <ProductCardComponent product={p} />
+            </div>
+          </SwiperSlide>
         ))}
-      </div>
+      </Swiper>
     </section>
   );
 }
