@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { Minus, Plus, Trash2 } from "lucide-react";
@@ -8,7 +9,7 @@ import { removeItem, updateQuantity } from "@/store/slices/cartSlice";
 import { formatPrice } from "@/lib/utils/format";
 import type { CartItem as CartItemType } from "@/types";
 
-export function CartItem({ item }: { item: CartItemType }) {
+function CartItemComponent({ item }: { item: CartItemType }) {
   const dispatch = useAppDispatch();
 
   return (
@@ -16,7 +17,7 @@ export function CartItem({ item }: { item: CartItemType }) {
       <Link href={`/product/${item.slug}`} className="flex-shrink-0">
         <div className="relative h-16 w-16 overflow-hidden rounded-lg bg-gray-100">
           {item.image ? (
-            <Image src={item.image} alt={item.name} fill sizes="64px" className="object-cover" />
+            <Image src={item.image} alt={item.name} fill sizes="64px" loading="lazy" quality={75} className="object-cover" />
           ) : (
             <div className="flex h-full items-center justify-center text-2xl">🛍️</div>
           )}
@@ -71,3 +72,5 @@ export function CartItem({ item }: { item: CartItemType }) {
     </div>
   );
 }
+
+export const CartItem = memo(CartItemComponent);

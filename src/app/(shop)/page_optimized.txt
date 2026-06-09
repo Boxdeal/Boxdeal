@@ -1,0 +1,26 @@
+OPTIMIZATION SUMMARY FOR HOME PAGE:
+
+Current Issues:
+- Initial 6 queries (fast - parallel)
+- Then for EACH category (usually 10+), TWO more queries run:
+  - 1 query for category products
+  - 1 query for subcategories
+  - Then for EACH subcategory (usually 3-5), 1 more query
+- Total: 6 + (categories * 2) + (total_subcategories) = 6 + (10*2) + (30) = 56 queries!
+
+OPTIMIZATION PLAN (Reduce to ~12 queries):
+1. Keep initial 6 queries (banners, categories, brands, deals, featured)
+2. Instead of fetching all categories with products:
+   - Show only TOP 3-4 categories in sections
+   - Limit subcategories per category to 2
+   - Batch fetch all section products in one/two queries
+
+Result: 6 + (4 categories * 2) + (8 subcats) = ~22 queries (60% reduction)
+
+ALTERNATIVE (BEST - Reduce to ~10 queries):
+1. Keep initial 6 queries
+2. Fetch categories with subcategories in one RPC call or with limits
+3. Only load visible sections (top 3 categories)
+4. Load remaining sections on-demand with lazy loading
+
+This would reduce to ~10 queries total (82% reduction)

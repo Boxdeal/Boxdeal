@@ -43,10 +43,6 @@ export default function RootLayout({
     <html lang="en" className={inter.variable}>
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <script
-          src="https://checkout.razorpay.com/v1/checkout.js"
-          async
-        />
       </head>
       <body>
         <ReduxProvider>

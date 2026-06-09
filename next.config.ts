@@ -12,7 +12,8 @@ const nextConfig: NextConfig = {
     ],
     deviceSizes: [360, 480, 640, 750, 828, 1080, 1200, 1920],
     imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
-    minimumCacheTTL: 86400,
+    minimumCacheTTL: 86400 * 7,  // OPTIMIZATION: Cache for 7 days
+    dangerouslyAllowSVG: true,
   },
   experimental: {
     optimizePackageImports: [
@@ -20,10 +21,17 @@ const nextConfig: NextConfig = {
       "recharts",
       "@radix-ui/react-dialog",
       "@radix-ui/react-dropdown-menu",
+      "@radix-ui/react-select",
+      "@radix-ui/react-accordion",
     ],
   },
   compress: true,
   poweredByHeader: false,
+  // OPTIMIZATION: Enable SWR cache for data fetches
+  onDemandEntries: {
+    maxInactiveAge: 60 * 60 * 1000,  // Keep inactive pages for 1 hour
+    pagesBufferLength: 5,
+  },
   headers: async () => [
     {
       source: "/(.*)",
@@ -32,11 +40,30 @@ const nextConfig: NextConfig = {
         { key: "X-Frame-Options", value: "DENY" },
         { key: "X-XSS-Protection", value: "1; mode=block" },
         { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+        // OPTIMIZATION: Cache static assets for 1 year
+        {
+          key: "Cache-Control",
+          value: "public, max-age=31536000, immutable",
+        },
       ],
     },
     {
       source: "/api/(.*)",
-      headers: [{ key: "Cache-Control", value: "no-store" }],
+      headers: [
+        {
+          key: "Cache-Control",
+          value: "public, s-maxage=60, stale-while-revalidate=3600",
+        },
+      ],
+    },
+    {
+      source: "/images/(.*)",
+      headers: [
+        {
+          key: "Cache-Control",
+          value: "public, max-age=31536000, immutable",
+        },
+      ],
     },
   ],
 };

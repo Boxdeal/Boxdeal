@@ -21,10 +21,6 @@ export function formatRelativeTime(date: string | Date): string {
   return formatDistanceToNow(new Date(date), { addSuffix: true, locale: enIN });
 }
 
-export function formatNumber(n: number): string {
-  return new Intl.NumberFormat("en-IN").format(n);
-}
-
 export function formatCompactNumber(n: number): string {
   if (n >= 10_000_000) return `${(n / 10_000_000).toFixed(1)}Cr`;
   if (n >= 100_000)    return `${(n / 100_000).toFixed(1)}L`;

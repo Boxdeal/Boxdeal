@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, memo } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { Heart, ShoppingCart, Zap } from "lucide-react";
@@ -19,7 +19,7 @@ interface ProductCardProps {
   isDeal?: boolean;
 }
 
-export function ProductCard({ product, isDeal }: ProductCardProps) {
+function ProductCardComponent({ product, isDeal }: ProductCardProps) {
   const [isHovering, setIsHovering] = useState(false);
   const dispatch = useAppDispatch();
   const isWishlisted = useIsWishlisted(product.id);
@@ -68,6 +68,9 @@ export function ProductCard({ product, isDeal }: ProductCardProps) {
               alt={product.name}
               fill
               sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
+              loading="lazy"
+              quality={85}
+              priority={false}
               className={cn(
                 "object-contain transition-opacity duration-500 group-hover:scale-105",
                 isHovering ? "opacity-0" : "opacity-100"
@@ -79,6 +82,9 @@ export function ProductCard({ product, isDeal }: ProductCardProps) {
                 alt={`${product.name} - alternate`}
                 fill
                 sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
+                loading="lazy"
+                quality={85}
+                priority={false}
                 className={cn(
                   "object-contain transition-opacity duration-500 group-hover:scale-105",
                   isHovering ? "opacity-100" : "opacity-0"
@@ -167,3 +173,5 @@ export function ProductCard({ product, isDeal }: ProductCardProps) {
     </Link>
   );
 }
+
+export const ProductCard = memo(ProductCardComponent);

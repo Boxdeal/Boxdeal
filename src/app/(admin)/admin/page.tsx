@@ -75,36 +75,39 @@ export default async function AdminDashboard() {
     {
       title:   "Month Revenue",
       value:   formatPrice(stats.month_revenue ?? 0),
-      icon:    TrendingUp,
+      icon:    IndianRupee,
       variant: "success" as const,
     },
     {
-      title:   "Month Orders",
-      value:   stats.month_orders ?? 0,
-      icon:    ShoppingBag,
-      variant: "default" as const,
+      title:   "Total Orders",
+      value:   formatCompactNumber(stats.total_orders ?? 0),
+      icon:    Package,
+      variant: "success" as const,
     },
   ];
 
   return (
-    <div className="p-6 space-y-6">
-      <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
+    <div className="space-y-8 p-6">
+      <section>
+        <h2 className="mb-4 text-2xl font-bold text-gray-900">Overview</h2>
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          {statCards.map((stat) => (
+            <StatsCard key={stat.title} {...stat} />
+          ))}
+        </div>
+      </section>
 
-      {/* Stats grid */}
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        {statCards.map((card) => (
-          <StatsCard key={card.title} {...card} />
-        ))}
-      </div>
+      <section>
+        <h2 className="mb-4 text-2xl font-bold text-gray-900">Revenue Trend</h2>
+        <div className="rounded-lg border border-gray-200 bg-white p-6">
+          <RevenueChart data={chart} />
+        </div>
+      </section>
 
-      {/* Revenue chart */}
-      <RevenueChart data={chart} />
-
-      {/* Recent orders */}
-      <div>
-        <h2 className="mb-3 font-semibold text-gray-900">Recent Orders</h2>
+      <section>
+        <h2 className="mb-4 text-2xl font-bold text-gray-900">Recent Orders</h2>
         <OrdersTable orders={recentOrders} />
-      </div>
+      </section>
     </div>
   );
 }

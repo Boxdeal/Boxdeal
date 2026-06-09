@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { ShoppingCart, Heart, Share2, Shield, Truck, RefreshCw } from "lucide-react";
+import { Shield, Truck, RefreshCw } from "lucide-react";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { ProductImageGallery } from "@/components/product/ProductImageGallery";
 import { ProductSpecifications } from "@/components/product/ProductSpecifications";
@@ -10,6 +10,8 @@ import { PriceDisplay } from "@/components/shared/PriceDisplay";
 import { Breadcrumb } from "@/components/shared/Breadcrumb";
 import { ProductGrid } from "@/components/product/ProductGrid";
 import { AddToCartButton } from "./AddToCartButton";
+
+export const revalidate = 3600;  // Cache for 1 hour
 
 interface Props {
   params: Promise<{ slug: string }>;

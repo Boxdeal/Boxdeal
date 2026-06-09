@@ -1,6 +1,5 @@
 import type { OrderStatus } from "@/types";
 
-export const APP_NAME = "BoxDeal";
 export const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
 
 export const SHIPPING_CHARGE = 49;
@@ -52,9 +51,3 @@ export const INDIA_STATES = [
 
 export const RAZORPAY_CURRENCY = "INR";
 export const RAZORPAY_THEME_COLOR = "#f97316";
-
-export const IMAGE_SIZES = {
-  thumbnail: 400,
-  card:      600,
-  gallery:   1200,
-} as const;

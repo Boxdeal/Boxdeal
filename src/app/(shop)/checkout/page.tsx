@@ -28,6 +28,19 @@ export default function CheckoutPage() {
     loadAddresses();
   }, [user, items.length]);
 
+  useEffect(() => {
+    // Load Razorpay script dynamically only on checkout page
+    const script = document.createElement("script");
+    script.src = "https://checkout.razorpay.com/v1/checkout.js";
+    script.async = true;
+    document.head.appendChild(script);
+    return () => {
+      if (document.head.contains(script)) {
+        document.head.removeChild(script);
+      }
+    };
+  }, []);
+
   async function loadAddresses() {
     const supabase = getSupabaseBrowserClient();
     const { data } = await supabase

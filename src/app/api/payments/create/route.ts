@@ -70,18 +70,22 @@ export async function POST(req: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  // Insert order items + decrement stock
-  for (const item of items) {
-    const { data: product } = await admin
-      .from("products")
-      .select("name, sku, product_images(image_url, is_primary)")
-      .eq("id", item.product_id)
-      .single();
+  // Batch fetch ALL product details first (parallel, not sequential)
+  const itemProductIds = items.map(i => i.product_id);
+  const { data: products } = await admin
+    .from("products")
+    .select("id, name, sku, product_images(image_url, is_primary)")
+    .in("id", itemProductIds);
 
+  const productMap = new Map(products?.map(p => [p.id, p]) ?? []);
+
+  // Build batch insert for order items
+  const orderItemsToInsert = items.map(item => {
+    const product = productMap.get(item.product_id);
     const imgs = (product?.product_images as Array<{ image_url: string; is_primary: boolean }>) ?? [];
     const img = imgs.find((i) => i.is_primary) ?? imgs[0];
-
-    await admin.from("order_items").insert({
+    
+    return {
       order_id:      dbOrder.id,
       product_id:    item.product_id,
       product_name:  product?.name ?? item.name,
@@ -90,14 +94,19 @@ export async function POST(req: NextRequest) {
       quantity:      item.quantity,
       mrp:           item.mrp,
       selling_price: item.selling_price,
-    });
+    };
+  });
 
-    await admin.rpc("decrement_stock", {
-      p_product_id: item.product_id,
-      p_quantity:   item.quantity,
-    });
-  }
-
+  // Batch insert all order items + batch decrement stock (parallel)
+  await Promise.all([
+    ...(orderItemsToInsert.length > 0 ? [admin.from("order_items").insert(orderItemsToInsert)] : []),
+    ...items.map(item =>
+      admin.rpc("decrement_stock", {
+        p_product_id: item.product_id,
+        p_quantity:   item.quantity,
+      })
+    ),
+  ]);
   // Initial status history
   await admin.from("order_status_history").insert({
     order_id: dbOrder.id,

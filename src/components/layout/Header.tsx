@@ -26,7 +26,7 @@ export function Header() {
       <div className="mx-auto flex max-w-7xl items-center gap-3 px-4 py-3 sm:gap-4 sm:py-3.5">
 
         {/* Logo */}
-        <Link href="/" className="flex-shrink-0">
+        <Link href="/" className="flex-shrink-0" prefetch={true}>
           <span className="text-xl font-black tracking-tight text-gray-900">
             Box<span className="text-brand-500">Deal</span>
           </span>
@@ -54,6 +54,7 @@ export function Header() {
             href="/wishlist"
             className="relative flex h-9 w-9 items-center justify-center rounded-xl text-gray-600 transition-colors hover:bg-gray-100"
             aria-label="Wishlist"
+            prefetch={true}
           >
             <Heart className="h-5 w-5" />
             {wishlistCount > 0 && (
@@ -67,6 +68,7 @@ export function Header() {
           <Link
             href={user ? "/account" : "/login"}
             className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-100"
+            prefetch={true}
           >
             <div className={
               user

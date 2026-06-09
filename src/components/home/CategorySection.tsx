@@ -70,6 +70,7 @@ export function CategorySection({
                 sizes="100vw"
                 className={styles.image}
                 priority={false}
+                loading="lazy"
               />
             ) : (
               <div className={styles.noImagePlaceholder}>
@@ -108,6 +109,7 @@ export function CategorySection({
                   sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
                   className={styles.productImage}
                   priority={false}
+                  loading="lazy"
                 />
               ) : (
                 <div className={styles.noImagePlaceholder}>
@@ -139,6 +141,7 @@ export function CategorySection({
                   sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
                   className={styles.productImage}
                   priority={false}
+                  loading="lazy"
                 />
               ) : (
                 <div className={styles.noImagePlaceholder}>

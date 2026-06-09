@@ -292,6 +292,8 @@ export function DealsSection({ products, backgroundImage }: Props) {
                       )}
                       {p.primary_image ? (
                         <Image
+                          loading="lazy"
+                          quality={80}
                           src={p.thumbnail_image ?? p.primary_image}
                           alt={p.name}
                           fill

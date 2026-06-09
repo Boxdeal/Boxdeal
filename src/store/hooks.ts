@@ -28,7 +28,6 @@ export const useIsWishlisted = (productId: string) =>
   useAppSelector((s) => s.wishlist.productIds.includes(productId));
 
 // ─── Auth selectors ───────────────────────────────────────────
-export const useAuth = () => useAppSelector((s) => s.auth);
 export const useUser = () => useAppSelector((s) => s.auth.user);
 export const useProfile = () => useAppSelector((s) => s.auth.profile);
 export const useIsAdmin = () =>

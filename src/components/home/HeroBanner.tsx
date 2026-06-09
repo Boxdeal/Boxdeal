@@ -43,7 +43,21 @@ export function HeroBanner({ banners }: Props) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [banners.length]);
 
-  if (!banners.length) return null;
+  if (!banners.length) {
+    return (
+      <section className="relative overflow-hidden">
+        <div
+          className="relative w-full bg-gradient-to-r from-brand-500 to-brand-600 flex items-center justify-center"
+          style={{ aspectRatio: "1440 / 500" }}
+        >
+          <div className="text-center text-white">
+            <h2 className="text-4xl font-bold mb-2">Welcome to BoxDeal</h2>
+            <p className="text-xl">Best Deals on Electronics & Mobile Accessories</p>
+          </div>
+        </div>
+      </section>
+    );
+  }
 
   const b     = banners[idx];
   const light = b.text_theme === "light";
@@ -56,7 +70,7 @@ export function HeroBanner({ banners }: Props) {
 
       {/* Image container — aspect ratio keeps full image visible on all screens */}
       <div
-        className="relative w-full bg-gray-50"
+        className="relative w-full bg-gradient-to-r from-gray-100 to-gray-50"
         style={{ aspectRatio: "1440 / 500" }}
       >
         {/* All images preloaded — opacity switch = instant slide change */}
@@ -66,7 +80,7 @@ export function HeroBanner({ banners }: Props) {
             src={banner.image_url}
             alt={banner.title}
             fill
-            priority={i === 0}
+            priority={i === 0} loading={i === 0 ? "eager" : "lazy"}
             className={cn(
               "object-contain object-center transition-opacity duration-500",
               i === idx ? "opacity-100" : "opacity-0",

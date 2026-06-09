@@ -10,6 +10,8 @@ import { ShoppingBag, ChevronRight } from "lucide-react";
 import { PRODUCTS_PER_PAGE } from "@/constants";
 import Link from "next/link";
 
+
+export const revalidate = 3600;  // Cache for 1 hour
 export const metadata: Metadata = { title: "All Products" };
 
 interface Props {
