@@ -228,7 +228,9 @@ export function DealsSection({ products, backgroundImage }: Props) {
               fill
               className="object-cover object-center"
               priority
-              quality={85}
+              placeholder="blur"
+              blurDataURL="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1440 500'%3E%3Crect fill='%23f3f4f6' width='1440' height='500'/%3E%3C/svg%3E"
+              quality={75}
             />
           )}
         </div>
@@ -293,10 +295,12 @@ export function DealsSection({ products, backgroundImage }: Props) {
                       {p.primary_image ? (
                         <Image
                           loading="lazy"
-                          quality={80}
+                          quality={75}
                           src={p.thumbnail_image ?? p.primary_image}
                           alt={p.name}
                           fill
+                          placeholder="blur"
+                          blurDataURL="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'%3E%3Crect fill='%23f3f4f6' width='200' height='200'/%3E%3C/svg%3E"
                           className="object-contain p-3 transition-transform duration-300 group-hover:scale-110"
                           sizes="200px"
                         />
@@ -359,7 +363,9 @@ export function DealsSection({ products, backgroundImage }: Props) {
               fill
               className="object-cover object-center"
               priority
-              quality={85}
+              placeholder="blur"
+              blurDataURL="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1440 500'%3E%3Crect fill='%23f3f4f6' width='1440' height='500'/%3E%3C/svg%3E"
+              quality={75}
             />
           )}
           {/* Dark overlay */}
@@ -409,6 +415,8 @@ export function DealsSection({ products, backgroundImage }: Props) {
                         src={p.thumbnail_image ?? p.primary_image}
                         alt={p.name}
                         fill
+                        placeholder="blur"
+                        blurDataURL="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'%3E%3Crect fill='%23f3f4f6' width='200' height='200'/%3E%3C/svg%3E"
                         className="object-contain p-3 transition-transform duration-300 group-hover:scale-110"
                         sizes="200px"
                       />

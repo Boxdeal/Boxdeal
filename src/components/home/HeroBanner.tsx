@@ -80,13 +80,16 @@ export function HeroBanner({ banners }: Props) {
             src={banner.image_url}
             alt={banner.title}
             fill
-            priority={i === 0} loading={i === 0 ? "eager" : "lazy"}
+            priority={i === 0}
+            loading={i === 0 ? "eager" : "lazy"}
+            placeholder="blur"
+            blurDataURL="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1440 500'%3E%3Crect fill='%23f3f4f6' width='1440' height='500'/%3E%3C/svg%3E"
             className={cn(
               "object-contain object-center transition-opacity duration-500",
               i === idx ? "opacity-100" : "opacity-0",
             )}
             sizes="100vw"
-            quality={85}
+            quality={75}
           />
         ))}
 

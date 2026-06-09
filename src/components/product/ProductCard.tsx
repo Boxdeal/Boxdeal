@@ -69,8 +69,10 @@ function ProductCardComponent({ product, isDeal }: ProductCardProps) {
               fill
               sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
               loading="lazy"
-              quality={85}
+              quality={75}
               priority={false}
+              placeholder="blur"
+              blurDataURL="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'%3E%3Crect fill='%23f3f4f6' width='200' height='200'/%3E%3C/svg%3E"
               className={cn(
                 "object-contain transition-opacity duration-500 group-hover:scale-105",
                 isHovering ? "opacity-0" : "opacity-100"
@@ -83,8 +85,10 @@ function ProductCardComponent({ product, isDeal }: ProductCardProps) {
                 fill
                 sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
                 loading="lazy"
-                quality={85}
+                quality={75}
                 priority={false}
+                placeholder="blur"
+                blurDataURL="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'%3E%3Crect fill='%23f3f4f6' width='200' height='200'/%3E%3C/svg%3E"
                 className={cn(
                   "object-contain transition-opacity duration-500 group-hover:scale-105",
                   isHovering ? "opacity-100" : "opacity-0"

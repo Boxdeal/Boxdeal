@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import { Toaster } from "sonner";
 import { ReduxProvider } from "@/store/provider";
+import { ServiceWorkerRegister } from "@/components/shared/ServiceWorkerRegister";
 import "./globals.css";
 
 const inter = Inter({
@@ -43,9 +44,12 @@ export default function RootLayout({
     <html lang="en" className={inter.variable}>
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="manifest" href="/manifest.json" />
+        <meta name="mobile-web-app-capable" content="yes" />
       </head>
       <body>
         <ReduxProvider>
+          <ServiceWorkerRegister />
           {children}
           <Toaster
             position="top-right"
