@@ -50,7 +50,7 @@ const typingStyles = `
   .marquee-track {
     display: flex;
     gap: 20px;
-    animation: scroll 30s linear infinite;
+    animation: scroll 20s linear infinite;
   }
 
   .marquee-track:hover {
@@ -257,7 +257,7 @@ export function DealsSection({ products, backgroundImage }: Props) {
             <Swiper
               modules={[Autoplay, Navigation]}
               autoplay={{
-                delay: 5000,
+                delay: 3000,
                 disableOnInteraction: false,
               }}
               navigation={{
