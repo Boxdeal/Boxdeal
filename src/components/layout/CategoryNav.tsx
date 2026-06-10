@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { cache } from "react";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { CategoryDropdownItem } from "./CategoryDropdownItem";
 import { CategoryNavMobile } from "./CategoryNavMobile";
@@ -7,7 +8,7 @@ import styles from "./CategoryNav.module.css";
 type Sub = { id: string; name: string; slug: string; is_active: boolean; sort_order: number };
 type Cat = { id: string; name: string; slug: string; subcategories: Sub[] | null };
 
-export async function CategoryNav() {
+const getCategories = cache(async () => {
   const supabase = await getSupabaseServerClient();
 
   const { data } = await supabase
@@ -17,7 +18,11 @@ export async function CategoryNav() {
     .order("sort_order")
     .limit(12);
 
-  const categories = (data ?? []) as Cat[];
+  return (data ?? []) as Cat[];
+});
+
+export async function CategoryNav() {
+  const categories = await getCategories();
 
   return (
     <>
