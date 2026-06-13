@@ -1,19 +1,55 @@
 "use client";
 
+import { memo, useState, useRef, useEffect } from "react";
 import Link from "next/link";
-import { ShoppingCart, Heart, User, Search } from "lucide-react";
+import { ShoppingCart, Heart, User, Search, LogOut, Settings } from "lucide-react";
 import { useAppDispatch, useAppSelector, useCartItemCount, useUser, useProfile } from "@/store/hooks";
 import { openCart, openSearch } from "@/store/slices/uiSlice";
 import { SearchBar } from "@/components/shared/SearchBar";
+import { authService } from "@/services/auth";
+import { toast } from "sonner";
+import { useRouter } from "next/navigation";
+import { useAuth } from "@/hooks";
 
-export function Header() {
+function HeaderContent() {
   const dispatch      = useAppDispatch();
   const cartCount     = useCartItemCount();
-  const user          = useUser();
+  const reduxUser     = useUser();
   const profile       = useProfile();
   const wishlistCount = useAppSelector((s) => s.wishlist.productIds.length);
+  const router        = useRouter();
+  const [showDropdown, setShowDropdown] = useState(false);
+  const dropdownRef   = useRef<HTMLDivElement>(null);
+  const { user: authUser } = useAuth();
 
-  const firstName = profile?.full_name?.split(" ")[0];
+  // Use Supabase auth user if available, otherwise Redux
+  const user = authUser || reduxUser;
+  const firstName = profile?.full_name?.split(" ")[0] || authUser?.email?.split("@")[0];
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setShowDropdown(false);
+      }
+    }
+
+    if (showDropdown) {
+      document.addEventListener("mousedown", handleClickOutside);
+      return () => document.removeEventListener("mousedown", handleClickOutside);
+    }
+  }, [showDropdown]);
+
+  async function handleLogout() {
+    try {
+      await authService.logout();
+      toast.success("Logged out successfully!");
+      router.push("/login");
+      router.refresh();
+    } catch (err) {
+      toast.error("Failed to logout");
+    }
+  }
 
   return (
     <header className="sticky top-0 z-50 border-b border-gray-100 bg-white/95 shadow-[0_2px_20px_rgba(0,0,0,0.06)] backdrop-blur-md">
@@ -65,25 +101,61 @@ export function Header() {
           </Link>
 
           {/* Account */}
-          <Link
-            href={user ? "/account" : "/login"}
-            className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-100"
-            prefetch={true}
-          >
-            <div className={
-              user
-                ? "flex h-7 w-7 items-center justify-center rounded-full bg-brand-50 text-xs font-bold text-brand-600"
-                : "flex h-7 w-7 items-center justify-center rounded-full bg-gray-100 text-gray-500"
-            }>
-              {user
-                ? (firstName?.[0]?.toUpperCase() ?? <User className="h-4 w-4" />)
-                : <User className="h-4 w-4" />
-              }
+          {user ? (
+            <div className="relative" ref={dropdownRef}>
+              <button
+                onClick={() => setShowDropdown(!showDropdown)}
+                className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-100"
+              >
+                <div className="flex h-7 w-7 items-center justify-center rounded-full bg-brand-50 text-xs font-bold text-brand-600">
+                  {firstName?.[0]?.toUpperCase() ?? <User className="h-4 w-4" />}
+                </div>
+                <span className="hidden sm:inline">{firstName ?? "Account"}</span>
+              </button>
+
+              {showDropdown && (
+                <div className="absolute right-0 mt-2 w-48 rounded-xl bg-white shadow-lg border border-gray-100 overflow-hidden z-50">
+                  <Link
+                    href="/account"
+                    className="flex items-center gap-2 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50"
+                    onClick={() => setShowDropdown(false)}
+                  >
+                    <User className="h-4 w-4" />
+                    My Account
+                  </Link>
+                  <Link
+                    href="/account/settings"
+                    className="flex items-center gap-2 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 border-t border-gray-100"
+                    onClick={() => setShowDropdown(false)}
+                  >
+                    <Settings className="h-4 w-4" />
+                    Settings
+                  </Link>
+                  <button
+                    onClick={() => {
+                      setShowDropdown(false);
+                      handleLogout();
+                    }}
+                    className="flex w-full items-center gap-2 px-4 py-3 text-sm text-red-600 hover:bg-red-50 border-t border-gray-100"
+                  >
+                    <LogOut className="h-4 w-4" />
+                    Logout
+                  </button>
+                </div>
+              )}
             </div>
-            <span className="hidden sm:inline">
-              {user ? (firstName ?? "Account") : "Sign in"}
-            </span>
-          </Link>
+          ) : (
+            <Link
+              href="/login"
+              className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-100"
+              prefetch={true}
+            >
+              <div className="flex h-7 w-7 items-center justify-center rounded-full bg-gray-100 text-gray-500">
+                <User className="h-4 w-4" />
+              </div>
+              <span className="hidden sm:inline">Sign in</span>
+            </Link>
+          )}
 
           {/* Cart */}
           <button
@@ -105,3 +177,5 @@ export function Header() {
     </header>
   );
 }
+
+export const Header = memo(HeaderContent);

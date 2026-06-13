@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { Header } from "@/components/layout/Header";
 import { CategoryNav } from "@/components/layout/CategoryNav";
 import { Footer } from "@/components/layout/Footer";
@@ -6,11 +7,17 @@ import { CartDrawer } from "@/components/cart/CartDrawer";
 
 export const revalidate = 3600;
 
+function CategoryNavSkeleton() {
+  return <div className="h-12 bg-white border-b border-gray-100" />;
+}
+
 export default function ShopLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-screen flex-col bg-gray-50">
       <Header />
-      <CategoryNav />
+      <Suspense fallback={<CategoryNavSkeleton />}>
+        <CategoryNav />
+      </Suspense>
       <MobileMenu />
       <CartDrawer />
       <main className="flex-1">{children}</main>

@@ -9,6 +9,7 @@ type Sub = { id: string; name: string; slug: string; is_active: boolean; sort_or
 type Cat = { id: string; name: string; slug: string; subcategories: Sub[] | null };
 
 const getCategories = cache(async () => {
+  const queryStart = performance.now();
   const supabase = await getSupabaseServerClient();
 
   const { data } = await supabase
@@ -17,6 +18,9 @@ const getCategories = cache(async () => {
     .eq("is_active", true)
     .order("sort_order")
     .limit(12);
+
+  const queryTime = performance.now() - queryStart;
+  console.log(`[DB Performance] Categories query: ${queryTime.toFixed(0)}ms`);
 
   return (data ?? []) as Cat[];
 });

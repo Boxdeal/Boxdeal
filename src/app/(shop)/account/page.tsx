@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
-import { User, MapPin, Package, Heart, LogOut } from "lucide-react";
+import { MapPin, Package, Heart, Settings } from "lucide-react";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import Link from "next/link";
 
@@ -26,6 +26,7 @@ export default async function AccountPage() {
     { icon: Package, label: "My Orders",    href: "/orders",   badge: orderCount },
     { icon: MapPin,  label: "Addresses",    href: "/account/addresses" },
     { icon: Heart,   label: "Wishlist",     href: "/wishlist" },
+    { icon: Settings, label: "Settings",    href: "/account/settings" },
   ];
 
   return (
@@ -33,11 +34,11 @@ export default async function AccountPage() {
       <h1 className="text-2xl font-bold text-gray-900">My Account</h1>
 
       {/* Profile card */}
-      <div className="rounded-2xl border border-gray-100 bg-white p-6 flex items-center gap-4">
+      <Link href="/account/profile" className="rounded-2xl border border-gray-100 bg-white p-6 flex items-center gap-4 hover:bg-gray-50 transition-colors">
         <div className="flex h-16 w-16 items-center justify-center rounded-full bg-brand-100 text-2xl font-bold text-brand-700">
           {profile?.full_name?.charAt(0)?.toUpperCase() ?? user.email?.charAt(0)?.toUpperCase() ?? "U"}
         </div>
-        <div>
+        <div className="flex-1">
           <p className="text-lg font-bold text-gray-900">
             {profile?.full_name ?? "Welcome!"}
           </p>
@@ -46,7 +47,8 @@ export default async function AccountPage() {
             <p className="text-sm text-gray-500">{profile.phone}</p>
           )}
         </div>
-      </div>
+        <span className="text-gray-300">›</span>
+      </Link>
 
       {/* Menu */}
       <div className="rounded-2xl border border-gray-100 bg-white overflow-hidden divide-y divide-gray-100">
