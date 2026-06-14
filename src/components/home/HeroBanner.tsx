@@ -81,15 +81,16 @@ export function HeroBanner({ banners }: Props) {
             alt={banner.title}
             fill
             priority={i === 0}
+            fetchPriority={i === 0 ? "high" : "low"}
             loading={i === 0 ? "eager" : "lazy"}
             placeholder="blur"
-            blurDataURL="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1440 500'%3E%3Crect fill='%23f3f4f6' width='1440' height='500'/%3E%3C/svg%3E"
+            blurDataURL="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1440 500'%3E%3Crect fill='%23e5e7eb' width='1440' height='500'/%3E%3C/svg%3E"
             className={cn(
               "object-contain object-center transition-opacity duration-500",
               i === idx ? "opacity-100" : "opacity-0",
             )}
-            sizes="100vw"
-            quality={75}
+            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 100vw, 1440px"
+            quality={i === 0 ? 85 : 75}
           />
         ))}
 

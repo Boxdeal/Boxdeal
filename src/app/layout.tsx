@@ -44,6 +44,7 @@ export default function RootLayout({
     <html lang="en" className={inter.variable}>
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fhyfxchcgnsvjhagpcrj.supabase.co" />
         <link rel="manifest" href="/manifest.json" />
         <meta name="mobile-web-app-capable" content="yes" />
       </head>

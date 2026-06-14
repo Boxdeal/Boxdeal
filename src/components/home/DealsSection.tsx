@@ -228,9 +228,11 @@ export function DealsSection({ products, backgroundImage }: Props) {
               fill
               className="object-cover object-center"
               priority
+              fetchPriority="high"
               placeholder="blur"
-              blurDataURL="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1440 500'%3E%3Crect fill='%23f3f4f6' width='1440' height='500'/%3E%3C/svg%3E"
-              quality={75}
+              blurDataURL="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1440 500'%3E%3Crect fill='%23e5e7eb' width='1440' height='500'/%3E%3C/svg%3E"
+              sizes="(max-width: 640px) 100vw, (max-width: 1024px) 100vw, 1440px"
+              quality={85}
             />
           )}
         </div>
@@ -363,9 +365,11 @@ export function DealsSection({ products, backgroundImage }: Props) {
               fill
               className="object-cover object-center"
               priority
+              fetchPriority="high"
               placeholder="blur"
-              blurDataURL="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1440 500'%3E%3Crect fill='%23f3f4f6' width='1440' height='500'/%3E%3C/svg%3E"
-              quality={75}
+              blurDataURL="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1440 500'%3E%3Crect fill='%23e5e7eb' width='1440' height='500'/%3E%3C/svg%3E"
+              sizes="(max-width: 640px) 100vw, (max-width: 1024px) 100vw, 1440px"
+              quality={85}
             />
           )}
           {/* Dark overlay */}
