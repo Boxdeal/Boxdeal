@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { OrdersTable } from "@/components/admin/OrdersTable";
 import type { Order, OrderStatus } from "@/types";
@@ -37,16 +38,16 @@ export default async function AdminOrdersPage({ searchParams }: Props) {
 
       {/* Status filter tabs */}
       <div className="flex gap-2 overflow-x-auto pb-1">
-        <a
+        <Link
           href="/admin/orders"
           className={`rounded-full px-4 py-1.5 text-sm font-medium whitespace-nowrap transition-colors ${
             !status ? "bg-brand-500 text-white" : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-50"
           }`}
         >
           All
-        </a>
+        </Link>
         {statuses.map((s) => (
-          <a
+          <Link
             key={s}
             href={`/admin/orders?status=${s}`}
             className={`rounded-full px-4 py-1.5 text-sm font-medium whitespace-nowrap transition-colors ${
@@ -54,7 +55,7 @@ export default async function AdminOrdersPage({ searchParams }: Props) {
             }`}
           >
             {ORDER_STATUS_LABELS[s]}
-          </a>
+          </Link>
         ))}
       </div>
 
@@ -64,7 +65,7 @@ export default async function AdminOrdersPage({ searchParams }: Props) {
       {totalPages > 1 && (
         <div className="flex justify-center gap-2">
           {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
-            <a
+            <Link
               key={p}
               href={`/admin/orders?${status ? `status=${status}&` : ""}page=${p}`}
               className={`h-9 w-9 flex items-center justify-center rounded-lg border text-sm ${
@@ -72,7 +73,7 @@ export default async function AdminOrdersPage({ searchParams }: Props) {
               }`}
             >
               {p}
-            </a>
+            </Link>
           ))}
         </div>
       )}

@@ -18,7 +18,8 @@ export const supabasePhoneOtpService = {
 
       if (error) throw error;
 
-      phoneOtpVerificationId = data?.session?.id || null;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      phoneOtpVerificationId = (data as any)?.session?.id || null;
       return { success: true, message: "OTP sent successfully" };
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Failed to send OTP";

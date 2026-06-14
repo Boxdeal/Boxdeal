@@ -15,6 +15,7 @@ const schema = z.object({
   pincode:       z.string().regex(/^\d{6}$/, "Enter valid 6-digit PIN code"),
   address_type:  z.enum(["home", "work", "other"]).default("home"),
   save_address:  z.boolean().default(false),
+  is_default:    z.boolean().default(false),
 });
 
 export type AddressFormValues = z.infer<typeof schema>;
@@ -123,6 +124,11 @@ export function AddressForm({ defaultValues, onSubmit, loading }: AddressFormPro
       <label className="flex cursor-pointer items-center gap-2 text-sm text-gray-700">
         <input type="checkbox" {...register("save_address")} className="rounded text-brand-500" />
         Save this address for future orders
+      </label>
+
+      <label className="flex cursor-pointer items-center gap-2 text-sm text-gray-700">
+        <input type="checkbox" {...register("is_default")} className="rounded text-brand-500" />
+        Set as default address
       </label>
 
       <button

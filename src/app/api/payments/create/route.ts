@@ -115,10 +115,19 @@ export async function POST(req: NextRequest) {
 
   // Increment coupon usage
   if (coupon_code) {
-    await admin.from("coupons").rpc
-      ? await admin.rpc("validate_coupon", { p_code: coupon_code, p_order_total: total_amount })
-      : null;
-    await admin.from("coupons").update({ used_count: admin.from("coupons") }).eq("code", coupon_code.toUpperCase());
+    const couponCode = coupon_code.toUpperCase();
+    const { data: coupon } = await admin
+      .from("coupons")
+      .select("id, used_count, max_uses")
+      .eq("code", couponCode)
+      .single();
+
+    if (coupon && coupon.used_count < coupon.max_uses) {
+      await admin
+        .from("coupons")
+        .update({ used_count: coupon.used_count + 1 })
+        .eq("code", couponCode);
+    }
   }
 
   return NextResponse.json({

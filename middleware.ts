@@ -4,6 +4,19 @@ import { createServerClient } from "@supabase/ssr";
 const PROTECTED_ROUTES = ["/checkout", "/orders", "/account", "/wishlist"];
 const ADMIN_ROUTES     = ["/admin"];
 
+interface CookieOptions {
+  name: string;
+  value: string;
+  options?: {
+    maxAge?: number;
+    expires?: Date;
+    httpOnly?: boolean;
+    secure?: boolean;
+    sameSite?: "strict" | "lax" | "none";
+    path?: string;
+  };
+}
+
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({ request });
 
@@ -13,7 +26,7 @@ export async function middleware(request: NextRequest) {
     {
       cookies: {
         getAll: () => request.cookies.getAll(),
-        setAll: (cookiesToSet) => {
+        setAll: (cookiesToSet: CookieOptions[]) => {
           cookiesToSet.forEach(({ name, value }) =>
             request.cookies.set(name, value)
           );

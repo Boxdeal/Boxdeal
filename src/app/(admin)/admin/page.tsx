@@ -80,7 +80,7 @@ export default async function AdminDashboard() {
     },
     {
       title:   "Total Orders",
-      value:   formatCompactNumber(stats.total_orders ?? 0),
+      value:   formatCompactNumber(stats.month_orders ?? 0),
       icon:    Package,
       variant: "success" as const,
     },

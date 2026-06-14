@@ -58,7 +58,17 @@ export default function AddressesPage() {
         await updateAddress(editingId, formData);
         toast.success("Address updated successfully!");
       } else {
-        await addAddress(formData as any);
+        await addAddress({
+          full_name: formData.full_name || "",
+          phone: formData.phone || "",
+          address_line1: formData.address_line1 || "",
+          address_line2: formData.address_line2 || "",
+          city: formData.city || "",
+          state: formData.state || "",
+          pincode: formData.pincode || "",
+          address_type: formData.address_type as "home" | "work" | "other",
+          is_default: formData.is_default || false,
+        });
         toast.success("Address added successfully!");
       }
       setShowForm(false);
@@ -231,7 +241,7 @@ export default function AddressesPage() {
               <select
                 required
                 value={formData.address_type || "home"}
-                onChange={(e) => setFormData({ ...formData, address_type: e.target.value as any })}
+                onChange={(e) => setFormData({ ...formData, address_type: e.target.value as "home" | "work" | "other" })}
                 className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-brand-400 focus:outline-none focus:ring-1 focus:ring-brand-100"
               >
                 <option value="home">Home</option>

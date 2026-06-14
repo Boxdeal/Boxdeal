@@ -33,7 +33,7 @@ export function Footer() {
               Box<span className="text-brand-400">Deal</span>
             </span>
             <p className="mt-3 text-sm leading-relaxed text-gray-400">
-              India's fastest growing e-commerce platform. Quality products,
+              India&apos;s fastest growing e-commerce platform. Quality products,
               lightning-fast delivery, and unbeatable prices.
             </p>
             <div className="mt-4 space-y-2 text-sm">

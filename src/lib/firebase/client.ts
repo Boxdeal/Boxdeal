@@ -20,19 +20,24 @@ export function setupRecaptcha(containerId: string): RecaptchaVerifier | null {
     return null; // Skip reCAPTCHA in dev mode
   }
 
-  return new RecaptchaVerifier(containerId, {
-    size: "invisible",
-    callback: () => {
-      console.log("reCAPTCHA verified");
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return new (RecaptchaVerifier as any)(
+    containerId,
+    {
+      size: "invisible",
+      callback: () => {
+        console.log("reCAPTCHA verified");
+      },
+      "expired-callback": () => {
+        console.log("reCAPTCHA expired");
+      },
     },
-    "expired-callback": () => {
-      console.log("reCAPTCHA expired");
-    },
-  }, auth);
+    auth
+  );
 }
 
 export async function sendPhoneOtp(phoneNumber: string, appVerifier: RecaptchaVerifier | null) {
-  return signInWithPhoneNumber(auth, phoneNumber, appVerifier as any);
+  return signInWithPhoneNumber(auth, phoneNumber, appVerifier as unknown as RecaptchaVerifier);
 }
 
 export { signInWithPhoneNumber };

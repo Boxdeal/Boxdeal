@@ -1,13 +1,13 @@
 "use client";
 
 import { auth } from "@/lib/firebase/client";
-import { signInWithPhoneNumber, signInAnonymously, UserCredential } from "firebase/auth";
+import { signInWithPhoneNumber, signInAnonymously, UserCredential, User, RecaptchaVerifier } from "firebase/auth";
 
 const TEST_NUMBERS: Record<string, string> = {
   "9045045553": "123456",
 };
 
-let mockUser: any = null;
+let mockUser: User | null = null;
 let confirmedPhone: string = "";
 
 class MockConfirmationResult {
@@ -51,7 +51,7 @@ export const phoneOtpService = {
       // For non-test numbers, would use Firebase
       const formattedPhone = `+91${cleanPhone}`;
       try {
-        await signInWithPhoneNumber(auth, formattedPhone, null as any);
+        await signInWithPhoneNumber(auth, formattedPhone, null as unknown as RecaptchaVerifier);
       } catch (err) {
         throw new Error("Phone authentication not available in test mode. Use test number: 9045045553");
       }
