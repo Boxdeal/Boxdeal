@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { cache } from "react";
 import { notFound } from "next/navigation";
 import { Shield, Truck, RefreshCw } from "lucide-react";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
@@ -17,7 +18,7 @@ interface Props {
   params: Promise<{ slug: string }>;
 }
 
-async function getProduct(slug: string) {
+const getProduct = cache(async (slug: string) => {
   const supabase = await getSupabaseServerClient();
   const { data } = await supabase
     .from("products")
@@ -33,7 +34,7 @@ async function getProduct(slug: string) {
     .eq("is_active", true)
     .single();
   return data;
-}
+});
 
 async function getReviews(productId: string) {
   const supabase = await getSupabaseServerClient();
