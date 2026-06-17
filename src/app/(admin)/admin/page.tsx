@@ -1,39 +1,19 @@
 import type { Metadata } from "next";
 import {
   ShoppingBag, IndianRupee, Package, AlertTriangle,
-  Users, TrendingUp, Clock,
+  Users, Clock,
 } from "lucide-react";
-import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { StatsCard } from "@/components/admin/StatsCard";
 import { RevenueChart } from "@/components/admin/RevenueChart";
 import { OrdersTable } from "@/components/admin/OrdersTable";
 import { formatPrice, formatCompactNumber } from "@/lib/utils/format";
-import type { DashboardStats, RevenueChartPoint, Order } from "@/types";
+import { getAdminDashboard } from "@/lib/admin/stats";
 
 export const metadata: Metadata = { title: "Admin Dashboard" };
-
-async function getDashboardData() {
-  const supabase = await getSupabaseServerClient();
-
-  const [statsRes, chartRes, recentOrdersRes] = await Promise.all([
-    supabase.rpc("get_dashboard_stats"),
-    supabase.rpc("get_revenue_chart", { p_days: 30 }),
-    supabase
-      .from("orders")
-      .select("*")
-      .order("placed_at", { ascending: false })
-      .limit(10),
-  ]);
-
-  return {
-    stats:        (statsRes.data ?? {}) as DashboardStats,
-    chart:        (chartRes.data ?? []) as RevenueChartPoint[],
-    recentOrders: (recentOrdersRes.data ?? []) as Order[],
-  };
-}
+export const dynamic = "force-dynamic";
 
 export default async function AdminDashboard() {
-  const { stats, chart, recentOrders } = await getDashboardData();
+  const { stats, chart, recentOrders } = await getAdminDashboard();
 
   const statCards = [
     {

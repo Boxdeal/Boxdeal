@@ -87,7 +87,15 @@ export function PaymentButton({ address }: PaymentButtonProps) {
           router.push(`/orders/${data.db_order_id}?success=true`);
         },
         modal: {
-          ondismiss: () => setLoading(false),
+          ondismiss: () => {
+            // User closed the popup without paying — release the pending order.
+            fetch("/api/payments/cancel", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ db_order_id: data.db_order_id }),
+            }).catch(() => {});
+            setLoading(false);
+          },
         },
       };
 

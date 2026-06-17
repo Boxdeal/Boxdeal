@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Search } from "lucide-react";
-import { getSupabaseServerClient } from "@/lib/supabase/server";
+import { getSupabasePublicClient } from "@/lib/supabase/server";
 import { ProductGrid } from "@/components/product/ProductGrid";
 import { EmptyState } from "@/components/shared/EmptyState";
 
@@ -24,7 +24,10 @@ export default async function SearchPage({ searchParams }: Props) {
     );
   }
 
-  const supabase = await getSupabaseServerClient();
+  const supabase = getSupabasePublicClient();
+  // Partial substring match (e.g. "son" → "sony"), served by the pg_trgm
+  // GIN indexes from database/search_indexes.sql.
+  const safe = q.trim().replace(/[%_,()]/g, " ").trim();
   const { data } = await supabase
     .from("products")
     .select(`
@@ -33,7 +36,8 @@ export default async function SearchPage({ searchParams }: Props) {
       product_images(image_url, thumbnail_url, is_primary)
     `)
     .eq("is_active", true)
-    .textSearch("search_vector", q.trim())
+    .or(`name.ilike.%${safe}%,slug.ilike.%${safe}%,short_description.ilike.%${safe}%`)
+    .order("sold_count", { ascending: false })
     .limit(48);
 
   const products = (data ?? []).map((p: Record<string, unknown>) => {

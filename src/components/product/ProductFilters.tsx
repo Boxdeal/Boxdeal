@@ -1,9 +1,8 @@
 "use client";
 
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
-import { useCallback } from "react";
-import { X } from "lucide-react";
-import { INDIA_STATES } from "@/constants";
+import { useCallback, useTransition } from "react";
+import { X, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils/helpers";
 import type { Brand, Category, Subcategory } from "@/types";
 
@@ -21,6 +20,7 @@ export function ProductFilters({
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const [isPending, startTransition] = useTransition();
 
   const activeCategory = searchParams.get("category") ?? "";
   const activeBrand = searchParams.get("brand") ?? "";
@@ -42,13 +42,15 @@ export function ProductFilters({
         params.set(key, value);
       }
       params.delete("page");
-      router.push(`${pathname}?${params.toString()}`);
+      startTransition(() => {
+        router.push(`${pathname}?${params.toString()}`, { scroll: false });
+      });
     },
     [searchParams, router, pathname]
   );
 
   function clearAll() {
-    router.push(pathname);
+    startTransition(() => router.push(pathname, { scroll: false }));
   }
 
   const hasFilters = !![activeCategory, activeBrand, minPrice, maxPrice, minRating].some(Boolean) || inStock;
@@ -56,7 +58,10 @@ export function ProductFilters({
   return (
     <aside className="w-56 flex-shrink-0 space-y-5">
       <div className="flex items-center justify-between">
-        <h3 className="font-semibold text-gray-900">Filters</h3>
+        <h3 className="flex items-center gap-2 font-semibold text-gray-900">
+          Filters
+          {isPending && <Loader2 className="h-3.5 w-3.5 animate-spin text-brand-400" />}
+        </h3>
         {hasFilters && (
           <button
             onClick={clearAll}

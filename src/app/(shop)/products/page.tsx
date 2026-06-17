@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
-import { getSupabaseServerClient } from "@/lib/supabase/server";
+import { unstable_cache } from "next/cache";
+import { getSupabasePublicClient } from "@/lib/supabase/server";
 import { ProductGrid } from "@/components/product/ProductGrid";
 import { ProductFilters } from "@/components/product/ProductFilters";
 import { ProductSort } from "@/components/product/ProductSort";
@@ -8,6 +9,7 @@ import { Pagination } from "@/components/shared/Pagination";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { ShoppingBag, ChevronRight } from "lucide-react";
 import { PRODUCTS_PER_PAGE } from "@/constants";
+import type { Brand, Category, Subcategory } from "@/types";
 import Link from "next/link";
 
 
@@ -18,59 +20,44 @@ interface Props {
   searchParams: Promise<Record<string, string>>;
 }
 
-async function getFilters() {
-  const supabase = await getSupabaseServerClient();
-  const [{ data: categories }, { data: subcategories }, { data: brands }] =
-    await Promise.all([
-      supabase.from("categories").select("*").eq("is_active", true).order("sort_order"),
-      supabase.from("subcategories").select("*").eq("is_active", true),
-      supabase.from("brands").select("*").eq("is_active", true),
-    ]);
-  return { categories: categories ?? [], subcategories: subcategories ?? [], brands: brands ?? [] };
+interface Filters {
+  categories: Category[];
+  subcategories: Subcategory[];
+  brands: Brand[];
 }
 
-async function getCategoryInfo(slug: string) {
-  const supabase = await getSupabaseServerClient();
-  const { data: cat } = await supabase
-    .from("categories")
-    .select("id, name, subcategories(id, name, slug, is_active, sort_order)")
-    .eq("slug", slug)
-    .single();
-  return cat as {
-    id: string;
-    name: string;
-    subcategories: Array<{ id: string; name: string; slug: string; is_active: boolean; sort_order: number }>;
-  } | null;
-}
+// Catalog filter data (categories/subcategories/brands) changes rarely, so
+// cache it once per hour and share it across every request instead of
+// re-querying on each filter toggle. Uses the cookieless public client.
+const getFilters = unstable_cache(
+  async () => {
+    const supabase = getSupabasePublicClient();
+    const [{ data: categories }, { data: subcategories }, { data: brands }] =
+      await Promise.all([
+        supabase.from("categories").select("*").eq("is_active", true).order("sort_order"),
+        supabase.from("subcategories").select("*").eq("is_active", true),
+        supabase.from("brands").select("*").eq("is_active", true),
+      ]);
+    return {
+      categories: (categories ?? []) as Category[],
+      subcategories: (subcategories ?? []) as Subcategory[],
+      brands: (brands ?? []) as Brand[],
+    };
+  },
+  ["catalog-filters"],
+  { revalidate: 3600, tags: ["catalog-filters"] }
+);
 
-async function getSubcategoryInfo(slug: string) {
-  const supabase = await getSupabaseServerClient();
-  const { data } = await supabase
-    .from("subcategories")
-    .select("id, name, slug, category:categories!category_id(name, slug)")
-    .eq("slug", slug)
-    .single();
-  return data as { id: string; name: string; slug: string; category: { name: string; slug: string } } | null;
-}
-
-async function getProducts(params: Record<string, string>) {
-  const supabase = await getSupabaseServerClient();
+async function getProducts(params: Record<string, string>, filters: Filters) {
+  const supabase = getSupabasePublicClient();
   const page = Math.max(1, Number(params.page ?? 1));
   const from = (page - 1) * PRODUCTS_PER_PAGE;
   const to = from + PRODUCTS_PER_PAGE - 1;
 
-  // Resolve slugs to IDs for reliable filtering
-  const [categoryRow, subcategoryRow, brandRow] = await Promise.all([
-    params.category
-      ? supabase.from("categories").select("id").eq("slug", params.category).single()
-      : Promise.resolve({ data: null }),
-    params.subcategory
-      ? supabase.from("subcategories").select("id").eq("slug", params.subcategory).single()
-      : Promise.resolve({ data: null }),
-    params.brand
-      ? supabase.from("brands").select("id").eq("slug", params.brand).single()
-      : Promise.resolve({ data: null }),
-  ]);
+  // Resolve slugs → IDs in-memory from the cached filters (no extra queries).
+  const categoryId    = params.category    ? filters.categories.find((c) => c.slug === params.category)?.id : null;
+  const subcategoryId = params.subcategory ? filters.subcategories.find((s) => s.slug === params.subcategory)?.id : null;
+  const brandId       = params.brand       ? filters.brands.find((b) => b.slug === params.brand)?.id : null;
 
   let query = supabase
     .from("products")
@@ -86,16 +73,21 @@ async function getProducts(params: Record<string, string>) {
     )
     .eq("is_active", true);
 
-  if (categoryRow.data)    query = query.eq("category_id",    categoryRow.data.id);
-  if (subcategoryRow.data) query = query.eq("subcategory_id", subcategoryRow.data.id);
-  if (brandRow.data)       query = query.eq("brand_id",       brandRow.data.id);
+  if (categoryId)    query = query.eq("category_id",    categoryId);
+  if (subcategoryId) query = query.eq("subcategory_id", subcategoryId);
+  if (brandId)       query = query.eq("brand_id",       brandId);
   if (params.min_price)   query = query.gte("selling_price",   Number(params.min_price));
   if (params.max_price)   query = query.lte("selling_price",   Number(params.max_price));
   if (params.rating)      query = query.gte("rating",          Number(params.rating));
   if (params.in_stock === "true")         query = query.gt("stock_quantity", 0);
   if (params.is_featured === "true")      query = query.eq("is_featured",     true);
   if (params.is_deal_of_day === "true")   query = query.eq("is_deal_of_day",  true);
-  if (params.q) query = query.textSearch("search_vector", params.q);
+  // Partial substring match (e.g. "son" → "sony"), served by the pg_trgm
+  // GIN indexes from database/search_indexes.sql.
+  if (params.q) {
+    const safe = params.q.replace(/[%_,()]/g, " ").trim();
+    if (safe) query = query.or(`name.ilike.%${safe}%,slug.ilike.%${safe}%,short_description.ilike.%${safe}%`);
+  }
 
   const sortMap: Record<string, { column: string; ascending: boolean }> = {
     price_asc:  { column: "selling_price", ascending: true  },
@@ -128,12 +120,36 @@ export default async function ProductsPage({ searchParams }: Props) {
   const isCategoryView   = !!params.category && !params.subcategory;
   const isSubcategoryView = !!params.subcategory;
 
-  const [filters, { products, total }, categoryInfo, subcategoryInfo] = await Promise.all([
-    getFilters(),
-    getProducts(params),
-    isCategoryView   ? getCategoryInfo(params.category)     : Promise.resolve(null),
-    isSubcategoryView ? getSubcategoryInfo(params.subcategory) : Promise.resolve(null),
-  ]);
+  // Filters are cached, so this resolves instantly after the first request.
+  const filters = await getFilters();
+  const { products, total } = await getProducts(params, filters);
+
+  // Derive breadcrumb/grouping info from the cached filters — no extra queries.
+  const categoryInfo = isCategoryView
+    ? (() => {
+        const cat = filters.categories.find((c) => c.slug === params.category);
+        if (!cat) return null;
+        return {
+          id: cat.id,
+          name: cat.name,
+          subcategories: filters.subcategories.filter((s) => s.category_id === cat.id),
+        };
+      })()
+    : null;
+
+  const subcategoryInfo = isSubcategoryView
+    ? (() => {
+        const sub = filters.subcategories.find((s) => s.slug === params.subcategory);
+        if (!sub) return null;
+        const cat = filters.categories.find((c) => c.id === sub.category_id);
+        return {
+          id: sub.id,
+          name: sub.name,
+          slug: sub.slug,
+          category: { name: cat?.name ?? "", slug: cat?.slug ?? "" },
+        };
+      })()
+    : null;
 
   const page       = Math.max(1, Number(params.page ?? 1));
   const totalPages = Math.ceil(total / PRODUCTS_PER_PAGE);

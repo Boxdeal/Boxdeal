@@ -37,6 +37,22 @@ export async function getSupabaseServerClient() {
   );
 }
 
+// Cookieless anon client for PUBLIC catalog reads (products, categories…).
+// Reading cookies forces a route to render dynamically; this client avoids
+// that, so its queries can be wrapped in `unstable_cache` and shared across
+// requests. Never use it for anything user-specific.
+let publicClient: ReturnType<typeof createClient> | null = null;
+export function getSupabasePublicClient() {
+  if (!publicClient) {
+    publicClient = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      { auth: { autoRefreshToken: false, persistSession: false } }
+    );
+  }
+  return publicClient;
+}
+
 export function getSupabaseAdminClient() {
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,

@@ -1,20 +1,16 @@
 import type { Metadata } from "next";
-import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { RevenueChart } from "@/components/admin/RevenueChart";
 import { formatPrice, formatCompactNumber } from "@/lib/utils/format";
+import { getAdminDashboard, getTopProducts } from "@/lib/admin/stats";
 
 export const metadata: Metadata = { title: "Analytics — Admin" };
+export const dynamic = "force-dynamic";
 
 export default async function AdminAnalyticsPage() {
-  const supabase = await getSupabaseServerClient();
-
-  const [chartRes, topProductsRes] = await Promise.all([
-    supabase.rpc("get_revenue_chart", { p_days: 30 }),
-    supabase.rpc("get_top_products", { p_limit: 10 }),
+  const [{ chart }, topProducts] = await Promise.all([
+    getAdminDashboard(),
+    getTopProducts(10),
   ]);
-
-  const chart       = chartRes.data ?? [];
-  const topProducts = topProductsRes.data ?? [];
 
   return (
     <div className="p-6 space-y-6">

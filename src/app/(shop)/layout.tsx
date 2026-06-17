@@ -3,6 +3,7 @@ import { Header } from "@/components/layout/Header";
 import { CategoryNav } from "@/components/layout/CategoryNav";
 import { Footer } from "@/components/layout/Footer";
 import { MobileMenu } from "@/components/layout/MobileMenu";
+import { SearchOverlay } from "@/components/layout/SearchOverlay";
 import { CartDrawer } from "@/components/cart/CartDrawer";
 
 export const revalidate = 3600;
@@ -19,6 +20,7 @@ export default function ShopLayout({ children }: { children: React.ReactNode }) 
         <CategoryNav />
       </Suspense>
       <MobileMenu />
+      <SearchOverlay />
       <CartDrawer />
       <main className="flex-1">{children}</main>
       <Footer />

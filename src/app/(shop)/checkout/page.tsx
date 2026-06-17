@@ -2,19 +2,21 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { useCart, useCartSubtotal, useUser } from "@/store/hooks";
+import { useCart, useCartSubtotal } from "@/store/hooks";
+import { useAuth } from "@/hooks";
 import { CartSummary } from "@/components/cart/CartSummary";
 import { AddressForm, type AddressFormValues } from "@/components/checkout/AddressForm";
 import { PaymentButton } from "@/components/checkout/PaymentButton";
+import { CouponInput } from "@/components/checkout/CouponInput";
 import { CartItem } from "@/components/cart/CartItem";
-import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { addressService } from "@/services/address";
 import type { Address } from "@/types";
 
 export default function CheckoutPage() {
   const { items, coupon } = useCart();
   const subtotal = useCartSubtotal();
   const discount = coupon?.valid ? (coupon.discount ?? 0) : 0;
-  const user = useUser();
+  const { user, loading: authLoading } = useAuth();
   const router = useRouter();
 
   const [addresses, setAddresses] = useState<Address[]>([]);
@@ -23,10 +25,11 @@ export default function CheckoutPage() {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    if (!user) { router.push("/login"); return; }
-    if (!items.length) { router.push("/cart"); return; }
+    if (authLoading) return; // wait for the Supabase session to resolve
+    if (!user) { router.push("/login?redirect=/checkout"); return; }
+    if (!items.length) { router.push("/products"); return; }
     loadAddresses();
-  }, [user, items.length]);
+  }, [user, authLoading, items.length]);
 
   useEffect(() => {
     // Load Razorpay script dynamically only on checkout page
@@ -42,57 +45,42 @@ export default function CheckoutPage() {
   }, []);
 
   async function loadAddresses() {
-    const supabase = getSupabaseBrowserClient();
-    const { data } = await supabase
-      .from("addresses")
-      .select("*")
-      .order("is_default", { ascending: false });
-    setAddresses(data ?? []);
-    const def = (data ?? []).find((a) => a.is_default) ?? data?.[0] ?? null;
+    if (!user) return;
+    const { data } = await addressService.getAddresses(user.id);
+    const list = (data ?? []) as Address[];
+    setAddresses(list);
+    const def = list.find((a) => a.is_default) ?? list[0] ?? null;
     setSelectedAddress(def);
   }
 
   async function saveAddress(values: AddressFormValues) {
+    if (!user) return;
     setSaving(true);
-    const supabase = getSupabaseBrowserClient();
 
-    if (values.save_address) {
-      if (values.is_default || addresses.length === 0) {
-        await supabase.from("addresses").update({ is_default: false }).eq("user_id", user!.id);
-      }
-      const { data } = await supabase
-        .from("addresses")
-        .insert({
-          user_id:       user!.id,
-          full_name:     values.full_name,
-          phone:         values.phone,
-          address_line1: values.address_line1,
-          address_line2: values.address_line2 ?? null,
-          city:          values.city,
-          state:         values.state,
-          pincode:       values.pincode,
-          address_type:  values.address_type,
-          is_default:    addresses.length === 0,
-        })
-        .select()
-        .single();
-      if (data) setSelectedAddress(data);
-    } else {
-      setSelectedAddress({
-        id: "temp",
-        user_id: user!.id,
-        full_name: values.full_name,
-        phone: values.phone,
-        address_line1: values.address_line1,
-        address_line2: values.address_line2 ?? null,
-        city: values.city,
-        state: values.state,
-        pincode: values.pincode,
-        address_type: values.address_type,
-        is_default: false,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      });
+    // Always save the address to the user's account. The first address (or one
+    // explicitly marked default) becomes the default; the service unsets others.
+    const makeDefault = values.is_default || addresses.length === 0;
+    const { data } = await addressService.createAddress(user.id, {
+      full_name:     values.full_name,
+      phone:         values.phone,
+      address_line1: values.address_line1,
+      address_line2: values.address_line2 ?? null,
+      city:          values.city,
+      state:         values.state,
+      pincode:       values.pincode,
+      address_type:  values.address_type,
+      is_default:    makeDefault,
+    });
+
+    if (data) {
+      const saved = data as Address;
+      // Show it in the list immediately and select it for this order.
+      setAddresses((prev) =>
+        saved.is_default
+          ? [saved, ...prev.map((a) => ({ ...a, is_default: false }))]
+          : [saved, ...prev]
+      );
+      setSelectedAddress(saved);
     }
     setAddingNew(false);
     setSaving(false);
@@ -162,6 +150,8 @@ export default function CheckoutPage() {
               <CartSummary subtotal={subtotal} discount={discount} />
             </div>
           </div>
+
+          <CouponInput />
 
           {selectedAddress && (
             <PaymentButton address={selectedAddress} />
