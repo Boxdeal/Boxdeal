@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { getSupabaseServerClient } from "@/lib/supabase/server";
+import { getSupabaseAdminClient } from "@/lib/supabase/server";
 import { OrdersTable } from "@/components/admin/OrdersTable";
 import type { Order, OrderStatus } from "@/types";
 import { ORDER_STATUS_LABELS } from "@/constants";
@@ -18,8 +18,8 @@ export default async function AdminOrdersPage({ searchParams }: Props) {
   const from = (page - 1) * per;
   const to = from + per - 1;
 
-  const supabase = await getSupabaseServerClient();
-  let query = supabase
+  const admin = getSupabaseAdminClient();
+  let query = admin
     .from("orders")
     .select("*", { count: "exact" })
     .order("placed_at", { ascending: false })

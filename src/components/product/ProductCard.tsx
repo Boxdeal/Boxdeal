@@ -3,6 +3,7 @@
 import { useState, memo } from "react";
 import Link from "next/link";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 import { Heart, ShoppingCart, Zap } from "lucide-react";
 import { useAppDispatch, useIsWishlisted } from "@/store/hooks";
 import { addItem } from "@/store/slices/cartSlice";
@@ -22,24 +23,34 @@ interface ProductCardProps {
 function ProductCardComponent({ product, isDeal }: ProductCardProps) {
   const [isHovering, setIsHovering] = useState(false);
   const dispatch = useAppDispatch();
+  const router = useRouter();
   const isWishlisted = useIsWishlisted(product.id);
+
+  function cartPayload() {
+    return {
+      product_id:     product.id,
+      name:           product.name,
+      slug:           product.slug,
+      image:          product.thumbnail_image ?? product.primary_image,
+      mrp:            product.mrp,
+      selling_price:  product.selling_price,
+      quantity:       1,
+      stock_quantity: product.stock_quantity,
+    };
+  }
 
   function handleAddToCart(e: React.MouseEvent) {
     e.preventDefault();
-    dispatch(
-      addItem({
-        product_id:    product.id,
-        name:          product.name,
-        slug:          product.slug,
-        image:         product.thumbnail_image ?? product.primary_image,
-        mrp:           product.mrp,
-        selling_price: product.selling_price,
-        quantity:      1,
-        stock_quantity: product.stock_quantity,
-      })
-    );
+    dispatch(addItem(cartPayload()));
     dispatch(openCart());
     toast.success("Added to cart!");
+  }
+
+  function handleBuyNow(e: React.MouseEvent) {
+    e.preventDefault();
+    // Add to cart and go straight to checkout (don't open the drawer).
+    dispatch(addItem(cartPayload()));
+    router.push("/checkout");
   }
 
   function handleWishlist(e: React.MouseEvent) {
@@ -159,19 +170,32 @@ function ProductCardComponent({ product, isDeal }: ProductCardProps) {
             size="sm"
           />
 
-          <button
-            onClick={handleAddToCart}
-            disabled={outOfStock}
-            className={cn(
-              "mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-semibold transition-colors",
-              outOfStock
-                ? "cursor-not-allowed bg-gray-100 text-gray-400"
-                : "bg-brand-500 text-white hover:bg-brand-600 active:scale-95"
-            )}
-          >
-            <ShoppingCart className="h-3.5 w-3.5" />
-            {outOfStock ? "Out of Stock" : "Add to Cart"}
-          </button>
+          {outOfStock ? (
+            <button
+              disabled
+              className="mt-2 flex w-full items-center justify-center gap-1 rounded-lg bg-gray-100 py-1.5 text-[11px] font-semibold text-gray-400 cursor-not-allowed sm:gap-1.5 sm:py-2 sm:text-xs"
+            >
+              <ShoppingCart className="h-3 w-3 shrink-0 sm:h-3.5 sm:w-3.5" />
+              Out of Stock
+            </button>
+          ) : (
+            <div className="mt-2 flex flex-row gap-1.5">
+              <button
+                onClick={handleAddToCart}
+                className="flex flex-1 items-center justify-center gap-1 whitespace-nowrap rounded-lg border border-brand-500 py-1.5 text-[11px] font-semibold text-brand-600 transition-colors hover:bg-brand-50 active:scale-95 sm:gap-1.5 sm:py-2 sm:text-xs"
+              >
+                <ShoppingCart className="h-3 w-3 shrink-0 sm:h-3.5 sm:w-3.5" />
+                Add to Cart
+              </button>
+              <button
+                onClick={handleBuyNow}
+                className="flex flex-1 items-center justify-center gap-1 whitespace-nowrap rounded-lg bg-brand-500 py-1.5 text-[11px] font-semibold text-white transition-colors hover:bg-brand-600 active:scale-95 sm:gap-1.5 sm:py-2 sm:text-xs"
+              >
+                <Zap className="h-3 w-3 shrink-0 fill-current sm:h-3.5 sm:w-3.5" />
+                Buy Now
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </Link>

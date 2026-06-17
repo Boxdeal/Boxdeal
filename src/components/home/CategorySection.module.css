@@ -164,13 +164,13 @@
 .categoryNameContainer {
   display: flex;
   flex-direction: column;
-  padding: 8px;
+  padding: 4px 8px;
   text-align: center;
 }
 
 @media (min-width: 640px) {
   .categoryNameContainer {
-    padding: 12px;
+    padding: 6px 12px;
   }
 }
 
@@ -277,7 +277,8 @@
 .productImageWrapper {
   position: relative;
   width: 100%;
-  aspect-ratio: 3 / 4;
+  flex: 1;
+  min-height: 0;
   overflow: hidden;
   background: linear-gradient(to bottom right, #f3f4f6, #e5e7eb);
   display: flex;

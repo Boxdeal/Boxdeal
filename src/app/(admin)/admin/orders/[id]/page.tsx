@@ -1,11 +1,10 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { getSupabaseServerClient } from "@/lib/supabase/server";
+import { getSupabaseAdminClient } from "@/lib/supabase/server";
 import { OrderStatusUpdater } from "./OrderStatusUpdater";
 import { ORDER_STATUS_LABELS, ORDER_STATUS_COLORS } from "@/constants";
 import { formatPrice, formatDateTime } from "@/lib/utils/format";
 import { cn } from "@/lib/utils/helpers";
-import type { Order } from "@/types";
 import Image from "next/image";
 
 export const metadata: Metadata = { title: "Order Detail — Admin" };
@@ -16,9 +15,9 @@ export default async function AdminOrderDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const supabase = await getSupabaseServerClient();
+  const admin = getSupabaseAdminClient();
 
-  const { data: order } = await supabase
+  const { data: order } = await admin
     .from("orders")
     .select(`
       *,
@@ -30,7 +29,7 @@ export default async function AdminOrderDetailPage({
 
   if (!order) notFound();
 
-  const { data: userProfile } = await supabase
+  const { data: userProfile } = await admin
     .from("user_profiles")
     .select("full_name, phone")
     .eq("id", order.user_id)
