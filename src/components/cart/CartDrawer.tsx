@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { X, ShoppingBag } from "lucide-react";
-import { useAppDispatch, useCart, useCartOpen, useCartSubtotal } from "@/store/hooks";
+import { useAppDispatch, useCart, useCartOpen, useCartSubtotal, useCartDiscount } from "@/store/hooks";
 import { closeCart } from "@/store/slices/uiSlice";
 import { CartItem } from "./CartItem";
 import { CartSummary } from "./CartSummary";
@@ -11,9 +11,9 @@ import { cn } from "@/lib/utils/helpers";
 export function CartDrawer() {
   const dispatch = useAppDispatch();
   const isOpen = useCartOpen();
-  const { items, coupon } = useCart();
+  const { items } = useCart();
   const subtotal = useCartSubtotal();
-  const discount = coupon?.valid ? (coupon.discount ?? 0) : 0;
+  const discount = useCartDiscount();
 
   return (
     <>

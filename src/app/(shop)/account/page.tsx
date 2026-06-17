@@ -15,7 +15,7 @@ export default async function AccountPage() {
     .from("user_profiles")
     .select("*")
     .eq("id", user.id)
-    .single();
+    .maybeSingle();
 
   const { count: orderCount } = await supabase
     .from("orders")

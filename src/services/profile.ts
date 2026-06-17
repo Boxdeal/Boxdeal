@@ -13,19 +13,24 @@ export interface UserProfile {
 }
 
 export const profileService = {
-  // Fetch user profile
+  // Fetch user profile. Uses maybeSingle() so a missing row returns
+  // { data: null } instead of a 406 error (e.g. brand-new phone-login users
+  // whose profile row hasn't been created yet).
   async getProfile(userId: string) {
     const supabase = getSupabaseBrowserClient();
     const { data, error } = await supabase
       .from("user_profiles")
       .select("*")
       .eq("id", userId)
-      .single();
+      .maybeSingle();
 
     return { data: data as UserProfile | null, error };
   },
 
-  // Update user profile
+  // Update user profile. Uses upsert (not update) so the row is created when
+  // it doesn't exist yet — otherwise updating a missing profile matches 0 rows
+  // and PostgREST returns 406 Not Acceptable. The id equals auth.uid(), which
+  // satisfies the "User own profile" RLS policy for both insert and update.
   async updateProfile(
     userId: string,
     profile: Partial<UserProfile>
@@ -33,31 +38,14 @@ export const profileService = {
     const supabase = getSupabaseBrowserClient();
     const { data, error } = await supabase
       .from("user_profiles")
-      .update({
-        ...profile,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", userId)
-      .select()
-      .single();
-
-    return { data: data as UserProfile | null, error };
-  },
-
-  // Create user profile (called after signup)
-  async createProfile(userId: string, email: string) {
-    const supabase = getSupabaseBrowserClient();
-    const { data, error } = await supabase
-      .from("user_profiles")
-      .insert({
-        id: userId,
-        full_name: null,
-        phone: null,
-        avatar_url: null,
-        date_of_birth: null,
-        gender: null,
-        is_admin: false,
-      })
+      .upsert(
+        {
+          id: userId,
+          ...profile,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "id" }
+      )
       .select()
       .single();
 

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Lock } from "lucide-react";
-import { useAppDispatch, useCart, useCartSubtotal } from "@/store/hooks";
+import { useAppDispatch, useCart, useCartSubtotal, useCartDiscount } from "@/store/hooks";
 import { clearCart } from "@/store/slices/cartSlice";
 import { calculateShipping } from "@/lib/utils/helpers";
 import { formatPrice } from "@/lib/utils/format";
@@ -27,7 +27,10 @@ export function PaymentButton({ address }: PaymentButtonProps) {
   const router = useRouter();
   const { items, coupon } = useCart();
   const subtotal = useCartSubtotal();
-  const discount = coupon?.valid ? (coupon.discount ?? 0) : 0;
+  const discount = useCartDiscount();
+  // A coupon only counts toward the order if it still yields a discount for
+  // the current cart (e.g. subtotal may have dropped below its minimum).
+  const couponCode = coupon?.valid && discount > 0 ? coupon.code : null;
   const shipping = calculateShipping(subtotal - discount);
   const total = subtotal - discount + shipping;
 
@@ -40,7 +43,7 @@ export function PaymentButton({ address }: PaymentButtonProps) {
         body: JSON.stringify({
           items,
           address,
-          coupon_code: coupon?.valid ? coupon.code : null,
+          coupon_code: couponCode,
           subtotal,
           discount,
           shipping_charge: shipping,

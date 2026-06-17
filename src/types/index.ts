@@ -289,6 +289,9 @@ export interface CouponValidationResult {
   discount?: number;
   discount_type?: DiscountType;
   discount_value?: number;
+  min_order_amount?: number;
+  max_discount?: number | null;
+  coupon_id?: string;
 }
 
 // ────────────────────────────────────────────────────────────

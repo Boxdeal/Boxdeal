@@ -2,8 +2,6 @@
 
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
-let phoneOtpVerificationId: string | null = null;
-
 export const supabasePhoneOtpService = {
   async sendOtp(phoneNumber: string) {
     try {
@@ -11,15 +9,13 @@ export const supabasePhoneOtpService = {
       const formattedPhone = `+91${cleanPhone}`;
 
       const supabase = getSupabaseBrowserClient();
-      const { data, error } = await supabase.auth.signInWithOtp({
+      const { error } = await supabase.auth.signInWithOtp({
         phone: formattedPhone,
         options: { shouldCreateUser: true },
       });
 
       if (error) throw error;
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      phoneOtpVerificationId = (data as any)?.session?.id || null;
       return { success: true, message: "OTP sent successfully" };
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Failed to send OTP";

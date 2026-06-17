@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Mail, ArrowRight, Loader2, User as UserIcon, Phone } from "lucide-react";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { takePostLoginRedirect } from "@/lib/utils/authRedirect";
 import { toast } from "sonner";
 
 export default function CompleteProfilePage() {
@@ -26,6 +27,21 @@ export default function CompleteProfilePage() {
 
       setUserId(user.id);
       setUserEmail(user.email || "");
+
+      // Pre-fill the phone they just verified (auth stores it as +91XXXXXXXXXX).
+      if (user.phone) setPhoneNumber(user.phone.replace(/^(\+?91)/, "").replace(/\D/g, "").slice(-10));
+
+      // If the profile is already complete, this is a returning user — skip
+      // the form and send them straight in.
+      const { data: profile } = await supabase
+        .from("user_profiles")
+        .select("full_name")
+        .eq("id", user.id)
+        .maybeSingle();
+      if (profile?.full_name?.trim()) {
+        router.replace(takePostLoginRedirect());
+        return;
+      }
     };
 
     checkAuth();
@@ -59,19 +75,24 @@ export default function CompleteProfilePage() {
     try {
       const supabase = getSupabaseBrowserClient();
       
-      // Update user_profiles table
+      // Upsert so the row is created if it doesn't exist yet (phone-login
+      // users may not have a profile row). Updating a missing row matches
+      // 0 rows and returns a 406 error.
       const { error } = await supabase
         .from("user_profiles")
-        .update({
-          full_name: fullName.trim(),
-          phone: phoneNumber.replace(/\D/g, ""),
-        })
-        .eq("id", userId);
+        .upsert(
+          {
+            id: userId,
+            full_name: fullName.trim(),
+            phone: phoneNumber.replace(/\D/g, ""),
+          },
+          { onConflict: "id" }
+        );
 
       if (error) throw error;
 
       toast.success("Profile completed successfully!");
-      router.push("/account");
+      router.push(takePostLoginRedirect());
       router.refresh();
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Failed to complete profile";

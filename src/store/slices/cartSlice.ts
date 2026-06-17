@@ -24,6 +24,9 @@ const cartSlice = createSlice({
 
     removeItem(state, action: PayloadAction<string>) {
       state.items = state.items.filter((i) => i.product_id !== action.payload);
+      // An empty cart can't carry a coupon — drop it so it must be
+      // re-applied once items are added back.
+      if (state.items.length === 0) state.coupon = null;
     },
 
     updateQuantity(

@@ -206,7 +206,7 @@ export function AddressForm({ defaultValues, onSubmit, loading }: AddressFormPro
         </p>
       )}
 
-      <div className="flex gap-3">
+      <div className="flex flex-wrap gap-x-4 gap-y-2">
         {(["home", "work", "other"] as const).map((type) => (
           <label key={type} className="flex cursor-pointer items-center gap-1.5 text-sm">
             <input type="radio" {...register("address_type")} value={type} className="text-brand-500" />

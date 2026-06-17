@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { takePostLoginRedirect } from "@/lib/utils/authRedirect";
 import { Loader2 } from "lucide-react";
 
 export default function CallbackPage() {
@@ -27,23 +28,24 @@ export default function CallbackPage() {
           return;
         }
 
-        // Check if user has profile
+        // Check if user has a profile. maybeSingle() tolerates a missing row
+        // (returns null) instead of erroring.
         const { data: profile, error: profileError } = await supabase
           .from("user_profiles")
           .select("*")
           .eq("id", session.user.id)
-          .single();
+          .maybeSingle();
 
-        if (profileError && profileError.code !== "PGRST116") {
+        if (profileError) {
           throw profileError;
         }
 
-        // If profile doesn't exist or missing required fields, redirect to complete profile
+        // New / incomplete user → finish profile (which then returns to the
+        // stored destination). Returning user → straight to where they came from.
         if (!profile || !profile.full_name || !profile.phone) {
           router.push("/auth/complete-profile");
         } else {
-          // Profile exists and complete, go to account
-          router.push("/account");
+          router.push(takePostLoginRedirect());
         }
       } catch (err) {
         const message = err instanceof Error ? err.message : "Authentication failed";

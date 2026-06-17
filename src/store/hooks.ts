@@ -1,5 +1,6 @@
 import { useDispatch, useSelector } from "react-redux";
 import type { AppDispatch, RootState } from "./index";
+import { computeCouponDiscount } from "@/lib/utils/coupon";
 
 export const useAppDispatch = () => useDispatch<AppDispatch>();
 export const useAppSelector = <T>(selector: (state: RootState) => T): T =>
@@ -20,6 +21,17 @@ export const useCartSubtotal = () =>
       0
     )
   );
+
+// Live coupon discount, recomputed from the CURRENT subtotal so it always
+// reflects the cart (item removed / quantity changed → discount updates).
+export const useCartDiscount = () =>
+  useAppSelector((s) => {
+    const subtotal = s.cart.items.reduce(
+      (sum, item) => sum + item.selling_price * item.quantity,
+      0
+    );
+    return computeCouponDiscount(s.cart.coupon, subtotal);
+  });
 
 // ─── Wishlist selectors ───────────────────────────────────────
 export const useWishlist = () => useAppSelector((s) => s.wishlist.productIds);

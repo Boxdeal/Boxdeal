@@ -7,6 +7,8 @@ import Link from "next/link";
 import { authService } from "@/services/auth";
 import { supabasePhoneOtpService } from "@/services/supabasePhoneOtp";
 import { googleOAuthService } from "@/services/googleOAuth";
+import { profileService } from "@/services/profile";
+import { setPostLoginRedirect, takePostLoginRedirect } from "@/lib/utils/authRedirect";
 import { toast } from "sonner";
 
 export default function LoginPage() {
@@ -19,7 +21,12 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
   const searchParams = useSearchParams();
-  const redirect = searchParams.get("redirect") ?? "/account";
+
+  // Remember where to return after login (the page the user came from). Stored
+  // so it survives the OTP→complete-profile and Google OAuth round-trips.
+  useEffect(() => {
+    setPostLoginRedirect(searchParams.get("redirect"));
+  }, [searchParams]);
 
   async function handlePasswordLogin(e: React.FormEvent) {
     e.preventDefault();
@@ -34,7 +41,7 @@ export default function LoginPage() {
       if (error) throw error;
 
       toast.success("Logged in successfully!");
-      router.push(redirect);
+      router.push(takePostLoginRedirect());
       router.refresh();
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Login failed";
@@ -83,8 +90,24 @@ export default function LoginPage() {
       const result = await supabasePhoneOtpService.verifyOtp(phone, otp);
       if (!result.success) throw new Error(result.error);
 
-      toast.success("Logged in successfully!");
-      router.push(redirect);
+      // New vs returning user: a returning user already has a filled-in
+      // profile (name set). New / incomplete users are sent to the profile
+      // page to finish signing up; existing users go straight in.
+      const userId = result.user?.id;
+      let needsProfile = true;
+      if (userId) {
+        const { data: profile } = await profileService.getProfile(userId);
+        needsProfile = !profile?.full_name?.trim();
+      }
+
+      if (needsProfile) {
+        // Keep the stored redirect; complete-profile will return there.
+        toast.success("Verified! Just one more step.");
+        router.push("/auth/complete-profile");
+      } else {
+        toast.success("Logged in successfully!");
+        router.push(takePostLoginRedirect());
+      }
       router.refresh();
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Invalid OTP";

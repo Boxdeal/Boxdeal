@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Tag, X, Loader2, Check } from "lucide-react";
 import { toast } from "sonner";
-import { useAppDispatch, useCart, useCartSubtotal } from "@/store/hooks";
+import { useAppDispatch, useCart, useCartSubtotal, useCartDiscount } from "@/store/hooks";
 import { applyCoupon, removeCoupon } from "@/store/slices/cartSlice";
 import { formatPrice } from "@/lib/utils/format";
 
@@ -11,10 +11,25 @@ export function CouponInput() {
   const dispatch = useAppDispatch();
   const { coupon } = useCart();
   const subtotal = useCartSubtotal();
+  const discount = useCartDiscount();
   const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
 
   const applied = coupon?.valid;
+
+  // If the cart changes so the coupon no longer qualifies (e.g. subtotal drops
+  // below its minimum order), drop it automatically and tell the user.
+  useEffect(() => {
+    if (coupon?.valid && subtotal > 0 && discount === 0) {
+      dispatch(removeCoupon());
+      const minOrder = Number(coupon.min_order_amount ?? 0);
+      toast.info(
+        minOrder > 0
+          ? `Coupon removed — minimum order of ${formatPrice(minOrder)} not met`
+          : "Coupon removed — no longer applicable"
+      );
+    }
+  }, [coupon, subtotal, discount, dispatch]);
 
   async function apply() {
     const trimmed = code.trim().toUpperCase();
@@ -49,7 +64,7 @@ export function CouponInput() {
   }
 
   return (
-    <div className="rounded-2xl border border-gray-100 bg-white p-5">
+    <div className="rounded-2xl border border-gray-100 bg-white p-4 sm:p-5">
       <h2 className="mb-3 flex items-center gap-2 font-bold text-gray-900">
         <Tag className="h-4 w-4 text-brand-500" /> Have a coupon?
       </h2>
@@ -59,7 +74,7 @@ export function CouponInput() {
           <div className="flex items-center gap-2 text-sm">
             <Check className="h-4 w-4 text-green-600" />
             <span className="font-bold uppercase text-green-700">{coupon?.code}</span>
-            <span className="text-green-600">−{formatPrice(coupon?.discount ?? 0)}</span>
+            <span className="text-green-600">−{formatPrice(discount)}</span>
           </div>
           <button onClick={remove} className="text-gray-400 hover:text-red-500" title="Remove coupon">
             <X className="h-4 w-4" />

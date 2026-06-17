@@ -51,11 +51,13 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json({
     data: {
-      valid:          true,
+      valid:            true,
       discount,
-      discount_type:  coupon.discount_type,
-      discount_value: Number(coupon.discount_value),
-      coupon_id:      coupon.id,
+      discount_type:    coupon.discount_type,
+      discount_value:   Number(coupon.discount_value),
+      min_order_amount: Number(coupon.min_order_amount || 0),
+      max_discount:     coupon.max_discount != null ? Number(coupon.max_discount) : null,
+      coupon_id:        coupon.id,
     },
   });
 }

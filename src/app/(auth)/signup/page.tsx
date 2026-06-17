@@ -138,13 +138,13 @@ export default function SignupPage() {
     setLoading(true);
 
     try {
-      const emailForProfile = method === "password" ? email : `user_${phoneNumber}@boxdeal.phone`;
-      await profileService.createProfile(userId, emailForProfile);
-
-      await profileService.updateProfile(userId, {
+      // upsert — the DB trigger already created the profile row on signup, so a
+      // plain insert would hit a primary-key conflict. This fills in the details.
+      const { error } = await profileService.updateProfile(userId, {
         full_name: fullName.trim(),
         phone: phoneNumber.replace(/\D/g, ""),
       });
+      if (error) throw error;
 
       toast.success("Account created successfully!");
       router.push("/account");

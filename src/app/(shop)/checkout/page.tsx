@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { useCart, useCartSubtotal } from "@/store/hooks";
+import { useCart, useCartSubtotal, useCartDiscount } from "@/store/hooks";
 import { useAuth } from "@/hooks";
 import { CartSummary } from "@/components/cart/CartSummary";
 import { AddressForm, type AddressFormValues } from "@/components/checkout/AddressForm";
@@ -13,9 +13,9 @@ import { addressService } from "@/services/address";
 import type { Address } from "@/types";
 
 export default function CheckoutPage() {
-  const { items, coupon } = useCart();
+  const { items } = useCart();
   const subtotal = useCartSubtotal();
-  const discount = coupon?.valid ? (coupon.discount ?? 0) : 0;
+  const discount = useCartDiscount();
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
 
@@ -51,6 +51,9 @@ export default function CheckoutPage() {
     setAddresses(list);
     const def = list.find((a) => a.is_default) ?? list[0] ?? null;
     setSelectedAddress(def);
+    // No saved address yet → open the form straight away so the user can fill
+    // it in. If addresses already exist, show the selectable list instead.
+    setAddingNew(list.length === 0);
   }
 
   async function saveAddress(values: AddressFormValues) {
@@ -89,33 +92,44 @@ export default function CheckoutPage() {
   if (!items.length) return null;
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-8">
-      <h1 className="mb-6 text-2xl font-bold text-gray-900">Checkout</h1>
-      <div className="grid gap-6 lg:grid-cols-5">
+    <div className="mx-auto max-w-5xl px-3 py-6 sm:px-4 sm:py-8">
+      <h1 className="mb-5 text-xl font-bold text-gray-900 sm:mb-6 sm:text-2xl">Checkout</h1>
+      <div className="grid gap-4 sm:gap-6 lg:grid-cols-5">
         {/* Left */}
         <div className="space-y-6 lg:col-span-3">
           {/* Address selection */}
-          <div className="rounded-2xl border border-gray-100 bg-white p-5">
-            <h2 className="mb-4 font-bold text-gray-900">Delivery Address</h2>
+          <div className="rounded-2xl border border-gray-100 bg-white p-4 sm:p-5">
+            <div className="mb-4 flex items-center justify-between gap-2">
+              <h2 className="font-bold text-gray-900">Delivery Address</h2>
+              {/* Let users who already have addresses back out of the form */}
+              {addingNew && addresses.length > 0 && (
+                <button
+                  onClick={() => setAddingNew(false)}
+                  className="text-sm font-medium text-gray-500 hover:text-gray-700"
+                >
+                  Cancel
+                </button>
+              )}
+            </div>
             {addresses.length > 0 && !addingNew && (
               <div className="space-y-3 mb-4">
                 {addresses.map((addr) => (
-                  <label key={addr.id} className="flex cursor-pointer gap-3 rounded-xl border border-gray-200 p-4 hover:border-brand-300 transition-colors">
+                  <label key={addr.id} className="flex cursor-pointer gap-3 rounded-xl border border-gray-200 p-3 sm:p-4 hover:border-brand-300 transition-colors">
                     <input
                       type="radio"
                       name="address"
                       checked={selectedAddress?.id === addr.id}
                       onChange={() => setSelectedAddress(addr)}
-                      className="mt-0.5 text-brand-500"
+                      className="mt-0.5 flex-shrink-0 text-brand-500"
                     />
-                    <div className="text-sm">
-                      <p className="font-semibold text-gray-900">
+                    <div className="min-w-0 text-sm">
+                      <p className="font-semibold text-gray-900 break-words">
                         {addr.full_name} · {addr.phone}
                         {addr.is_default && (
                           <span className="ml-2 rounded bg-brand-100 px-1.5 py-0.5 text-xs text-brand-700">Default</span>
                         )}
                       </p>
-                      <p className="text-gray-500 mt-0.5">
+                      <p className="text-gray-500 mt-0.5 break-words">
                         {addr.address_line1}{addr.address_line2 ? `, ${addr.address_line2}` : ""},{" "}
                         {addr.city}, {addr.state} — {addr.pincode}
                       </p>
@@ -141,7 +155,7 @@ export default function CheckoutPage() {
         {/* Right */}
         <div className="space-y-4 lg:col-span-2">
           {/* Order summary */}
-          <div className="rounded-2xl border border-gray-100 bg-white p-5">
+          <div className="rounded-2xl border border-gray-100 bg-white p-4 sm:p-5">
             <h2 className="mb-3 font-bold text-gray-900">Order Summary</h2>
             <div className="divide-y divide-gray-100">
               {items.map((item) => <CartItem key={item.product_id} item={item} />)}

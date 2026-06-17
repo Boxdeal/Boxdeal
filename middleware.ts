@@ -42,19 +42,27 @@ export async function middleware(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser();
   const { pathname } = request.nextUrl;
 
+  // Build a redirect that CARRIES the auth cookies refreshed above. Without
+  // this, a refresh-token rotation that coincides with a redirect loses the
+  // new cookie, invalidating the session and bouncing the user to /login
+  // repeatedly.
+  const redirectTo = (url: URL) => {
+    const redirectResponse = NextResponse.redirect(url);
+    response.cookies.getAll().forEach((cookie) => redirectResponse.cookies.set(cookie));
+    return redirectResponse;
+  };
+
   // Protect user routes
   const needsAuth = PROTECTED_ROUTES.some((r) => pathname.startsWith(r));
   if (needsAuth && !user) {
-    return NextResponse.redirect(
-      new URL(`/login?redirect=${encodeURIComponent(pathname)}`, request.url)
-    );
+    return redirectTo(new URL(`/login?redirect=${encodeURIComponent(pathname)}`, request.url));
   }
 
   // Protect admin routes
   const needsAdmin = ADMIN_ROUTES.some((r) => pathname.startsWith(r));
   if (needsAdmin) {
     if (!user) {
-      return NextResponse.redirect(new URL("/login", request.url));
+      return redirectTo(new URL("/login", request.url));
     }
     const { data: profile } = await supabase
       .from("user_profiles")
@@ -63,14 +71,14 @@ export async function middleware(request: NextRequest) {
       .single();
 
     if (!profile?.is_admin) {
-      return NextResponse.redirect(new URL("/", request.url));
+      return redirectTo(new URL("/", request.url));
     }
   }
 
   // Redirect logged-in users away from login page
   if (pathname === "/login" && user) {
     const redirect = request.nextUrl.searchParams.get("redirect") ?? "/account";
-    return NextResponse.redirect(new URL(redirect, request.url));
+    return redirectTo(new URL(redirect, request.url));
   }
 
   return response;

@@ -8,7 +8,7 @@ import { openCart, openSearch } from "@/store/slices/uiSlice";
 import { SearchBar } from "@/components/shared/SearchBar";
 import { authService } from "@/services/auth";
 import { toast } from "sonner";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { useAuth } from "@/hooks";
 
 function HeaderContent() {
@@ -18,6 +18,7 @@ function HeaderContent() {
   const profile       = useProfile();
   const wishlistCount = useAppSelector((s) => s.wishlist.productIds.length);
   const router        = useRouter();
+  const pathname      = usePathname();
   const [showDropdown, setShowDropdown] = useState(false);
   const dropdownRef   = useRef<HTMLDivElement>(null);
   const { user: authUser } = useAuth();
@@ -146,7 +147,7 @@ function HeaderContent() {
             </div>
           ) : (
             <Link
-              href="/login"
+              href={`/login?redirect=${encodeURIComponent(pathname)}`}
               className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-100"
               prefetch={true}
             >

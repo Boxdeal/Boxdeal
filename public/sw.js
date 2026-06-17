@@ -1,6 +1,6 @@
-const CACHE_NAME = 'boxdeal-v1';
-const HERO_CACHE = 'boxdeal-hero-images-v1';
-const API_CACHE = 'boxdeal-api-v1';
+const CACHE_NAME = 'boxdeal-v2';
+const HERO_CACHE = 'boxdeal-hero-images-v2';
+const API_CACHE = 'boxdeal-api-v2';
 
 const CRITICAL_ASSETS = [
   '/',
@@ -38,9 +38,15 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('fetch', (event) => {
   const { request } = event;
+
+  // Only ever handle GET. Mutations (POST/PATCH/PUT/DELETE — e.g. Supabase
+  // profile upserts) must pass straight through to the network untouched;
+  // caching them is invalid and caused failed responses to surface as errors.
+  if (request.method !== 'GET') return;
+
   const url = new URL(request.url);
 
-  // Cache hero images aggressively
+  // Cache hero images aggressively (these live on cross-origin Supabase storage).
   if (HERO_IMAGE_PATTERNS.some(pattern => pattern.test(url.href))) {
     event.respondWith(
       caches.match(request).then((response) => {
@@ -59,6 +65,11 @@ self.addEventListener('fetch', (event) => {
     );
     return;
   }
+
+  // Any other cross-origin request (Supabase REST/Auth, analytics, …) passes
+  // straight through, so a non-2xx response (e.g. 406) is delivered as-is and
+  // never falls into the HTML fallback below.
+  if (url.origin !== self.location.origin) return;
 
   // Network first for API calls, fallback to cache
   if (url.pathname.startsWith('/api/')) {
@@ -98,14 +109,13 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Network first for HTML
+  // Network first for HTML, falling back to cache when offline. Always resolve
+  // to a real Response — returning undefined throws
+  // "Failed to convert value to 'Response'".
   event.respondWith(
-    fetch(request)
-      .then((response) => response)
-      .catch(() => {
-        return caches.match(request).then((response) => {
-          return response || caches.match('/');
-        });
-      })
+    fetch(request).catch(async () => {
+      const cached = (await caches.match(request)) || (await caches.match('/'));
+      return cached || new Response('Offline', { status: 503, statusText: 'Offline' });
+    })
   );
 });
