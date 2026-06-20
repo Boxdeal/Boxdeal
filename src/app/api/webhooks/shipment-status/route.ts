@@ -50,8 +50,12 @@ export async function POST(req: NextRequest) {
   const awb          = payload.awb as string | undefined;
   const currentStatus = (payload.current_status ?? payload.shipment_status) as string | undefined;
 
+  // Always acknowledge with 200 when there's nothing actionable (incomplete
+  // payload, unknown status, unknown order). Shiprocket — including its "Test
+  // Webhook" button — treats any non-2xx as "endpoint unreachable" and refuses
+  // to save the config, so we must never 4xx a well-formed delivery.
   if (!currentStatus || (!orderNumber && !awb)) {
-    return NextResponse.json({ error: "Missing status or order reference" }, { status: 400 });
+    return NextResponse.json({ ok: true, ignored: "incomplete payload" });
   }
 
   const newStatus = mapStatus(String(currentStatus));
@@ -68,7 +72,8 @@ export async function POST(req: NextRequest) {
   const { data: order } = await query.single();
 
   if (!order) {
-    return NextResponse.json({ error: "Order not found" }, { status: 404 });
+    // Acknowledge — the AWB/order may simply belong to a different channel.
+    return NextResponse.json({ ok: true, ignored: "order not found" });
   }
 
   // Don't regress a delivered/cancelled order back to an earlier state.
