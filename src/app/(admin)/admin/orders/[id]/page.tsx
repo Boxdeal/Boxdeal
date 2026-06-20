@@ -9,6 +9,10 @@ import Image from "next/image";
 
 export const metadata: Metadata = { title: "Order Detail — Admin" };
 
+// Admin must always see live order/shipment data (status, AWB, tracking) —
+// never a cached snapshot. Force fresh render on every request.
+export const dynamic = "force-dynamic";
+
 export default async function AdminOrderDetailPage({
   params,
 }: {
@@ -77,7 +81,7 @@ export default async function AdminOrderDetailPage({
           </div>
 
           {/* Update status */}
-          <OrderStatusUpdater orderId={order.id} currentStatus={order.status} />
+          <OrderStatusUpdater orderId={order.id} currentStatus={order.status} hasTracking={!!order.tracking_number} trackingNumber={order.tracking_number} courierName={order.courier_name} />
         </div>
 
         <div className="space-y-4">
@@ -107,6 +111,31 @@ export default async function AdminOrderDetailPage({
               {order.razorpay_payment_id && <p className="text-xs text-gray-400 truncate">{order.razorpay_payment_id}</p>}
             </div>
           </div>
+
+          {/* Shipment (Shiprocket) */}
+          {(order.tracking_number || order.shiprocket_order_id) && (
+            <div className="rounded-2xl border border-gray-100 bg-white p-4">
+              <h2 className="mb-3 font-semibold text-gray-900">Shipment</h2>
+              <div className="text-sm space-y-1">
+                {order.courier_name && (
+                  <div className="flex justify-between"><span className="text-gray-500">Courier</span><span className="font-medium">{order.courier_name}</span></div>
+                )}
+                {order.tracking_number && (
+                  <div className="flex justify-between gap-2">
+                    <span className="text-gray-500">AWB</span>
+                    {order.tracking_url ? (
+                      <a href={order.tracking_url} target="_blank" rel="noopener noreferrer" className="font-medium text-brand-600 hover:underline truncate">{order.tracking_number}</a>
+                    ) : (
+                      <span className="font-medium">{order.tracking_number}</span>
+                    )}
+                  </div>
+                )}
+                {order.shiprocket_order_id && (
+                  <div className="flex justify-between"><span className="text-gray-500">Shiprocket ID</span><span className="font-medium">{order.shiprocket_order_id}</span></div>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Timeline */}
           <div className="rounded-2xl border border-gray-100 bg-white p-4">

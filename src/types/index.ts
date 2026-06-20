@@ -208,6 +208,8 @@ export interface Order {
   courier_name: string | null;
   tracking_number: string | null;
   tracking_url: string | null;
+  shiprocket_order_id: string | null;
+  shiprocket_shipment_id: string | null;
   notes: string | null;
   placed_at: string;
   confirmed_at: string | null;

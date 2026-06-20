@@ -1,8 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { Lock } from "lucide-react";
+import { Lock, CheckCircle2, XCircle, X } from "lucide-react";
 import { useAppDispatch, useCart, useCartSubtotal, useCartDiscount } from "@/store/hooks";
 import { clearCart } from "@/store/slices/cartSlice";
 import { calculateShipping } from "@/lib/utils/helpers";
@@ -17,14 +16,24 @@ interface PaymentButtonProps {
 
 declare global {
   interface Window {
-    Razorpay: new (options: Record<string, unknown>) => { open: () => void };
+    Razorpay: new (options: Record<string, unknown>) => {
+      open: () => void;
+      on: (event: string, handler: (response: unknown) => void) => void;
+    };
   }
 }
 
+type Result =
+  | { kind: "success"; orderId: string; orderNumber: string }
+  | { kind: "failed"; message: string }
+  | null;
+
 export function PaymentButton({ address }: PaymentButtonProps) {
   const [loading, setLoading] = useState(false);
+  // The post-payment popup state. Rendered right here on the checkout page so
+  // it never depends on a navigation succeeding from inside Razorpay's iframe.
+  const [result, setResult] = useState<Result>(null);
   const dispatch = useAppDispatch();
-  const router = useRouter();
   const { items, coupon } = useCart();
   const subtotal = useCartSubtotal();
   const discount = useCartDiscount();
@@ -54,6 +63,18 @@ export function PaymentButton({ address }: PaymentButtonProps) {
       const { data, error } = await orderRes.json();
       if (error) throw new Error(error);
 
+      // Once we reach a final state (paid or failed) we don't want the modal's
+      // ondismiss to also cancel the order.
+      let settled = false;
+
+      const cancelOrder = () => {
+        fetch("/api/payments/cancel", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ db_order_id: data.db_order_id }),
+        }).catch(() => {});
+      };
+
       const options = {
         key:         process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
         amount:      data.razorpay_amount,
@@ -71,38 +92,65 @@ export function PaymentButton({ address }: PaymentButtonProps) {
           razorpay_payment_id: string;
           razorpay_signature: string;
         }) => {
-          const verifyRes = await fetch("/api/payments/verify", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              db_order_id:        data.db_order_id,
-              razorpay_order_id:  response.razorpay_order_id,
-              razorpay_payment_id: response.razorpay_payment_id,
-              razorpay_signature: response.razorpay_signature,
-            }),
-          });
-          const result = await verifyRes.json();
-          if (result.error) {
-            toast.error("Payment verification failed");
-            return;
+          settled = true;
+          try {
+            const verifyRes = await fetch("/api/payments/verify", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                db_order_id:        data.db_order_id,
+                razorpay_order_id:  response.razorpay_order_id,
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_signature: response.razorpay_signature,
+              }),
+            });
+            const verifyResult = await verifyRes.json();
+            if (verifyResult.error) {
+              setResult({
+                kind: "failed",
+                message: "We couldn't verify your payment. If money was deducted it will be refunded.",
+              });
+              setLoading(false);
+              return;
+            }
+            // Success — show the confirmation popup. Cart is cleared only when
+            // the user leaves (goToOrder), so clearing it here can't trigger the
+            // checkout page's "cart empty → /products" redirect and unmount us.
+            setResult({
+              kind: "success",
+              orderId: data.db_order_id,
+              orderNumber: data.order_number,
+            });
+            setLoading(false);
+          } catch {
+            setResult({
+              kind: "failed",
+              message: "Something went wrong while confirming your payment.",
+            });
+            setLoading(false);
           }
-          dispatch(clearCart());
-          router.push(`/orders/${data.db_order_id}?success=true`);
         },
         modal: {
           ondismiss: () => {
-            // User closed the popup without paying — release the pending order.
-            fetch("/api/payments/cancel", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ db_order_id: data.db_order_id }),
-            }).catch(() => {});
+            // User closed Razorpay without completing payment.
+            if (settled) return;
+            cancelOrder();
             setLoading(false);
           },
         },
       };
 
       const rzp = new window.Razorpay(options);
+      // Fires when Razorpay reports the payment itself failed.
+      rzp.on("payment.failed", () => {
+        settled = true;
+        cancelOrder();
+        setResult({
+          kind: "failed",
+          message: "Your payment could not be completed. No money was deducted.",
+        });
+        setLoading(false);
+      });
       rzp.open();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Something went wrong");
@@ -110,14 +158,117 @@ export function PaymentButton({ address }: PaymentButtonProps) {
     }
   }
 
+  function goToOrder() {
+    if (result?.kind !== "success") return;
+    const id = result.orderId;
+    dispatch(clearCart());
+    // Hard navigation so the checkout page's cart-empty redirect effect can't
+    // race us to /products.
+    window.location.href = `/orders/${id}`;
+  }
+
   return (
-    <button
-      onClick={handlePay}
-      disabled={loading || items.length === 0}
-      className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand-500 py-4 text-base font-bold text-white hover:bg-brand-600 disabled:opacity-60 transition-all active:scale-95"
-    >
-      <Lock className="h-4 w-4" />
-      {loading ? "Processing…" : `Pay ${formatPrice(total)} Securely`}
-    </button>
+    <>
+      <button
+        onClick={handlePay}
+        disabled={loading || items.length === 0}
+        className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand-500 py-4 text-base font-bold text-white hover:bg-brand-600 disabled:opacity-60 transition-all active:scale-95"
+      >
+        <Lock className="h-4 w-4" />
+        {loading ? "Processing…" : `Pay ${formatPrice(total)} Securely`}
+      </button>
+
+      {result?.kind === "success" && (
+        <SuccessModal orderNumber={result.orderNumber} onClose={goToOrder} />
+      )}
+      {result?.kind === "failed" && (
+        <FailedModal
+          message={result.message}
+          onClose={() => setResult(null)}
+        />
+      )}
+    </>
+  );
+}
+
+function SuccessModal({
+  orderNumber,
+  onClose,
+}: {
+  orderNumber: string;
+  onClose: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 animate-in fade-in duration-200">
+      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+      <div className="relative z-10 w-full max-w-[340px] overflow-hidden rounded-3xl bg-white shadow-2xl animate-in zoom-in-95 fade-in duration-300">
+        <div className="h-1.5 w-full bg-brand-500" />
+        <div className="px-7 py-8 text-center">
+          {/* The success tick stays green (universal "done" signal); everything
+              else follows the brand (orange) theme. */}
+          <div className="mx-auto mb-5 flex h-24 w-24 items-center justify-center rounded-full bg-green-100">
+            <CheckCircle2 className="h-12 w-12 text-green-500" strokeWidth={1.5} />
+          </div>
+          <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-brand-600">
+            Payment Successful
+          </p>
+          <h2 className="mb-2 text-2xl font-extrabold leading-tight text-gray-900">
+            Your Order is Confirmed!
+          </h2>
+          <p className="mb-1 text-sm text-gray-500">Thank you for shopping with us.</p>
+          <p className="mb-7 text-sm text-gray-700">
+            Order <span className="font-mono font-semibold text-gray-900">{orderNumber}</span> has been placed.
+          </p>
+          <button
+            onClick={onClose}
+            className="w-full rounded-2xl bg-brand-500 py-3.5 text-sm font-bold text-white transition-all hover:bg-brand-600 active:scale-95"
+          >
+            View My Order
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function FailedModal({
+  message,
+  onClose,
+}: {
+  message: string;
+  onClose: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 animate-in fade-in duration-200">
+      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+      <div className="relative z-10 w-full max-w-[340px] overflow-hidden rounded-3xl bg-white shadow-2xl animate-in zoom-in-95 fade-in duration-300">
+        <button
+          onClick={onClose}
+          className="absolute right-4 top-4 rounded-full p-1 text-gray-400 hover:text-gray-600"
+          aria-label="Close"
+        >
+          <X className="h-4 w-4" />
+        </button>
+        <div className="h-1.5 w-full bg-red-500" />
+        <div className="px-7 py-8 text-center">
+          <div className="mx-auto mb-5 flex h-24 w-24 items-center justify-center rounded-full bg-red-100">
+            <XCircle className="h-12 w-12 text-red-500" strokeWidth={1.5} />
+          </div>
+          <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-red-600">
+            Payment Failed
+          </p>
+          <h2 className="mb-2 text-2xl font-extrabold leading-tight text-gray-900">
+            Payment Unsuccessful
+          </h2>
+          <p className="mb-7 text-sm leading-relaxed text-gray-500">{message}</p>
+          <button
+            onClick={onClose}
+            className="w-full rounded-2xl bg-gray-900 py-3.5 text-sm font-bold text-white transition-all hover:bg-gray-800 active:scale-95"
+          >
+            Try Again
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }

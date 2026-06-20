@@ -16,13 +16,10 @@ export const metadata: Metadata = { title: "Order Details" };
 
 export default async function OrderDetailPage({
   params,
-  searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ success?: string }>;
 }) {
   const { id } = await params;
-  const { success } = await searchParams;
 
   const supabase = await getSupabaseServerClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -78,19 +75,6 @@ export default async function OrderDetailPage({
         <ChevronLeft className="h-4 w-4" />
         My Orders
       </Link>
-
-      {/* Success banner */}
-      {success === "true" && (
-        <div className="flex items-center gap-3 rounded-2xl bg-green-50 border border-green-200 px-5 py-4">
-          <CheckCircle className="h-5 w-5 flex-shrink-0 text-green-500" />
-          <div>
-            <p className="font-semibold text-green-800">Payment successful!</p>
-            <p className="text-sm text-green-600">
-              Your order <span className="font-mono">{typedOrder.order_number}</span> has been placed.
-            </p>
-          </div>
-        </div>
-      )}
 
       {/* Order header */}
       <div className="rounded-2xl border border-gray-100 bg-white p-5">

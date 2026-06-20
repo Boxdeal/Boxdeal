@@ -7,6 +7,9 @@ import { ORDER_STATUS_LABELS } from "@/constants";
 
 export const metadata: Metadata = { title: "Orders — Admin" };
 
+// Admin order list must always reflect live status — no cached snapshot.
+export const dynamic = "force-dynamic";
+
 interface Props {
   searchParams: Promise<{ status?: OrderStatus; page?: string }>;
 }

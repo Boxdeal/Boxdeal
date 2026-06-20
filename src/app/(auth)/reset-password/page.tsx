@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Lock, ArrowRight, Loader2 } from "lucide-react";
 import Link from "next/link";
@@ -13,6 +13,51 @@ export default function ResetPasswordPage() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  // The reset link lands here without a session. We must first turn the
+  // recovery token in the URL into a session before the password can change —
+  // otherwise updateUser() fails with 403 "session_not_found".
+  const [verifying, setVerifying] = useState(true);
+  const [linkError, setLinkError] = useState("");
+
+  useEffect(() => {
+    const supabase = getSupabaseBrowserClient();
+    let done = false;
+    const finish = (ok: boolean) => {
+      if (done) return;
+      done = true;
+      if (!ok) {
+        setLinkError("This password reset link is invalid or has expired. Please request a new one.");
+      }
+      setVerifying(false);
+    };
+
+    // Supabase fires PASSWORD_RECOVERY once it parses the token from the URL.
+    const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "PASSWORD_RECOVERY" || (event === "SIGNED_IN" && session)) finish(true);
+    });
+
+    (async () => {
+      const params = new URLSearchParams(window.location.search);
+      // Supabase relays expired/invalid links as ?error_description=...
+      if (params.get("error_description")) return finish(false);
+
+      // Already have a session (auto-detected from the URL)?
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) return finish(true);
+
+      // PKCE flow — exchange the ?code=... for a recovery session.
+      const code = params.get("code");
+      if (code) {
+        const { error } = await supabase.auth.exchangeCodeForSession(code);
+        return finish(!error);
+      }
+
+      // No session, no code — give the listener a brief moment, then fail.
+      setTimeout(() => finish(false), 2500);
+    })();
+
+    return () => sub.subscription.unsubscribe();
+  }, []);
 
   async function handleResetPassword(e: React.FormEvent) {
     e.preventDefault();
@@ -53,6 +98,40 @@ export default function ResetPasswordPage() {
     } finally {
       setLoading(false);
     }
+  }
+
+  // Verifying the recovery link — don't show the form yet.
+  if (verifying) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gray-50">
+        <Loader2 className="h-8 w-8 animate-spin text-brand-500" />
+      </div>
+    );
+  }
+
+  // Link was invalid/expired — guide the user to request a fresh one.
+  if (linkError) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4">
+        <div className="w-full max-w-md rounded-2xl bg-white p-8 shadow-sm border border-gray-100 space-y-6 text-center">
+          <span className="text-3xl font-black">
+            Box<span className="text-brand-500">Deal</span>
+          </span>
+          <div className="bg-red-50 rounded-lg p-3 border border-red-200">
+            <p className="text-sm text-red-900">{linkError}</p>
+          </div>
+          <Link
+            href="/forgot-password"
+            className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand-500 py-3.5 text-sm font-bold text-white hover:bg-brand-600 transition-colors"
+          >
+            Request a new link
+          </Link>
+          <Link href="/login" className="block text-sm font-semibold text-brand-500 hover:text-brand-600">
+            Back to Sign in
+          </Link>
+        </div>
+      </div>
+    );
   }
 
   return (

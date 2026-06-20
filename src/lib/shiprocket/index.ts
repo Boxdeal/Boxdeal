@@ -1,6 +1,9 @@
-import type { Order } from "@/types";
+import type { Order, OrderItem } from "@/types";
 
 const BASE_URL = "https://apiv2.shiprocket.in/v1/external";
+
+// Pickup location nickname as configured in the Shiprocket dashboard.
+const PICKUP_LOCATION = "Boxdeal";
 
 let cachedToken: { token: string; expiresAt: number } | null = null;
 
@@ -19,7 +22,7 @@ async function getToken(): Promise<string> {
   });
 
   const data = await res.json();
-  if (!res.ok) throw new Error("Shiprocket auth failed");
+  if (!res.ok || !data.token) throw new Error("Shiprocket auth failed");
 
   cachedToken = {
     token:     data.token,
@@ -44,24 +47,61 @@ async function shiprocketFetch(
   });
 }
 
-export async function createShiprocketOrder(order: Order) {
-  const items = (order.items ?? []).map((item) => ({
-    name:      item.product_name,
-    sku:       item.product_sku,
-    units:     item.quantity,
+/** Public Shiprocket tracking page for a given AWB. */
+export function getTrackingUrl(awb: string): string {
+  return `https://shiprocket.co/tracking/${awb}`;
+}
+
+// Order item enriched with the product's physical attributes (joined from
+// the products table at fulfillment time — order_items doesn't store these).
+export type ShipmentItem = OrderItem & {
+  weight_grams?: number | null;
+  length_cm?:    number | null;
+  breadth_cm?:   number | null;
+  height_cm?:    number | null;
+};
+
+/**
+ * Push an order to Shiprocket as an ad-hoc order.
+ * Weight is summed from each item's product weight; package dimensions use the
+ * largest dimension found across items (Shiprocket takes one box per shipment).
+ * Returns { order_id, shipment_id }.
+ */
+export async function createShiprocketOrder(
+  order: Order & { items?: ShipmentItem[] }
+) {
+  const items = (order.items ?? []) as ShipmentItem[];
+
+  const orderItems = items.map((item) => ({
+    name:          item.product_name,
+    sku:           item.product_sku,
+    units:         item.quantity,
     selling_price: item.selling_price,
   }));
 
-  const totalWeight =
-    (order.items ?? []).reduce((sum, _) => sum + 0.3, 0) || 0.5;
+  // Total actual weight in kg (Shiprocket expects kg). Floor at 0.1kg.
+  const totalGrams = items.reduce(
+    (sum, item) => sum + (item.weight_grams ?? 0) * item.quantity,
+    0
+  );
+  const weightKg = Math.max(totalGrams / 1000, 0.1);
+
+  // Package dimensions in cm — largest single-item value, sensible defaults.
+  const maxDim = (pick: (i: ShipmentItem) => number | null | undefined, fallback: number) =>
+    Math.max(...items.map((i) => Number(pick(i)) || 0), 0) || fallback;
+
+  const length  = maxDim((i) => i.length_cm, 10);
+  const breadth = maxDim((i) => i.breadth_cm, 10);
+  const height  = maxDim((i) => i.height_cm, 5);
 
   const res = await shiprocketFetch("/orders/create/adhoc", {
     method: "POST",
     body: JSON.stringify({
-      order_id:         order.order_number,
-      order_date:       order.placed_at,
-      pickup_location:  "Primary",
+      order_id:               order.order_number,
+      order_date:             order.placed_at,
+      pickup_location:        PICKUP_LOCATION,
       billing_customer_name:  order.shipping_full_name,
+      billing_last_name:      "",
       billing_address:        order.shipping_address1,
       billing_address_2:      order.shipping_address2 ?? "",
       billing_city:           order.shipping_city,
@@ -70,26 +110,51 @@ export async function createShiprocketOrder(order: Order) {
       billing_country:        "India",
       billing_phone:          order.shipping_phone,
       shipping_is_billing:    1,
-      order_items:            items,
+      order_items:            orderItems,
       payment_method:         order.payment_method === "cod" ? "COD" : "Prepaid",
       sub_total:              order.subtotal,
-      weight:                 totalWeight,
+      length,
+      breadth,
+      height,
+      weight:                 weightKg,
     }),
   });
 
   const data = await res.json();
-  if (!res.ok) throw new Error(data.message ?? "Shiprocket order creation failed");
-  return data;
+  if (!res.ok || !data.shipment_id) {
+    throw new Error(data.message ?? "Shiprocket order creation failed");
+  }
+  return data as {
+    order_id:    number;
+    shipment_id: number;
+    status?:     string;
+  };
 }
 
-export async function generateAWB(shipmentId: number, courierId: number) {
+/**
+ * Assign a courier + generate the AWB (tracking number) for a shipment.
+ * With auto-assignment enabled, courierId can be omitted and Shiprocket picks
+ * the recommended courier. Returns { awb_code, courier_name }.
+ */
+export async function generateAWB(shipmentId: number, courierId?: number) {
+  const body: Record<string, unknown> = { shipment_id: shipmentId };
+  if (courierId) body.courier_id = courierId;
+
   const res = await shiprocketFetch("/courier/assign/awb", {
     method: "POST",
-    body: JSON.stringify({ shipment_id: shipmentId, courier_id: courierId }),
+    body: JSON.stringify(body),
   });
   const data = await res.json();
   if (!res.ok) throw new Error(data.message ?? "AWB generation failed");
-  return data;
+
+  // Shiprocket nests the assigned courier details under response.data.
+  const d = data?.response?.data ?? {};
+  const awb_code     = d.awb_code     ?? data.awb_code     ?? null;
+  const courier_name = d.courier_name ?? data.courier_name ?? null;
+
+  if (!awb_code) throw new Error(data.message ?? "No courier could be assigned (check serviceability / wallet balance)");
+
+  return { awb_code: String(awb_code), courier_name: courier_name as string | null };
 }
 
 export async function schedulePickup(shipmentIds: number[]) {

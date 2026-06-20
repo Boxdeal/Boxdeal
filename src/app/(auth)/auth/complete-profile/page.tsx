@@ -10,10 +10,16 @@ import { toast } from "sonner";
 export default function CompleteProfilePage() {
   const [fullName, setFullName] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
+  const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
+  // Gate the form behind the initial auth/profile check so it never flashes for
+  // a returning (already-complete) user who is about to be redirected away.
+  const [checking, setChecking] = useState(true);
   const [userId, setUserId] = useState("");
   const [userEmail, setUserEmail] = useState("");
   const router = useRouter();
+
+  const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -31,17 +37,27 @@ export default function CompleteProfilePage() {
       // Pre-fill the phone they just verified (auth stores it as +91XXXXXXXXXX).
       if (user.phone) setPhoneNumber(user.phone.replace(/^(\+?91)/, "").replace(/\D/g, "").slice(-10));
 
-      // If the profile is already complete, this is a returning user — skip
-      // the form and send them straight in.
       const { data: profile } = await supabase
         .from("user_profiles")
-        .select("full_name")
+        .select("full_name, phone")
         .eq("id", user.id)
         .maybeSingle();
-      if (profile?.full_name?.trim()) {
+
+      // Only skip the form for a TRULY complete profile — both name AND phone.
+      // Google fills full_name from the account name but never a phone, so we
+      // must still collect that here (otherwise the form would flash & vanish).
+      if (profile?.full_name?.trim() && profile?.phone?.trim()) {
         router.replace(takePostLoginRedirect());
         return;
       }
+
+      // Pre-fill whatever we already have (e.g. Google name) so the user
+      // doesn't have to retype it.
+      if (profile?.full_name?.trim()) setFullName(profile.full_name.trim());
+      if (profile?.phone?.trim()) setPhoneNumber(profile.phone.replace(/\D/g, "").slice(-10));
+
+      // Profile is incomplete — reveal the form.
+      setChecking(false);
     };
 
     checkAuth();
@@ -70,11 +86,29 @@ export default function CompleteProfilePage() {
       return;
     }
 
+    // Users without an email (phone-OTP login) must provide one so they can
+    // receive order confirmations. Google users already have an email.
+    if (!userEmail && !EMAIL_RE.test(email.trim())) {
+      toast.error("Please enter a valid email address");
+      return;
+    }
+
     setLoading(true);
 
     try {
+      // Attach the email to the auth account first (phone-OTP users only).
+      if (!userEmail) {
+        const res = await fetch("/api/auth/set-email", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: email.trim() }),
+        });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error ?? "Failed to save email");
+      }
+
       const supabase = getSupabaseBrowserClient();
-      
+
       // Upsert so the row is created if it doesn't exist yet (phone-login
       // users may not have a profile row). Updating a missing row matches
       // 0 rows and returns a 406 error.
@@ -102,6 +136,16 @@ export default function CompleteProfilePage() {
     }
   }
 
+  // Still verifying whether the profile is complete — show a spinner instead of
+  // flashing the form (a complete user is about to be redirected away).
+  if (checking) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gray-50">
+        <Loader2 className="h-8 w-8 animate-spin text-brand-500" />
+      </div>
+    );
+  }
+
   return (
     <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4">
       <div className="w-full max-w-md rounded-2xl bg-white p-8 shadow-sm border border-gray-100 space-y-6">
@@ -119,6 +163,26 @@ export default function CompleteProfilePage() {
         </div>
 
         <form onSubmit={handleCompleteProfile} className="space-y-4">
+          {!userEmail && (
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-gray-700">
+                <div className="flex items-center gap-2">
+                  <Mail className="h-4 w-4 text-gray-400" />
+                  Email <span className="text-red-500">*</span>
+                </div>
+              </label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@example.com"
+                required
+                className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
+              />
+              <p className="text-xs text-gray-500 mt-2">We&apos;ll send order updates here</p>
+            </div>
+          )}
+
           <div>
             <label className="mb-1.5 block text-sm font-medium text-gray-700">
               <div className="flex items-center gap-2">

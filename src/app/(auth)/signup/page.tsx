@@ -22,7 +22,12 @@ export default function SignupPage() {
   const [userId, setUserId] = useState("");
   const [fullName, setFullName] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
+  // For phone-OTP signups we also collect an email (no email otherwise), so
+  // every user has both a phone and an email for order notifications.
+  const [profileEmail, setProfileEmail] = useState("");
   const router = useRouter();
+
+  const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
   async function handlePasswordSignup(e: React.FormEvent) {
     e.preventDefault();
@@ -135,9 +140,28 @@ export default function SignupPage() {
       return;
     }
 
+    // Phone-OTP signups have no email yet — require one so the user can receive
+    // order confirmations. (Password signups already have an email.)
+    if (method === "phone" && !EMAIL_RE.test(profileEmail.trim())) {
+      toast.error("Please enter a valid email address");
+      return;
+    }
+
     setLoading(true);
 
     try {
+      // For phone-OTP users, attach the email to their auth account first. If
+      // the email is taken / invalid we stop here so they can fix it.
+      if (method === "phone") {
+        const res = await fetch("/api/auth/set-email", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: profileEmail.trim() }),
+        });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error ?? "Failed to save email");
+      }
+
       // upsert — the DB trigger already created the profile row on signup, so a
       // plain insert would hit a primary-key conflict. This fills in the details.
       const { error } = await profileService.updateProfile(userId, {
@@ -422,6 +446,26 @@ export default function SignupPage() {
             <div className="bg-green-50 rounded-lg p-3 border border-green-200">
               <p className="text-sm text-green-900 font-semibold">✓ Account created! Complete your profile.</p>
             </div>
+
+            {method === "phone" && (
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-gray-700">
+                  <div className="flex items-center gap-2">
+                    <Mail className="h-4 w-4 text-gray-400" />
+                    Email <span className="text-red-500">*</span>
+                  </div>
+                </label>
+                <input
+                  type="email"
+                  value={profileEmail}
+                  onChange={(e) => setProfileEmail(e.target.value)}
+                  placeholder="you@example.com"
+                  required
+                  className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
+                />
+                <p className="text-xs text-gray-500 mt-2">We&apos;ll send order updates here</p>
+              </div>
+            )}
 
             <div>
               <label className="mb-1.5 block text-sm font-medium text-gray-700">

@@ -34,10 +34,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid payment signature" }, { status: 400 });
   }
 
-  // Load the order (with its items) so we can take stock and apply the coupon.
+  // Load the order (with its full items) so we can take stock, apply the coupon,
+  // AND render a complete confirmation email (needs name/price, not just id/qty).
   const { data: fullOrder, error: loadError } = await admin
     .from("orders")
-    .select("*, items:order_items(product_id, quantity)")
+    .select("*, items:order_items(*)")
     .eq("id", db_order_id)
     .eq("user_id", user.id)
     .single();
