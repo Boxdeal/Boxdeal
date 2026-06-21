@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import {
   PolicyLayout,
   PolicySection,
@@ -21,8 +22,8 @@ export default function TermsPage() {
         <p>
           By accessing or using BoxDeal, you confirm that you are at least 18
           years old and agree to these Terms &amp; Conditions, our{" "}
-          <a href="/privacy">Privacy Policy</a> and our{" "}
-          <a href="/returns">Return Policy</a>.
+          <Link href="/privacy">Privacy Policy</Link> and our{" "}
+          <Link href="/returns">Return Policy</Link>.
         </p>
       </PolicySection>
 
@@ -76,8 +77,8 @@ export default function TermsPage() {
       <PolicySection title="6. Returns, Cancellations & Shipping">
         <p>
           Returns, replacements and cancellations are governed by our{" "}
-          <a href="/returns">Return Policy</a>, and delivery is governed by our{" "}
-          <a href="/shipping">Shipping Policy</a>. Please read them before
+          <Link href="/returns">Return Policy</Link>, and delivery is governed by our{" "}
+          <Link href="/shipping">Shipping Policy</Link>. Please read them before
           ordering.
         </p>
       </PolicySection>

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import {
   PolicyLayout,
   PolicySection,
@@ -58,7 +59,7 @@ export default function ShippingPolicyPage() {
         <p>
           Once your order ships, you&rsquo;ll receive a tracking link by email
           and SMS. You can also track it anytime from your{" "}
-          <a href="/orders">Orders</a> page.
+          <Link href="/orders">Orders</Link> page.
         </p>
       </PolicySection>
 
@@ -74,7 +75,7 @@ export default function ShippingPolicyPage() {
           We strongly recommend recording a{" "}
           <strong>clear unboxing video</strong> when you open your package. It is
           required if you ever need to raise a damage or missing-item claim. See
-          our <a href="/returns">Return Policy</a> for details.
+          our <Link href="/returns">Return Policy</Link> for details.
         </PolicyNote>
       </PolicySection>
 

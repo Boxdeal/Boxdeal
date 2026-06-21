@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import {
   PolicyLayout,
   PolicySection,
@@ -161,7 +162,7 @@ export default function ReturnsPolicyPage() {
           You can cancel your order within{" "}
           <strong>12 hours of placing it, at no charge</strong> — as long as it
           has not already been shipped. Cancel from your{" "}
-          <a href="/orders">Orders</a> page or contact support. If paid online,
+          <Link href="/orders">Orders</Link> page or contact support. If paid online,
           the full amount is refunded.
         </p>
       </PolicySection>
