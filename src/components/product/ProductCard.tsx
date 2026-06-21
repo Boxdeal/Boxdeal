@@ -61,6 +61,14 @@ function ProductCardComponent({ product, isDeal }: ProductCardProps) {
 
   const outOfStock = product.stock_quantity <= 0;
 
+  // The main image shown is the primary (thumbnail_image ?? primary_image).
+  // For the hover swap we need the first OTHER image — not blindly index [1],
+  // because the primary may sit at any index in product_images.
+  const mainImage = product.thumbnail_image ?? product.primary_image;
+  const secondaryImage = product.product_images?.find(
+    (img) => img.image_url && img.image_url !== mainImage && img.image_url !== product.primary_image
+  )?.image_url;
+
   return (
     <Link
       href={`/product/${product.slug}`}
@@ -89,9 +97,9 @@ function ProductCardComponent({ product, isDeal }: ProductCardProps) {
                 isHovering ? "opacity-0" : "opacity-100"
               )}
             />
-            {product.product_images && product.product_images.length > 1 && (
+            {secondaryImage && (
               <Image
-                src={product.product_images[1]?.image_url ?? product.primary_image}
+                src={secondaryImage}
                 alt={`${product.name} - alternate`}
                 fill
                 sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
