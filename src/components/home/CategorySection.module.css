@@ -297,6 +297,24 @@
   transform: scale(1.05);
 }
 
+/* Home Theatre custom blue gradient (#2664ec) */
+.gradientHomeLtr {
+  background: linear-gradient(to right, #2664ec, #a8c2fa, #ffffff);
+}
+
+.gradientHomeRtl {
+  background: linear-gradient(to right, #ffffff, #a8c2fa, #2664ec);
+}
+
+/* PartyBox custom teal gradient (#058d81) */
+.gradientPartyLtr {
+  background: linear-gradient(to right, #058d81, #9fdfd9, #ffffff);
+}
+
+.gradientPartyRtl {
+  background: linear-gradient(to right, #ffffff, #9fdfd9, #058d81);
+}
+
 /* Gradient Backgrounds */
 .gradientBlueLtr {
   background: linear-gradient(to right, #2563eb, #93c5fd, #ffffff);

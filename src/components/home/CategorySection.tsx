@@ -40,7 +40,28 @@ export function CategorySection({
     : null;
   const isImageFirst = index % 2 === 0;
   const colorScheme = colorPalettes[index % colorPalettes.length];
-  const gradientColor = isImageFirst ? colorScheme.ltr : colorScheme.rtl;
+  // Home Theatre gets a solid blue (#2664ec) background instead of the rotating gradient.
+  const slugLower = (categorySlug ?? "").toLowerCase();
+  const nameLower = (categoryName ?? "").toLowerCase();
+  const isHomeTheatre =
+    slugLower.includes("home-theatre") ||
+    slugLower.includes("home-theater") ||
+    nameLower.includes("home theatre") ||
+    nameLower.includes("home theater");
+  const isPartyBox =
+    slugLower.includes("partybox") ||
+    slugLower.includes("party-box") ||
+    nameLower.includes("partybox") ||
+    nameLower.includes("party box");
+
+  let gradientColor: string;
+  if (isHomeTheatre) {
+    gradientColor = isImageFirst ? styles.gradientHomeLtr : styles.gradientHomeRtl;
+  } else if (isPartyBox) {
+    gradientColor = isImageFirst ? styles.gradientPartyLtr : styles.gradientPartyRtl;
+  } else {
+    gradientColor = isImageFirst ? colorScheme.ltr : colorScheme.rtl;
+  }
 
   return (
     <div className={styles.container}>

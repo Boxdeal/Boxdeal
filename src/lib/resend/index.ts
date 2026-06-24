@@ -44,6 +44,41 @@ function baseTemplate(title: string, bodyHtml: string): string {
 </html>`;
 }
 
+export async function sendContactMessage(input: {
+  name: string;
+  email: string;
+  phone?: string;
+  subject: string;
+  message: string;
+}) {
+  const supportInbox = process.env.CONTACT_INBOX_EMAIL ?? "support@boxdeal.in";
+
+  const html = baseTemplate(
+    "New Contact Message",
+    `
+    <h2 style="margin:0 0 8px;font-size:20px">${input.subject}</h2>
+    <p style="color:#6b7280;margin:0 0 24px">A new message was submitted from the Contact page.</p>
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px">
+      <tr><td style="padding:6px 0;color:#6b7280;width:120px">Name</td><td style="padding:6px 0;font-weight:600">${input.name}</td></tr>
+      <tr><td style="padding:6px 0;color:#6b7280">Email</td><td style="padding:6px 0;font-weight:600">${input.email}</td></tr>
+      ${input.phone ? `<tr><td style="padding:6px 0;color:#6b7280">Phone</td><td style="padding:6px 0;font-weight:600">${input.phone}</td></tr>` : ""}
+    </table>
+    <div style="background:#f9fafb;border-radius:8px;padding:16px">
+      <p style="margin:0 0 4px;font-weight:600">Message</p>
+      <p style="margin:0;color:#374151;white-space:pre-line">${input.message}</p>
+    </div>
+    `
+  );
+
+  await resend.emails.send({
+    from:     FROM,
+    to:       supportInbox,
+    replyTo:  input.email,
+    subject:  `Contact: ${input.subject} — ${input.name}`,
+    html,
+  });
+}
+
 export async function sendOrderConfirmation(order: Order, email: string) {
   const html = baseTemplate(
     "Order Confirmation",

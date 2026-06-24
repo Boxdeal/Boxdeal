@@ -190,10 +190,10 @@ function ProductCardComponent({ product, isDeal }: ProductCardProps) {
             <div className="mt-2 flex flex-row gap-1.5">
               <button
                 onClick={handleAddToCart}
-                className="flex flex-1 items-center justify-center gap-1 whitespace-nowrap rounded-lg border border-brand-500 py-1.5 text-[11px] font-semibold text-brand-600 transition-colors hover:bg-brand-50 active:scale-95 sm:gap-1.5 sm:py-2 sm:text-xs"
+                aria-label="Add to Cart"
+                className="flex items-center justify-center rounded-lg border border-brand-500 px-3 py-1.5 text-brand-600 transition-colors hover:bg-brand-50 active:scale-95 sm:py-2"
               >
-                <ShoppingCart className="h-3 w-3 shrink-0 sm:h-3.5 sm:w-3.5" />
-                Add to Cart
+                <ShoppingCart className="h-4 w-4 shrink-0 sm:h-[18px] sm:w-[18px]" />
               </button>
               <button
                 onClick={handleBuyNow}

@@ -78,6 +78,7 @@ export function AddToCartButton({ product }: { product: Product }) {
           <button
             onClick={handleAddToCart}
             disabled={outOfStock}
+            aria-label={outOfStock ? "Out of Stock" : "Add to Cart"}
             className={cn(
               "flex flex-1 items-center justify-center gap-2 rounded-xl py-3.5 text-sm font-bold transition-all active:scale-95",
               outOfStock
@@ -86,7 +87,7 @@ export function AddToCartButton({ product }: { product: Product }) {
             )}
           >
             <ShoppingCart className="h-4 w-4" />
-            {outOfStock ? "Out of Stock" : "Add to Cart"}
+            {outOfStock && "Out of Stock"}
           </button>
 
           <button
