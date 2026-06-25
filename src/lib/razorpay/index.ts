@@ -22,6 +22,22 @@ export async function createRazorpayOrder(amountInPaise: number, receipt: string
   });
 }
 
+/**
+ * Refund a captured Razorpay payment. Pass `amountInPaise` for a partial
+ * refund; omit it to refund the full captured amount. Returns the refund
+ * object (its `id` is the rfnd_* reference).
+ */
+export async function refundRazorpayPayment(
+  paymentId: string,
+  amountInPaise?: number
+) {
+  const rp = getRazorpay();
+  return rp.payments.refund(paymentId, {
+    speed: "normal",
+    ...(amountInPaise ? { amount: amountInPaise } : {}),
+  });
+}
+
 export function verifyRazorpaySignature(
   orderId: string,
   paymentId: string,

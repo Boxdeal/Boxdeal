@@ -179,7 +179,11 @@ export function PaymentButton({ address }: PaymentButtonProps) {
       </button>
 
       {result?.kind === "success" && (
-        <SuccessModal orderNumber={result.orderNumber} onClose={goToOrder} />
+        <SuccessModal
+          orderNumber={result.orderNumber}
+          onClose={goToOrder}
+          onDismiss={() => setResult(null)}
+        />
       )}
       {result?.kind === "failed" && (
         <FailedModal
@@ -194,14 +198,23 @@ export function PaymentButton({ address }: PaymentButtonProps) {
 function SuccessModal({
   orderNumber,
   onClose,
+  onDismiss,
 }: {
   orderNumber: string;
   onClose: () => void;
+  onDismiss: () => void;
 }) {
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 animate-in fade-in duration-200">
-      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/50" onClick={onDismiss} />
       <div className="relative z-10 w-full max-w-[340px] overflow-hidden rounded-3xl bg-white shadow-2xl animate-in zoom-in-95 fade-in duration-300">
+        <button
+          onClick={onDismiss}
+          className="absolute right-4 top-4 z-20 text-gray-400 transition-all hover:text-gray-700 active:scale-90"
+          aria-label="Close"
+        >
+          <X className="h-[18px] w-[18px]" strokeWidth={2.5} />
+        </button>
         <div className="h-1.5 w-full bg-brand-500" />
         <div className="px-7 py-8 text-center">
           {/* The success tick stays green (universal "done" signal); everything

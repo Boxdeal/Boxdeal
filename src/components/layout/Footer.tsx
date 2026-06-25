@@ -15,6 +15,7 @@ const links = {
     { label: "Track Order", href: "/orders#track" },
   ],
   help: [
+    { label: "About Us", href: "/about" },
     { label: "FAQ", href: "/faq" },
     { label: "Return Policy", href: "/returns" },
     { label: "Shipping Info", href: "/shipping" },

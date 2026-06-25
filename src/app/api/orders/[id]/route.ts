@@ -2,9 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { getSupabaseAdminClient } from "@/lib/supabase/server";
 import { sendOrderShipped, sendOrderDelivered } from "@/lib/resend/index";
+import { refundRazorpayPayment } from "@/lib/razorpay/index";
 import { createShiprocketOrder, generateAWB, getTrackingUrl, type ShipmentItem } from "@/lib/shiprocket/index";
 import type { Order, OrderStatus } from "@/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { ORDER_CANCEL_WINDOW_HOURS, USER_CANCELLABLE_STATUSES } from "@/constants";
 
 /**
  * Push an order to Shiprocket and assign a courier/AWB.
@@ -91,6 +93,42 @@ async function fulfillShiprocket(
   }
 }
 
+/**
+ * Refund a cancelled order's payment back to the customer, if it was paid
+ * online via Razorpay. Best-effort & safe to call for any order: COD or unpaid
+ * orders are a no-op. A refund failure is returned (not thrown) so the caller
+ * can still cancel the order and surface the error for a manual refund.
+ */
+async function refundOrderPayment(
+  id: string,
+  order: {
+    payment_status: string | null;
+    payment_method: string | null;
+    razorpay_payment_id: string | null;
+    total_amount: number;
+  }
+): Promise<{ refunded: boolean; error: string | null }> {
+  const wasPaidOnline =
+    order.payment_status === "paid" &&
+    order.payment_method === "razorpay" &&
+    !!order.razorpay_payment_id;
+  if (!wasPaidOnline) return { refunded: false, error: null };
+
+  try {
+    await refundRazorpayPayment(
+      order.razorpay_payment_id as string,
+      Math.round(order.total_amount * 100)
+    );
+    return { refunded: true, error: null };
+  } catch (e) {
+    console.error(`Razorpay refund failed for order ${id}:`, e);
+    return {
+      refunded: false,
+      error: e instanceof Error ? e.message : "Refund failed",
+    };
+  }
+}
+
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -100,6 +138,70 @@ export async function PATCH(
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+  const body = await req.json();
+
+  // ── Customer self-cancellation ──────────────────────────────────────────
+  // A buyer can cancel their OWN order within ORDER_CANCEL_WINDOW_HOURS of
+  // placing it, as long as it hasn't been packed/shipped yet (per /returns
+  // policy). Handled before the admin gate so it doesn't require is_admin.
+  if (body.action === "cancel") {
+    const admin = getSupabaseAdminClient();
+    const { data: order } = await admin
+      .from("orders")
+      .select("id, user_id, status, placed_at, payment_method, payment_status, razorpay_payment_id, total_amount")
+      .eq("id", id)
+      .single();
+
+    if (!order) return NextResponse.json({ error: "Order not found" }, { status: 404 });
+    if (order.user_id !== user.id)
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
+    if (!USER_CANCELLABLE_STATUSES.includes(order.status as OrderStatus)) {
+      return NextResponse.json(
+        { error: "This order can no longer be cancelled as it is already being processed for shipping." },
+        { status: 400 }
+      );
+    }
+
+    const hoursSincePlaced =
+      (Date.now() - new Date(order.placed_at).getTime()) / (1000 * 60 * 60);
+    if (hoursSincePlaced > ORDER_CANCEL_WINDOW_HOURS) {
+      return NextResponse.json(
+        { error: `Orders can only be cancelled within ${ORDER_CANCEL_WINDOW_HOURS} hours of placing them.` },
+        { status: 400 }
+      );
+    }
+
+    // Auto-refund a paid online payment back to the original method. Best-effort:
+    // a refund failure must NOT block the cancellation — we still cancel the order
+    // and surface the error so the team can refund manually.
+    const { refunded, error: refundError } = await refundOrderPayment(id, order);
+
+    const { data: cancelled, error: cancelError } = await admin
+      .from("orders")
+      .update({
+        status: "cancelled",
+        cancelled_at: new Date().toISOString(),
+        ...(refunded ? { payment_status: "refunded" } : {}),
+      })
+      .eq("id", id)
+      .select()
+      .single();
+    if (cancelError)
+      return NextResponse.json({ error: cancelError.message }, { status: 500 });
+
+    await admin.from("order_status_history").insert({
+      order_id:   id,
+      status:     "cancelled",
+      note:       refunded
+        ? "Cancelled by customer — refund initiated"
+        : "Cancelled by customer",
+      updated_by: user.id,
+    });
+
+    return NextResponse.json({ data: cancelled, refunded, refund_error: refundError });
+  }
+
   const { data: profile } = await supabase
     .from("user_profiles")
     .select("is_admin")
@@ -108,7 +210,6 @@ export async function PATCH(
   if (!profile?.is_admin)
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-  const body = await req.json();
   const { status, note, tracking_number, courier_name, action } = body as {
     status?: OrderStatus;
     note?: string;
@@ -148,7 +249,23 @@ export async function PATCH(
     if (courier_name)    updateData.courier_name    = courier_name;
   }
   if (status === "delivered")        updateData.delivered_at = new Date().toISOString();
-  if (status === "cancelled")        updateData.cancelled_at = new Date().toISOString();
+
+  // When an admin cancels an order, auto-refund any online payment too (same
+  // behaviour as a customer self-cancel). Best-effort — see refundOrderPayment.
+  let refunded = false;
+  let refundError: string | null = null;
+  if (status === "cancelled") {
+    updateData.cancelled_at = new Date().toISOString();
+    const { data: payInfo } = await admin
+      .from("orders")
+      .select("payment_status, payment_method, razorpay_payment_id, total_amount")
+      .eq("id", id)
+      .single();
+    if (payInfo) {
+      ({ refunded, error: refundError } = await refundOrderPayment(id, payInfo));
+      if (refunded) updateData.payment_status = "refunded";
+    }
+  }
 
   // When packing, push the order to Shiprocket and auto-assign a courier/AWB.
   // Best-effort: a Shiprocket failure must not block the admin from packing —
@@ -172,7 +289,7 @@ export async function PATCH(
   await admin.from("order_status_history").insert({
     order_id:   id,
     status,
-    note:       note ?? null,
+    note:       refunded ? `${note ? `${note} — ` : ""}Refund initiated` : note ?? null,
     updated_by: user.id,
   });
 
@@ -184,5 +301,10 @@ export async function PATCH(
     if (status === "delivered") await sendOrderDelivered(order as never, email).catch(console.error);
   }
 
-  return NextResponse.json({ data: order, shiprocket_error: shiprocketError });
+  return NextResponse.json({
+    data: order,
+    shiprocket_error: shiprocketError,
+    refunded,
+    refund_error: refundError,
+  });
 }

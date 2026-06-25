@@ -5,6 +5,12 @@ export const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000
 export const SHIPPING_CHARGE = 49;
 export const FREE_SHIPPING_THRESHOLD = 499;
 
+// Customers can cancel their own order within this many hours of placing it,
+// as long as it hasn't moved past "confirmed" (i.e. not yet packed/shipped).
+// Mirrors the Return & Cancellation Policy (/returns).
+export const ORDER_CANCEL_WINDOW_HOURS = 12;
+export const USER_CANCELLABLE_STATUSES: OrderStatus[] = ["placed", "confirmed"];
+
 export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
   placed:           "Order Placed",
   confirmed:        "Confirmed",

@@ -86,10 +86,15 @@ export function OrderStatusUpdater({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status: "cancelled" }),
     });
-    const { error } = await res.json();
+    const { error, refunded, refund_error } = await res.json();
     setLoading(false);
     if (error) { toast.error(error); return; }
     toast.success("Order cancelled");
+    if (refunded) {
+      toast.success("Refund initiated to the customer's original payment method.");
+    } else if (refund_error) {
+      toast.warning(`Order cancelled, but refund failed: ${refund_error}. Refund manually from Razorpay.`);
+    }
     router.refresh();
   }
 

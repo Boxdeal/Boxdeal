@@ -7,7 +7,12 @@ import {
   ShoppingBag, BadgeCheck, Package, Truck, MapPinned, PartyPopper, X,
 } from "lucide-react";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
-import { ORDER_STATUS_LABELS } from "@/constants";
+import {
+  ORDER_STATUS_LABELS,
+  ORDER_CANCEL_WINDOW_HOURS,
+  USER_CANCELLABLE_STATUSES,
+} from "@/constants";
+import { CancelOrderButton } from "./CancelOrderButton";
 import { formatPrice, formatDate, formatDateTime } from "@/lib/utils/format";
 import { cn } from "@/lib/utils/helpers";
 import type { Order, OrderItem, OrderStatusHistory } from "@/types";
@@ -44,6 +49,23 @@ export default async function OrderDetailPage({
   );
 
   const isCancelled = typedOrder.status === "cancelled" || typedOrder.status === "returned";
+
+  // Cancellation: the button is shown while the order is pre-shipping
+  // (placed → packed). It's only ENABLED within the 12h window AND before the
+  // order is packed; otherwise it's shown disabled with the reason why.
+  const hoursSincePlaced =
+    (Date.now() - new Date(typedOrder.placed_at).getTime()) / (1000 * 60 * 60);
+  const withinCancelWindow = hoursSincePlaced <= ORDER_CANCEL_WINDOW_HOURS;
+  const showCancel = (["placed", "confirmed", "packed"] as const).includes(
+    typedOrder.status as "placed" | "confirmed" | "packed"
+  );
+  const canCancel =
+    USER_CANCELLABLE_STATUSES.includes(typedOrder.status) && withinCancelWindow;
+  const cancelDisabledReason = !canCancel
+    ? typedOrder.status === "packed"
+      ? "Your order is already packed for shipping, so it can no longer be cancelled."
+      : `The ${ORDER_CANCEL_WINDOW_HOURS}-hour cancellation window has passed.`
+    : null;
 
   const JOURNEY: { status: string; label: string; icon: React.ElementType }[] = [
     { status: "placed",           label: "Order Placed",      icon: ShoppingBag   },
@@ -88,6 +110,15 @@ export default async function OrderDetailPage({
           </span>
         </div>
       </div>
+
+      {/* Cancel order (within policy window, before shipping) */}
+      {showCancel && (
+        <CancelOrderButton
+          orderId={typedOrder.id}
+          disabled={!canCancel}
+          disabledReason={cancelDisabledReason}
+        />
+      )}
 
       {/* Journey stepper */}
       <div className="rounded-2xl border border-gray-100 bg-white p-5">
