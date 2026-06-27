@@ -57,7 +57,7 @@ function HeaderContent() {
 
       {/* Announcement bar */}
       <div className="bg-brand-500 py-1.5 text-center text-xs font-medium tracking-wide text-white">
-        Free shipping on orders above ₹499 &nbsp;🚀
+        Flat delivery — capped at ₹200, no matter where you are &nbsp;🚀
       </div>
 
       <div className="mx-auto flex max-w-7xl items-center gap-3 px-4 py-3 sm:gap-4 sm:py-3.5">

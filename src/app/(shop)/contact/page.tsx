@@ -13,15 +13,15 @@ const contactInfo = [
   {
     icon: Mail,
     label: "Email Us",
-    value: "support@boxdeal.in",
-    href: "mailto:support@boxdeal.in",
+    value: "admin@boxdeal.in",
+    href: "mailto:admin@boxdeal.in",
     hint: "We reply within 24–48 hours",
   },
   {
     icon: Phone,
     label: "Call Us",
-    value: "+91 98765 43210",
-    href: "tel:+919876543210",
+    value: "+91 93551 51182",
+    href: "tel:+919355151182",
     hint: "Mon–Sat, 10 AM – 7 PM",
   },
   {

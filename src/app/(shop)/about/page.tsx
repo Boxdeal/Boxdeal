@@ -11,7 +11,22 @@ import {
   CheckCircle2,
   Heart,
   ArrowRight,
+  Instagram,
+  Send,
 } from "lucide-react";
+
+const social = [
+  {
+    label: "Instagram",
+    href: "https://www.instagram.com/smartaccessorieshub_?igsh=dnBnNHphYzUzcjZu&utm_source=qr",
+    icon: Instagram,
+  },
+  {
+    label: "Telegram",
+    href: "https://t.me/smartaccessorieshub",
+    icon: Send,
+  },
+];
 
 export const metadata: Metadata = {
   title: "About Us | BoxDeal",
@@ -232,31 +247,39 @@ export default function AboutPage() {
         <section className="mt-12 grid items-center gap-8 lg:grid-cols-2">
           <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
             <Image
-              src="/images/hero/banner1.jpg"
-              alt="A selection of BoxDeal open-box gadgets — smartwatch, earbuds and more"
-              width={1440}
-              height={500}
+              src="/founder.webp"
+              alt="Mohit and Sahib, founders of BoxDeal"
+              width={1100}
+              height={778}
               className="h-full w-full object-cover"
             />
+            <div className="px-5 py-4">
+              <p className="text-sm font-bold text-gray-900">Mohit &amp; Sahib</p>
+              <p className="text-xs text-gray-500">Founders, BoxDeal</p>
+            </div>
           </div>
           <div>
             <h2 className="text-2xl font-black text-gray-900 sm:text-3xl">
               A little about our journey
             </h2>
             <p className="mt-4 text-sm leading-relaxed text-gray-600 sm:text-base">
-              Our e-commerce journey began in 2017 as marketplace sellers, where
-              we earned top-rated seller status through thousands of happy
-              orders. Over the years we saw firsthand just how many perfectly
-              good products were being written off simply because a box had been
-              opened.
+              It started in 2017, when{" "}
+              <strong className="font-semibold text-gray-900">Mohit</strong> and{" "}
+              <strong className="font-semibold text-gray-900">Sahib</strong> —
+              two friends obsessed with gadgets — began selling online. We started
+              small, packing every order ourselves, and earned top-rated seller
+              status through thousands of happy orders. Along the way, one thing
+              kept bothering us: perfectly good, like-new products were being
+              written off for one silly reason — someone had opened the box.
             </p>
             <p className="mt-3 text-sm leading-relaxed text-gray-600 sm:text-base">
-              BoxDeal is our answer to that — a dedicated home for open-box
-              gadgets, where like-new products are quality-checked, fairly
-              graded, and offered at prices that actually make sense. We strive
-              to give you the best shopping experience humanly possible. Try us
-              once, and we&rsquo;re pretty sure you&rsquo;ll know exactly where to
-              come the next time you need a gadget.
+              BoxDeal is our answer to that — a home for open-box gadgets that are
+              rescued, put through an 8-step quality check, honestly graded A to D,
+              and priced to actually make sense. Every order is backed by brand
+              warranty and BoxDeal Assurance, and every box we ship carries the
+              same care we put into our very first one. Try us once, and
+              we&rsquo;re pretty sure you&rsquo;ll know exactly where to come the
+              next time you need a gadget. ❤️
             </p>
           </div>
         </section>
@@ -322,6 +345,28 @@ export default function AboutPage() {
               >
                 Contact Us
               </Link>
+            </div>
+            <div className="mt-8 flex flex-col items-center gap-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+                Follow us
+              </p>
+              <div className="flex gap-3">
+                {social.map((s) => {
+                  const Icon = s.icon;
+                  return (
+                    <a
+                      key={s.label}
+                      href={s.href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      aria-label={s.label}
+                      className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-brand-500"
+                    >
+                      <Icon className="h-5 w-5" />
+                    </a>
+                  );
+                })}
+              </div>
             </div>
           </div>
         </section>

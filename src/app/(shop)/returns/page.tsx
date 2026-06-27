@@ -182,8 +182,8 @@ export default function ReturnsPolicyPage() {
       <PolicySection title="Need Help?">
         <p>
           Our team is happy to help with any return or refund. Email{" "}
-          <a href="mailto:support@boxdeal.in">support@boxdeal.in</a> or call{" "}
-          <a href="tel:+919876543210">+91 98765 43210</a>.
+          <a href="mailto:admin@boxdeal.in">admin@boxdeal.in</a> or call{" "}
+          <a href="tel:+919355151182">+91 93551 51182</a>.
         </p>
       </PolicySection>
     </PolicyLayout>

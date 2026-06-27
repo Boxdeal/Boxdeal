@@ -5,7 +5,7 @@ import {
   PolicySection,
   PolicyNote,
 } from "@/components/shared/PolicyLayout";
-import { FREE_SHIPPING_THRESHOLD, SHIPPING_CHARGE } from "@/constants";
+import { DELIVERY_CHARGE_CAP } from "@/constants";
 
 export const metadata: Metadata = {
   title: "Shipping & Delivery Policy | BoxDeal",
@@ -23,16 +23,17 @@ export default function ShippingPolicyPage() {
       <PolicySection title="Shipping Charges">
         <ul>
           <li>
-            <strong>Free shipping</strong> on all orders above{" "}
-            <strong>₹{FREE_SHIPPING_THRESHOLD}</strong>.
+            Delivery is charged at the <strong>live courier rate</strong> for your
+            delivery pincode, calculated from the weight of your order.
           </li>
           <li>
-            A flat shipping fee of <strong>₹{SHIPPING_CHARGE}</strong> applies to
-            orders below ₹{FREE_SHIPPING_THRESHOLD}.
+            We cap delivery at <strong>₹{DELIVERY_CHARGE_CAP}</strong> — even if the
+            actual courier rate is higher, you never pay more than ₹{DELIVERY_CHARGE_CAP}.
+            BoxDeal absorbs the difference.
           </li>
         </ul>
         <p>
-          The exact shipping charge is always shown at checkout before you pay.
+          The exact delivery charge is always shown at checkout before you pay.
         </p>
       </PolicySection>
 
@@ -100,8 +101,8 @@ export default function ShippingPolicyPage() {
       <PolicySection title="Need Help?">
         <p>
           For any delivery question, email{" "}
-          <a href="mailto:support@boxdeal.in">support@boxdeal.in</a> or call{" "}
-          <a href="tel:+919876543210">+91 98765 43210</a>.
+          <a href="mailto:admin@boxdeal.in">admin@boxdeal.in</a> or call{" "}
+          <a href="tel:+919355151182">+91 93551 51182</a>.
         </p>
       </PolicySection>
     </PolicyLayout>

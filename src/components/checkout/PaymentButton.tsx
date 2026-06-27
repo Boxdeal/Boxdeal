@@ -4,14 +4,16 @@ import { useState } from "react";
 import { Lock, CheckCircle2, XCircle, X } from "lucide-react";
 import { useAppDispatch, useCart, useCartSubtotal, useCartDiscount } from "@/store/hooks";
 import { clearCart } from "@/store/slices/cartSlice";
-import { calculateShipping } from "@/lib/utils/helpers";
 import { formatPrice } from "@/lib/utils/format";
 import { RAZORPAY_CURRENCY, RAZORPAY_THEME_COLOR } from "@/constants";
 import type { Address } from "@/types";
+import type { ShippingState } from "@/components/cart/CartSummary";
 import { toast } from "sonner";
 
 interface PaymentButtonProps {
   address: Address;
+  /** Live delivery charge state for the selected address. */
+  delivery: ShippingState;
 }
 
 declare global {
@@ -28,7 +30,7 @@ type Result =
   | { kind: "failed"; message: string }
   | null;
 
-export function PaymentButton({ address }: PaymentButtonProps) {
+export function PaymentButton({ address, delivery }: PaymentButtonProps) {
   const [loading, setLoading] = useState(false);
   // The post-payment popup state. Rendered right here on the checkout page so
   // it never depends on a navigation succeeding from inside Razorpay's iframe.
@@ -40,10 +42,12 @@ export function PaymentButton({ address }: PaymentButtonProps) {
   // A coupon only counts toward the order if it still yields a discount for
   // the current cart (e.g. subtotal may have dropped below its minimum).
   const couponCode = coupon?.valid && discount > 0 ? coupon.code : null;
-  const shipping = calculateShipping(subtotal - discount);
-  const total = subtotal - discount + shipping;
+  // The delivery charge must be resolved (a number) before payment is allowed.
+  const shipping = typeof delivery === "number" ? delivery : null;
+  const total = subtotal - discount + (shipping ?? 0);
 
   async function handlePay() {
+    if (shipping === null) return; // delivery charge not ready / pincode not serviceable
     setLoading(true);
     try {
       const orderRes = await fetch("/api/payments/create", {
@@ -167,15 +171,31 @@ export function PaymentButton({ address }: PaymentButtonProps) {
     window.location.href = `/orders/${id}`;
   }
 
+  const payLabel =
+    loading             ? "Processing…" :
+    delivery === "loading"  ? "Calculating delivery…" :
+    shipping === null   ? "Pay Securely" :
+    `Pay ${formatPrice(total)} Securely`;
+
   return (
     <>
+      {delivery === "unserviceable" && (
+        <p className="mb-2 text-center text-sm font-medium text-red-600">
+          Sorry, delivery isn&apos;t available to this pincode. Please try a different address.
+        </p>
+      )}
+      {delivery === "error" && (
+        <p className="mb-2 text-center text-sm font-medium text-red-600">
+          Couldn&apos;t calculate the delivery charge right now. Please try again in a moment.
+        </p>
+      )}
       <button
         onClick={handlePay}
-        disabled={loading || items.length === 0}
-        className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand-500 py-4 text-base font-bold text-white hover:bg-brand-600 disabled:opacity-60 transition-all active:scale-95"
+        disabled={loading || items.length === 0 || shipping === null}
+        className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand-500 py-4 text-base font-bold text-white hover:bg-brand-600 disabled:opacity-60 disabled:cursor-not-allowed transition-all active:scale-95"
       >
         <Lock className="h-4 w-4" />
-        {loading ? "Processing…" : `Pay ${formatPrice(total)} Securely`}
+        {payLabel}
       </button>
 
       {result?.kind === "success" && (

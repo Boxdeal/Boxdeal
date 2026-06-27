@@ -2,8 +2,10 @@ import type { OrderStatus } from "@/types";
 
 export const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
 
-export const SHIPPING_CHARGE = 49;
-export const FREE_SHIPPING_THRESHOLD = 499;
+// Delivery is charged at the live Shiprocket courier rate, capped at this
+// amount — the customer never pays more than ₹200 even if the real rate is
+// higher (BoxDeal absorbs the difference).
+export const DELIVERY_CHARGE_CAP = 200;
 
 // Customers can cancel their own order within this many hours of placing it,
 // as long as it hasn't moved past "confirmed" (i.e. not yet packed/shipped).

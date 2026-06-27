@@ -52,6 +52,68 @@ export function getTrackingUrl(awb: string): string {
   return `https://shiprocket.co/tracking/${awb}`;
 }
 
+export type DeliveryRate =
+  | { serviceable: true; rate: number; courierId: number; courierName: string | null }
+  | { serviceable: false; rate: null; courierId: null; courierName: null };
+
+/**
+ * Fetch the live delivery rate from Shiprocket for a destination pincode.
+ * Uses the courier serviceability API and returns the rate of the courier
+ * Shiprocket would actually auto-assign (its recommended courier), falling back
+ * to the cheapest available courier. `serviceable: false` means no courier
+ * services the destination — the order should be blocked.
+ *
+ * @param deliveryPincode  destination (customer) pincode
+ * @param weightKg         total package weight in kg
+ * @param cod              true for cash-on-delivery, false for prepaid
+ */
+export async function getDeliveryRate(
+  deliveryPincode: string,
+  weightKg: number,
+  cod = false
+): Promise<DeliveryRate> {
+  const pickup = process.env.SHIPROCKET_PICKUP_PINCODE;
+  if (!pickup) throw new Error("SHIPROCKET_PICKUP_PINCODE is not configured");
+
+  const params = new URLSearchParams({
+    pickup_postcode:   pickup,
+    delivery_postcode: deliveryPincode,
+    weight:            String(weightKg),
+    cod:               cod ? "1" : "0",
+  });
+
+  const res = await shiprocketFetch(`/courier/serviceability/?${params.toString()}`);
+  const data = await res.json();
+
+  const couriers: Array<{
+    courier_company_id: number;
+    courier_name?:      string;
+    rate?:              number;
+  }> = data?.data?.available_courier_companies ?? [];
+
+  if (!res.ok || couriers.length === 0) {
+    return { serviceable: false, rate: null, courierId: null, courierName: null };
+  }
+
+  // Pick the cheapest available courier so the customer pays the lowest possible
+  // delivery charge for their pincode.
+  const chosen = couriers.reduce((cheapest, c) =>
+    Number(c.rate ?? Infinity) < Number(cheapest.rate ?? Infinity) ? c : cheapest
+  );
+
+  const rate = Number(chosen.rate);
+  if (!Number.isFinite(rate)) {
+    return { serviceable: false, rate: null, courierId: null, courierName: null };
+  }
+
+  return {
+    serviceable: true,
+    rate,
+    courierId:   chosen.courier_company_id,
+    courierName: chosen.courier_name ?? null,
+  };
+}
+
 // Order item enriched with the product's physical attributes (joined from
 // the products table at fulfillment time — order_items doesn't store these).
 export type ShipmentItem = OrderItem & {

@@ -13,8 +13,3 @@ export function getInitials(name: string): string {
     .join("");
 }
 
-export function calculateShipping(_subtotal: number): number {
-  // Free delivery on all orders.
-  return 0;
-}
-

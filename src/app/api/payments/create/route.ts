@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { getSupabaseAdminClient } from "@/lib/supabase/server";
 import { createRazorpayOrder } from "@/lib/razorpay/index";
+import { getCartDeliveryQuote } from "@/lib/shipping/index";
 import type { CartItem, Address } from "@/types";
 
 export async function POST(req: NextRequest) {
@@ -16,16 +17,12 @@ export async function POST(req: NextRequest) {
     coupon_code,
     subtotal,
     discount,
-    shipping_charge,
-    total_amount,
   }: {
-    items:           CartItem[];
-    address:         Address;
-    coupon_code:     string | null;
-    subtotal:        number;
-    discount:        number;
-    shipping_charge: number;
-    total_amount:    number;
+    items:       CartItem[];
+    address:     Address;
+    coupon_code: string | null;
+    subtotal:    number;
+    discount:    number;
   } = body;
 
   if (!items?.length) return NextResponse.json({ error: "Cart is empty" }, { status: 400 });
@@ -56,6 +53,30 @@ export async function POST(req: NextRequest) {
       );
     }
   }
+
+  // Recompute the delivery charge server-side from the destination pincode +
+  // cart weight (live Shiprocket rate, capped at ₹200). Never trust the charge
+  // sent by the client. A non-serviceable pincode blocks the order entirely.
+  let shipping_charge: number;
+  try {
+    const quote = await getCartDeliveryQuote(admin, items, address.pincode);
+    if (!quote.serviceable) {
+      return NextResponse.json(
+        { error: "Delivery isn't available to this pincode" },
+        { status: 422 }
+      );
+    }
+    shipping_charge = quote.delivery_charge;
+  } catch {
+    return NextResponse.json(
+      { error: "Couldn't calculate delivery charge. Please try again." },
+      { status: 502 }
+    );
+  }
+
+  // Total is derived server-side so a tampered client value can't change what
+  // the customer is actually charged.
+  const total_amount = subtotal - discount + shipping_charge;
 
   // Generate order number. Prefer the DB sequence function; if it's missing
   // (returns null / errors), fall back to a unique JS-generated number so the

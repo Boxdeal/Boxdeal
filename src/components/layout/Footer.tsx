@@ -1,5 +1,18 @@
 import Link from "next/link";
-import { Mail, Phone } from "lucide-react";
+import { Mail, Phone, Instagram, Send } from "lucide-react";
+
+const social = [
+  {
+    label: "Instagram",
+    href: "https://www.instagram.com/smartaccessorieshub_?igsh=dnBnNHphYzUzcjZu&utm_source=qr",
+    icon: Instagram,
+  },
+  {
+    label: "Telegram",
+    href: "https://t.me/smartaccessorieshub",
+    icon: Send,
+  },
+];
 
 const links = {
   shop: [
@@ -40,12 +53,29 @@ export function Footer() {
             <div className="mt-4 space-y-2 text-sm">
               <div className="flex items-center gap-2">
                 <Mail className="h-4 w-4 text-brand-400 flex-shrink-0" />
-                <span>support@boxdeal.in</span>
+                <span>admin@boxdeal.in</span>
               </div>
               <div className="flex items-center gap-2">
                 <Phone className="h-4 w-4 text-brand-400 flex-shrink-0" />
-                <span>+91 98765 43210</span>
+                <span>+91 93551 51182</span>
               </div>
+            </div>
+            <div className="-ml-2.5 mt-5 flex gap-2">
+              {social.map((s) => {
+                const Icon = s.icon;
+                return (
+                  <a
+                    key={s.label}
+                    href={s.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label={s.label}
+                    className="flex h-9 w-9 items-center justify-center rounded-full bg-gray-800 text-gray-300 transition-colors hover:bg-brand-500 hover:text-white"
+                  >
+                    <Icon className="h-4 w-4" />
+                  </a>
+                );
+              })}
             </div>
           </div>
 

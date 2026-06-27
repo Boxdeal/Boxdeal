@@ -51,7 +51,7 @@ export async function sendContactMessage(input: {
   subject: string;
   message: string;
 }) {
-  const supportInbox = process.env.CONTACT_INBOX_EMAIL ?? "support@boxdeal.in";
+  const supportInbox = process.env.CONTACT_INBOX_EMAIL ?? "admin@boxdeal.in";
 
   const html = baseTemplate(
     "New Contact Message",

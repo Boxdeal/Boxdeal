@@ -3,7 +3,7 @@ import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { getSupabaseAdminClient } from "@/lib/supabase/server";
 import { sendOrderShipped, sendOrderDelivered } from "@/lib/resend/index";
 import { refundRazorpayPayment } from "@/lib/razorpay/index";
-import { createShiprocketOrder, generateAWB, getTrackingUrl, type ShipmentItem } from "@/lib/shiprocket/index";
+import { createShiprocketOrder, generateAWB, getDeliveryRate, getTrackingUrl, type ShipmentItem } from "@/lib/shiprocket/index";
 import type { Order, OrderStatus } from "@/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { ORDER_CANCEL_WINDOW_HOURS, USER_CANCELLABLE_STATUSES } from "@/constants";
@@ -77,7 +77,29 @@ async function fulfillShiprocket(
 
     // Step 2 — assign courier / generate AWB for the shipment.
     if (shipmentId) {
-      const awb = await generateAWB(shipmentId);
+      // Force the cheapest courier (the same one whose rate the customer was
+      // quoted at checkout) instead of letting Shiprocket auto-assign — so what
+      // we bill the customer matches what Shiprocket bills us. Best-effort: if
+      // the rate lookup fails, fall back to auto-assign so fulfillment isn't
+      // blocked.
+      let courierId: number | undefined;
+      try {
+        const wItems = (srOrder.items ?? []) as Array<{
+          quantity: number;
+          product?: { weight_grams?: number | null };
+        }>;
+        const totalGrams = wItems.reduce(
+          (s, it) => s + (it.product?.weight_grams ?? 0) * it.quantity,
+          0
+        );
+        const weightKg = Math.max(totalGrams / 1000, 0.1);
+        const rate = await getDeliveryRate(String(srOrder.shipping_pincode), weightKg);
+        if (rate.serviceable) courierId = rate.courierId;
+      } catch (e) {
+        console.error(`Cheapest-courier lookup failed for order ${id}; using auto-assign:`, e);
+      }
+
+      const awb = await generateAWB(shipmentId, courierId);
       update.tracking_number = awb.awb_code;
       update.courier_name    = awb.courier_name;
       update.tracking_url    = getTrackingUrl(awb.awb_code);

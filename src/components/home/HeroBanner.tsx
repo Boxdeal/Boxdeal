@@ -94,8 +94,17 @@ export function HeroBanner({ banners }: Props) {
           />
         ))}
 
-        {/* Text overlay — always left 35%, right 65% reserved for product images */}
-        <div className="absolute inset-0 flex items-center pl-4 sm:pl-10 lg:pl-16">
+        {/* Whole-banner click target → product page (sits above images, below controls) */}
+        <Link
+          href={b.cta_link}
+          aria-label={b.title}
+          className="absolute inset-0 z-10"
+        />
+
+        {/* Text overlay — always left 35%, right 65% reserved for product images.
+            pointer-events-none so clicks fall through to the banner-wide link above;
+            interactive children re-enable pointer events. */}
+        <div className="pointer-events-none absolute inset-0 z-20 flex items-center pl-4 sm:pl-10 lg:pl-16">
           <div key={animKey} className="flex w-[35%] flex-col">
 
             {/* Accent line */}
@@ -166,7 +175,7 @@ export function HeroBanner({ banners }: Props) {
             <Link
               href={b.cta_link}
               className={cn(
-                "group inline-flex items-center self-start rounded-md font-bold uppercase tracking-wider shadow-md",
+                "group pointer-events-auto inline-flex items-center self-start rounded-md font-bold uppercase tracking-wider shadow-md",
                 "transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg active:translate-y-0",
                 "animate-banner-in [animation-delay:280ms]",
                 light
@@ -231,11 +240,11 @@ export function HeroBanner({ banners }: Props) {
         {banners.length > 1 && (
           <>
             <button aria-label="Previous banner" onClick={prev}
-              className="absolute left-1.5 top-1/2 flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded-full bg-white/80 shadow transition hover:bg-white sm:h-8 sm:w-8">
+              className="absolute left-1.5 top-1/2 z-30 flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded-full bg-white/80 shadow transition hover:bg-white sm:h-8 sm:w-8">
               <ChevronLeft className="h-3 w-3 text-gray-700 sm:h-4 sm:w-4" />
             </button>
             <button aria-label="Next banner" onClick={next}
-              className="absolute right-1.5 top-1/2 flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded-full bg-white/80 shadow transition hover:bg-white sm:h-8 sm:w-8">
+              className="absolute right-1.5 top-1/2 z-30 flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded-full bg-white/80 shadow transition hover:bg-white sm:h-8 sm:w-8">
               <ChevronRight className="h-3 w-3 text-gray-700 sm:h-4 sm:w-4" />
             </button>
           </>
@@ -243,7 +252,7 @@ export function HeroBanner({ banners }: Props) {
 
         {/* Dot indicators */}
         {banners.length > 1 && (
-          <div className="absolute bottom-1.5 left-1/2 flex -translate-x-1/2 gap-1 sm:bottom-3 sm:gap-1.5">
+          <div className="absolute bottom-1.5 left-1/2 z-30 flex -translate-x-1/2 gap-1 sm:bottom-3 sm:gap-1.5">
             {banners.map((_, i) => (
               <button
                 key={i}

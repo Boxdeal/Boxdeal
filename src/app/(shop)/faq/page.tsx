@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { ChevronRight, MessageCircle } from "lucide-react";
 import { FaqAccordion, type FaqCategory } from "@/components/shared/FaqAccordion";
-import { FREE_SHIPPING_THRESHOLD, SHIPPING_CHARGE } from "@/constants";
+import { DELIVERY_CHARGE_CAP } from "@/constants";
 
 export const metadata: Metadata = {
   title: "Frequently Asked Questions | BoxDeal",
@@ -78,9 +78,10 @@ const categories: FaqCategory[] = [
         q: "What are the shipping charges?",
         a: (
           <p>
-            Shipping is <strong>free on orders above ₹{FREE_SHIPPING_THRESHOLD}</strong>.
-            Below that, a flat fee of ₹{SHIPPING_CHARGE} applies. The exact charge
-            is always shown at checkout.
+            Delivery is charged at the live courier rate for your pincode, and is
+            <strong> capped at ₹{DELIVERY_CHARGE_CAP}</strong> — you never pay more
+            than that even if the actual rate is higher. The exact charge is always
+            shown at checkout.
           </p>
         ),
       },
@@ -234,16 +235,16 @@ export default function FaqPage() {
           </p>
           <div className="mt-4 flex flex-col items-center justify-center gap-3 sm:flex-row">
             <a
-              href="mailto:support@boxdeal.in"
+              href="mailto:admin@boxdeal.in"
               className="rounded-lg bg-brand-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-600"
             >
               Email Support
             </a>
             <a
-              href="tel:+919876543210"
+              href="tel:+919355151182"
               className="rounded-lg border border-brand-300 bg-white px-5 py-2.5 text-sm font-semibold text-brand-700 transition-colors hover:bg-brand-50"
             >
-              Call +91 98765 43210
+              Call +91 93551 51182
             </a>
           </div>
         </div>

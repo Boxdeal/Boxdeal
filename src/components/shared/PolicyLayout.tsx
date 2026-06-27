@@ -43,7 +43,7 @@ export function PolicyLayout({ title, intro, updated, children }: PolicyLayoutPr
         <p className="mt-6 text-center text-sm text-gray-500">
           Have a question about this policy?{" "}
           <a
-            href="mailto:support@boxdeal.in"
+            href="mailto:admin@boxdeal.in"
             className="font-medium text-brand-600 hover:text-brand-700"
           >
             Email our support team

@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useCart, useCartSubtotal, useCartDiscount } from "@/store/hooks";
 import { useAuth } from "@/hooks";
-import { CartSummary } from "@/components/cart/CartSummary";
+import { CartSummary, type ShippingState } from "@/components/cart/CartSummary";
 import { AddressForm, type AddressFormValues } from "@/components/checkout/AddressForm";
 import { PaymentButton } from "@/components/checkout/PaymentButton";
 import { CouponInput } from "@/components/checkout/CouponInput";
@@ -23,6 +23,36 @@ export default function CheckoutPage() {
   const [selectedAddress, setSelectedAddress] = useState<Address | null>(null);
   const [addingNew, setAddingNew] = useState(false);
   const [saving, setSaving] = useState(false);
+  // Live delivery charge for the selected address (Shiprocket rate, capped).
+  const [delivery, setDelivery] = useState<ShippingState>("pending");
+
+  // Whenever the selected address (pincode) or cart changes, fetch the live
+  // delivery charge so the customer sees the real total before paying.
+  useEffect(() => {
+    if (!selectedAddress?.pincode || items.length === 0) {
+      setDelivery("pending");
+      return;
+    }
+    let cancelled = false;
+    setDelivery("loading");
+    fetch("/api/shipping/quote", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ pincode: selectedAddress.pincode, items }),
+    })
+      .then((r) => r.json())
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        // A returned `error` means a system/config problem (e.g. rate API down or
+        // pickup pincode not configured) — distinct from a pincode that genuinely
+        // has no courier (`serviceable: false`).
+        if (error) { setDelivery("error"); return; }
+        if (!data?.serviceable) { setDelivery("unserviceable"); return; }
+        setDelivery(data.delivery_charge as number);
+      })
+      .catch(() => { if (!cancelled) setDelivery("error"); });
+    return () => { cancelled = true; };
+  }, [selectedAddress?.pincode, items]);
 
   useEffect(() => {
     if (authLoading) return; // wait for the Supabase session to resolve
@@ -161,14 +191,14 @@ export default function CheckoutPage() {
               {items.map((item) => <CartItem key={item.product_id} item={item} />)}
             </div>
             <div className="mt-4 pt-4 border-t">
-              <CartSummary subtotal={subtotal} discount={discount} />
+              <CartSummary subtotal={subtotal} discount={discount} shipping={delivery} />
             </div>
           </div>
 
           <CouponInput />
 
           {selectedAddress && (
-            <PaymentButton address={selectedAddress} />
+            <PaymentButton address={selectedAddress} delivery={delivery} />
           )}
         </div>
       </div>
