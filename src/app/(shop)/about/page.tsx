@@ -136,7 +136,7 @@ export default function AboutPage() {
             <div className="relative">
               <div className="overflow-hidden rounded-2xl bg-white/10 shadow-2xl ring-1 ring-white/20 backdrop-blur">
                 <Image
-                  src="/about1.png"
+                  src="/about1.webp"
                   alt="A curated spread of premium BoxDeal open-box gadgets"
                   width={1440}
                   height={500}
@@ -209,7 +209,7 @@ export default function AboutPage() {
         {/* Feature image band */}
         <section className="relative mt-12 overflow-hidden rounded-2xl shadow-sm">
           <Image
-            src="/about2.png"
+            src="/about2.webp"
             alt="BoxDeal smart accessories — cameras, audio gear and more"
             width={1440}
             height={500}
