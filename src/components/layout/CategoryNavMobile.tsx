@@ -8,6 +8,12 @@ import styles from "./CategoryNav.mobile.module.css";
 type Sub = { id: string; name: string; slug: string; is_active: boolean; sort_order: number };
 type Cat = { id: string; name: string; slug: string; subcategories: Sub[] | null };
 
+// Shorter labels for the nav (links/slugs are unaffected)
+const NAV_LABELS: Record<string, string> = {
+  "Landline Phones": "Landline",
+};
+const navLabel = (name: string) => NAV_LABELS[name] ?? name;
+
 interface Props {
   categories: Cat[];
 }
@@ -71,7 +77,7 @@ export function CategoryNavMobile({ categories }: Props) {
                 className={styles.menuItem}
                 onClick={closeMenu}
               >
-                {cat.name}
+                {navLabel(cat.name)}
               </Link>
             );
           }
@@ -82,7 +88,7 @@ export function CategoryNavMobile({ categories }: Props) {
                 onClick={() => toggleCategory(cat.id)}
                 className={styles.categoryButton}
               >
-                <span>{cat.name}</span>
+                <span>{navLabel(cat.name)}</span>
                 <ChevronDown
                   size={12}
                   className={`${styles.chevron} ${

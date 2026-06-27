@@ -8,6 +8,12 @@ import styles from "./CategoryNav.module.css";
 type Sub = { id: string; name: string; slug: string; is_active: boolean; sort_order: number };
 type Cat = { id: string; name: string; slug: string; subcategories: Sub[] | null };
 
+// Shorter labels for the nav bar (links/slugs are unaffected)
+const NAV_LABELS: Record<string, string> = {
+  "Landline Phones": "Landline",
+};
+const navLabel = (name: string) => NAV_LABELS[name] ?? name;
+
 const getCategories = cache(async () => {
   const queryStart = performance.now();
   const supabase = await getSupabaseServerClient();
@@ -47,14 +53,14 @@ export async function CategoryNav() {
               .sort((a, b) => a.sort_order - b.sort_order);
 
             return subs.length > 0 ? (
-              <CategoryDropdownItem key={cat.id} name={cat.name} slug={cat.slug} subs={subs} />
+              <CategoryDropdownItem key={cat.id} name={navLabel(cat.name)} slug={cat.slug} subs={subs} />
             ) : (
               <Link
                 key={cat.id}
                 href={`/products?category=${cat.slug}`}
                 className={styles.categoryLink}
               >
-                {cat.name}
+                {navLabel(cat.name)}
               </Link>
             );
           })}

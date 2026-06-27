@@ -27,7 +27,7 @@ const contactInfo = [
   {
     icon: MapPin,
     label: "Visit Us",
-    value: "BoxDeal HQ, India",
+    value: "15A/59 Karol Bagh, Delhi - 110005",
     href: null,
     hint: "Online-first, shipping pan-India",
   },

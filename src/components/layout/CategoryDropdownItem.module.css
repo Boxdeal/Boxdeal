@@ -18,24 +18,31 @@
   color: #f97316;
 }
 
-@media (min-width: 900px) and (max-width: 1024px) {
+@media (min-width: 900px) and (max-width: 1519px) {
   .triggerLink {
     padding: 0.25rem 0.1rem;
     font-size: 10px;
   }
 }
 
-@media (min-width: 1280px) {
+/* Tightest range (900-1024px): shrink text a touch more */
+@media (min-width: 900px) and (max-width: 1024px) {
   .triggerLink {
-    padding: 0.3rem 0.35rem;
-    font-size: 12px;
+    font-size: 9px;
   }
 }
 
-@media (min-width: 1478px) {
+/* Smallest range (900-947px): shrink text even more so the row stays on one line */
+@media (min-width: 900px) and (max-width: 947px) {
   .triggerLink {
-    padding: 0.35rem 0.5rem;
-    font-size: 13px;
+    font-size: 8px;
+  }
+}
+
+@media (min-width: 1520px) {
+  .triggerLink {
+    padding: 0.3rem 0.35rem;
+    font-size: 12px;
   }
 }
 
@@ -49,19 +56,13 @@
   transform: rotate(180deg);
 }
 
-@media (min-width: 900px) and (max-width: 1024px) {
+@media (min-width: 900px) and (max-width: 1519px) {
   .chevronIcon {
     height: 0.625rem;
     width: 0.625rem;
   }
 }
 
-@media (min-width: 1478px) {
-  .chevronIcon {
-    height: 0.875rem;
-    width: 0.875rem;
-  }
-}
 
 .dropdownMenu {
   position: absolute;

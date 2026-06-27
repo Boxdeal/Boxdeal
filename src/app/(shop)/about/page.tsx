@@ -106,7 +106,7 @@ export default function AboutPage() {
               <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1 text-xs font-semibold backdrop-blur">
                 <Sparkles className="h-3.5 w-3.5" /> Open-box, like-new, up to 60% off
               </span>
-              <h1 className="mt-4 text-4xl font-black leading-tight sm:text-5xl">
+              <h1 className="mt-4 text-3xl font-black leading-tight sm:text-4xl md:text-5xl">
                 Oh, hello there! 👋
               </h1>
               <p className="mt-4 max-w-xl text-sm leading-relaxed text-white/90 sm:text-base">
@@ -116,16 +116,16 @@ export default function AboutPage() {
                 products a second life, so you get premium gadgets at a fraction
                 of the price. It&rsquo;s really nice to have you here.
               </p>
-              <div className="mt-6 flex flex-wrap gap-3">
+              <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
                 <Link
                   href="/products"
-                  className="inline-flex items-center gap-2 rounded-lg bg-white px-5 py-2.5 text-sm font-bold text-brand-700 shadow-sm transition-transform hover:scale-[1.03]"
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-white px-5 py-2.5 text-sm font-bold text-brand-700 shadow-sm transition-transform hover:scale-[1.03] sm:w-auto"
                 >
                   Shop Now <ArrowRight className="h-4 w-4" />
                 </Link>
                 <Link
                   href="/contact"
-                  className="inline-flex items-center rounded-lg border border-white/40 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-white/10"
+                  className="inline-flex w-full items-center justify-center rounded-lg border border-white/40 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-white/10 sm:w-auto"
                 >
                   Talk to Us
                 </Link>
@@ -136,7 +136,7 @@ export default function AboutPage() {
             <div className="relative">
               <div className="overflow-hidden rounded-2xl bg-white/10 shadow-2xl ring-1 ring-white/20 backdrop-blur">
                 <Image
-                  src="/images/hero/banner3.jpg"
+                  src="/about1.png"
                   alt="A curated spread of premium BoxDeal open-box gadgets"
                   width={1440}
                   height={500}
@@ -209,7 +209,7 @@ export default function AboutPage() {
         {/* Feature image band */}
         <section className="relative mt-12 overflow-hidden rounded-2xl shadow-sm">
           <Image
-            src="/images/hero/banner4.jpg"
+            src="/about2.png"
             alt="BoxDeal smart accessories — cameras, audio gear and more"
             width={1440}
             height={500}
@@ -233,8 +233,8 @@ export default function AboutPage() {
         <section className="mt-12 overflow-hidden rounded-2xl bg-gradient-to-br from-brand-500 to-brand-700 text-white shadow-sm">
           <div className="grid grid-cols-2 gap-px sm:grid-cols-4">
             {stats.map((s) => (
-              <div key={s.label} className="bg-white/5 px-4 py-8 text-center">
-                <p className="text-2xl font-black sm:text-3xl">{s.value}</p>
+              <div key={s.label} className="bg-white/5 px-3 py-6 text-center sm:px-4 sm:py-8">
+                <p className="text-xl font-black sm:text-3xl">{s.value}</p>
                 <p className="mt-1 text-xs text-white/80 sm:text-sm">
                   {s.label}
                 </p>
@@ -331,17 +331,17 @@ export default function AboutPage() {
               Premium, like-new gadgets at open-box prices — backed by warranty
               and BoxDeal Assurance. See you on the other side. Ciao! 🚀
             </p>
-            <div className="mt-6 flex flex-col items-center justify-center gap-3 sm:flex-row">
+            <div className="mt-6 flex w-full flex-col items-center justify-center gap-3 sm:w-auto sm:flex-row">
               <Link
                 href="/products"
-                className="inline-flex items-center gap-2 rounded-lg bg-brand-500 px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-brand-600"
+                className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-brand-500 px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-brand-600 sm:w-auto"
               >
                 Browse Products
                 <ArrowRight className="h-4 w-4" />
               </Link>
               <Link
                 href="/contact"
-                className="rounded-lg border border-gray-700 bg-transparent px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-white/10"
+                className="w-full rounded-lg border border-gray-700 bg-transparent px-6 py-3 text-center text-sm font-semibold text-white transition-colors hover:bg-white/10 sm:w-auto"
               >
                 Contact Us
               </Link>

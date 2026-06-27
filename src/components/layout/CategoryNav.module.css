@@ -13,12 +13,40 @@
 .navContainer {
   margin-left: auto;
   margin-right: auto;
-  max-width: 80rem;
+  /* Wider than the header (max-w-7xl) so all category items fit on one row
+     around 1477-1600px instead of overflowing the 1280px cap */
+  max-width: 96rem;
   display: flex;
   align-items: center;
-  justify-content: center;
+  gap: 0.625rem;
+  /* Small screens: scroll horizontally so the row never wraps/collapses */
+  justify-content: flex-start;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE/Edge */
   padding-left: 1rem;
   padding-right: 1rem;
+}
+
+.navContainer::-webkit-scrollbar {
+  display: none; /* Chrome/Safari */
+}
+
+@media (min-width: 900px) {
+  .navContainer {
+    justify-content: safe center;
+    gap: 0.4rem;
+    /* Desktop: must be visible so the hover dropdowns aren't clipped.
+       (overflow-x: auto would force overflow-y to clip too.) */
+    overflow-x: visible;
+  }
+}
+
+@media (min-width: 1520px) {
+  .navContainer {
+    gap: 1.125rem;
+  }
 }
 
 /* Shared base for nav items (nav only renders at 900px+) */
@@ -58,9 +86,8 @@
   color: #b91c1c;
 }
 
-/* Large screens: nudge size up a touch, but keep padding tight so the row stays compact */
-/* Tight range (900-1024px): shrink text & spacing so all items fit one row */
-@media (min-width: 900px) and (max-width: 1024px) {
+/* Below 1520px: smaller text & tight spacing so the whole row fits compactly */
+@media (min-width: 900px) and (max-width: 1519px) {
   .allProductsLink,
   .categoryLink,
   .dealsLink {
@@ -69,21 +96,30 @@
   }
 }
 
-@media (min-width: 1280px) {
+/* Tightest range (900-1024px): shrink text a touch more */
+@media (min-width: 900px) and (max-width: 1024px) {
+  .allProductsLink,
+  .categoryLink,
+  .dealsLink {
+    font-size: 9px;
+  }
+}
+
+/* Smallest range (900-947px): shrink text even more so the row stays on one line */
+@media (min-width: 900px) and (max-width: 947px) {
+  .allProductsLink,
+  .categoryLink,
+  .dealsLink {
+    font-size: 8px;
+  }
+}
+
+@media (min-width: 1520px) {
   .allProductsLink,
   .categoryLink,
   .dealsLink {
     font-size: 12px;
     padding: 0.3rem 0.35rem;
-  }
-}
-
-@media (min-width: 1478px) {
-  .allProductsLink,
-  .categoryLink,
-  .dealsLink {
-    font-size: 13px;
-    padding: 0.35rem 0.5rem;
   }
 }
 
