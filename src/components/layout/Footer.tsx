@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Mail, Phone, Instagram, Send } from "lucide-react";
+import { Mail, Phone, MapPin, Instagram, Send } from "lucide-react";
 
 const social = [
   {
@@ -58,6 +58,10 @@ export function Footer() {
               <div className="flex items-center gap-2">
                 <Phone className="h-4 w-4 text-brand-400 flex-shrink-0" />
                 <span>+91 93551 51182</span>
+              </div>
+              <div className="flex items-start gap-2">
+                <MapPin className="h-4 w-4 text-brand-400 flex-shrink-0 mt-0.5" />
+                <span>15A/59 Karol Bagh, Delhi - 110005</span>
               </div>
             </div>
             <div className="-ml-2.5 mt-5 flex gap-2">
