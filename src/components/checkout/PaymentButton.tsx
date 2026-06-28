@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { Lock, CheckCircle2, XCircle, X } from "lucide-react";
 import { useAppDispatch, useCart, useCartSubtotal, useCartDiscount } from "@/store/hooks";
 import { clearCart } from "@/store/slices/cartSlice";
@@ -34,6 +35,9 @@ type Result =
 
 export function PaymentButton({ address, delivery, paymentMethod }: PaymentButtonProps) {
   const [loading, setLoading] = useState(false);
+  // The customer must accept the Terms & Conditions before they can pay / place
+  // an order. Gates both the online and COD flows.
+  const [agreed, setAgreed] = useState(false);
   // The post-payment popup state. Rendered right here on the checkout page so
   // it never depends on a navigation succeeding from inside Razorpay's iframe.
   const [result, setResult] = useState<Result>(null);
@@ -80,6 +84,10 @@ export function PaymentButton({ address, delivery, paymentMethod }: PaymentButto
 
   async function handlePay() {
     if (shipping === null) return; // delivery charge not ready / pincode not serviceable
+    if (!agreed) {
+      toast.error("Please accept the Terms & Conditions to continue.");
+      return;
+    }
     if (paymentMethod === "cod") return handleCod();
     setLoading(true);
     try {
@@ -225,13 +233,32 @@ export function PaymentButton({ address, delivery, paymentMethod }: PaymentButto
           Couldn&apos;t calculate the delivery charge right now. Please try again in a moment.
         </p>
       )}
+      <label className="mb-3 flex cursor-pointer items-start gap-2.5 text-sm text-gray-600">
+        <input
+          type="checkbox"
+          checked={agreed}
+          onChange={(e) => setAgreed(e.target.checked)}
+          className="mt-0.5 h-4 w-4 flex-shrink-0 rounded border-gray-300 text-brand-500 focus:ring-brand-500"
+        />
+        <span>
+          I agree to the{" "}
+          <Link href="/terms" target="_blank" className="font-medium text-brand-600 hover:underline">
+            Terms &amp; Conditions
+          </Link>{" "}
+          and{" "}
+          <Link href="/privacy" target="_blank" className="font-medium text-brand-600 hover:underline">
+            Privacy Policy
+          </Link>
+          .
+        </span>
+      </label>
       <button
         onClick={handlePay}
-        disabled={loading || items.length === 0 || shipping === null}
-        className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand-500 py-4 text-base font-bold text-white hover:bg-brand-600 disabled:opacity-60 disabled:cursor-not-allowed transition-all active:scale-95"
+        disabled={loading || items.length === 0 || shipping === null || !agreed}
+        className="flex w-full items-center justify-center gap-1.5 sm:gap-2 rounded-xl bg-brand-500 px-3 py-4 text-sm sm:text-base font-bold text-white hover:bg-brand-600 disabled:opacity-60 disabled:cursor-not-allowed transition-all active:scale-95"
       >
-        <Lock className="h-4 w-4" />
-        {payLabel}
+        <Lock className="h-4 w-4 shrink-0" />
+        <span className="min-w-0 truncate">{payLabel}</span>
       </button>
 
       {result?.kind === "success" && (

@@ -1,5 +1,10 @@
-import { format, formatDistanceToNow } from "date-fns";
+import { formatDistanceToNow } from "date-fns";
+import { formatInTimeZone } from "date-fns-tz";
 import { enIN } from "date-fns/locale";
+
+// All order/date display is pinned to IST so timestamps render correctly
+// regardless of server timezone (production runs in UTC).
+const IST = "Asia/Kolkata";
 
 export function formatPrice(amount: number): string {
   return new Intl.NumberFormat("en-IN", {
@@ -10,11 +15,11 @@ export function formatPrice(amount: number): string {
 }
 
 export function formatDate(date: string | Date): string {
-  return format(new Date(date), "dd MMM yyyy", { locale: enIN });
+  return formatInTimeZone(new Date(date), IST, "dd MMM yyyy", { locale: enIN });
 }
 
 export function formatDateTime(date: string | Date): string {
-  return format(new Date(date), "dd MMM yyyy, hh:mm a", { locale: enIN });
+  return formatInTimeZone(new Date(date), IST, "dd MMM yyyy, hh:mm a", { locale: enIN });
 }
 
 export function formatRelativeTime(date: string | Date): string {
