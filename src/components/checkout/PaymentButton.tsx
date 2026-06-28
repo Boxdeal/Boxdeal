@@ -14,6 +14,8 @@ interface PaymentButtonProps {
   address: Address;
   /** Live delivery charge state for the selected address. */
   delivery: ShippingState;
+  /** Selected payment method — drives the Razorpay vs COD flow. */
+  paymentMethod: "online" | "cod";
 }
 
 declare global {
@@ -26,11 +28,11 @@ declare global {
 }
 
 type Result =
-  | { kind: "success"; orderId: string; orderNumber: string }
+  | { kind: "success"; orderId: string; orderNumber: string; cod: boolean }
   | { kind: "failed"; message: string }
   | null;
 
-export function PaymentButton({ address, delivery }: PaymentButtonProps) {
+export function PaymentButton({ address, delivery, paymentMethod }: PaymentButtonProps) {
   const [loading, setLoading] = useState(false);
   // The post-payment popup state. Rendered right here on the checkout page so
   // it never depends on a navigation succeeding from inside Razorpay's iframe.
@@ -46,8 +48,39 @@ export function PaymentButton({ address, delivery }: PaymentButtonProps) {
   const shipping = typeof delivery === "number" ? delivery : null;
   const total = subtotal - discount + (shipping ?? 0);
 
+  async function handleCod() {
+    if (shipping === null) return;
+    setLoading(true);
+    try {
+      const res = await fetch("/api/orders/cod", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          items,
+          address,
+          coupon_code: couponCode,
+          subtotal,
+          discount,
+        }),
+      });
+      const { data, error } = await res.json();
+      if (error) throw new Error(error);
+      setResult({
+        kind: "success",
+        orderId: data.db_order_id,
+        orderNumber: data.order_number,
+        cod: true,
+      });
+      setLoading(false);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Something went wrong");
+      setLoading(false);
+    }
+  }
+
   async function handlePay() {
     if (shipping === null) return; // delivery charge not ready / pincode not serviceable
+    if (paymentMethod === "cod") return handleCod();
     setLoading(true);
     try {
       const orderRes = await fetch("/api/payments/create", {
@@ -124,6 +157,7 @@ export function PaymentButton({ address, delivery }: PaymentButtonProps) {
               kind: "success",
               orderId: data.db_order_id,
               orderNumber: data.order_number,
+              cod: false,
             });
             setLoading(false);
           } catch {
@@ -171,10 +205,12 @@ export function PaymentButton({ address, delivery }: PaymentButtonProps) {
     window.location.href = `/orders/${id}`;
   }
 
+  const isCod = paymentMethod === "cod";
   const payLabel =
-    loading             ? "Processing…" :
-    delivery === "loading"  ? "Calculating delivery…" :
-    shipping === null   ? "Pay Securely" :
+    loading                ? "Processing…" :
+    delivery === "loading" ? "Calculating delivery…" :
+    shipping === null      ? (isCod ? "Place Order" : "Pay Securely") :
+    isCod                  ? `Place Order · ${formatPrice(total)}` :
     `Pay ${formatPrice(total)} Securely`;
 
   return (
@@ -201,6 +237,7 @@ export function PaymentButton({ address, delivery }: PaymentButtonProps) {
       {result?.kind === "success" && (
         <SuccessModal
           orderNumber={result.orderNumber}
+          cod={result.cod}
           onClose={goToOrder}
           onDismiss={() => setResult(null)}
         />
@@ -217,10 +254,12 @@ export function PaymentButton({ address, delivery }: PaymentButtonProps) {
 
 function SuccessModal({
   orderNumber,
+  cod,
   onClose,
   onDismiss,
 }: {
   orderNumber: string;
+  cod: boolean;
   onClose: () => void;
   onDismiss: () => void;
 }) {
@@ -243,12 +282,14 @@ function SuccessModal({
             <CheckCircle2 className="h-12 w-12 text-green-500" strokeWidth={1.5} />
           </div>
           <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-brand-600">
-            Payment Successful
+            {cod ? "Order Placed" : "Payment Successful"}
           </p>
           <h2 className="mb-2 text-2xl font-extrabold leading-tight text-gray-900">
             Your Order is Confirmed!
           </h2>
-          <p className="mb-1 text-sm text-gray-500">Thank you for shopping with us.</p>
+          <p className="mb-1 text-sm text-gray-500">
+            {cod ? "Please keep the order amount ready in cash." : "Thank you for shopping with us."}
+          </p>
           <p className="mb-7 text-sm text-gray-700">
             Order <span className="font-mono font-semibold text-gray-900">{orderNumber}</span> has been placed.
           </p>

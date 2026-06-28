@@ -14,7 +14,7 @@ export async function POST(req: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Login required" }, { status: 401 });
 
-  const { pincode, items }: { pincode: string; items: CartItem[] } = await req.json();
+  const { pincode, items, cod }: { pincode: string; items: CartItem[]; cod?: boolean } = await req.json();
 
   if (!/^\d{6}$/.test(pincode ?? "")) {
     return NextResponse.json({ error: "Invalid pincode" }, { status: 400 });
@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const quote = await getCartDeliveryQuote(getSupabaseAdminClient(), items, pincode);
+    const quote = await getCartDeliveryQuote(getSupabaseAdminClient(), items, pincode, cod ?? false);
     return NextResponse.json({ data: quote });
   } catch (err) {
     return NextResponse.json(

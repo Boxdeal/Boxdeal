@@ -19,6 +19,7 @@ export default function LoginPage() {
   const [phone, setPhone] = useState("");
   const [otp, setOtp] = useState("");
   const [loading, setLoading] = useState(false);
+  const [resendTimer, setResendTimer] = useState(0);
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -27,6 +28,14 @@ export default function LoginPage() {
   useEffect(() => {
     setPostLoginRedirect(searchParams.get("redirect"));
   }, [searchParams]);
+
+  // Countdown for the "Resend OTP" button. Ticks down once per second while
+  // greater than zero, blocking re-sends so we don't burn extra SMS messages.
+  useEffect(() => {
+    if (resendTimer <= 0) return;
+    const id = setInterval(() => setResendTimer((t) => t - 1), 1000);
+    return () => clearInterval(id);
+  }, [resendTimer]);
 
   async function handlePasswordLogin(e: React.FormEvent) {
     e.preventDefault();
@@ -70,8 +79,28 @@ export default function LoginPage() {
 
       toast.success("OTP sent to your phone!");
       setStep("verify");
+      setResendTimer(30);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Failed to send OTP";
+      toast.error(msg);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleResendOtp() {
+    if (resendTimer > 0 || loading) return;
+
+    setLoading(true);
+    try {
+      const result = await supabasePhoneOtpService.sendOtp(phone);
+      if (!result.success) throw new Error(result.error);
+
+      toast.success("OTP resent to your phone!");
+      setOtp("");
+      setResendTimer(30);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Failed to resend OTP";
       toast.error(msg);
     } finally {
       setLoading(false);
@@ -330,11 +359,29 @@ export default function LoginPage() {
               )}
             </button>
 
+            <div className="text-center text-sm">
+              {resendTimer > 0 ? (
+                <span className="text-gray-500">
+                  Resend OTP in {resendTimer}s
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleResendOtp}
+                  disabled={loading}
+                  className="font-semibold text-brand-600 hover:text-brand-700 disabled:opacity-60"
+                >
+                  Resend OTP
+                </button>
+              )}
+            </div>
+
             <button
               type="button"
               onClick={() => {
                 setStep("input");
                 setOtp("");
+                setResendTimer(0);
               }}
               className="w-full text-sm font-semibold text-brand-600 hover:text-brand-700"
             >

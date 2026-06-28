@@ -23,12 +23,14 @@ export type DeliveryQuote =
  * Shiprocket at fulfillment. The live courier rate is then capped at ₹200.
  *
  * Returns `serviceable: false` when no courier covers the destination — callers
- * should block the order in that case.
+ * should block the order in that case. Pass `cod: true` to get the cash-on-
+ * delivery rate (some pincodes have COD couriers only, or none).
  */
 export async function getCartDeliveryQuote(
   admin: SupabaseClient,
   items: CartItem[],
-  pincode: string
+  pincode: string,
+  cod = false
 ): Promise<DeliveryQuote> {
   const ids = items.map((i) => i.product_id);
   const { data: products } = await admin
@@ -46,7 +48,7 @@ export async function getCartDeliveryQuote(
   );
   const weightKg = Math.max(totalGrams / 1000, 0.1);
 
-  const result = await getDeliveryRate(pincode, weightKg);
+  const result = await getDeliveryRate(pincode, weightKg, cod);
   if (!result.serviceable) {
     return { serviceable: false, delivery_charge: null, courier_name: null };
   }

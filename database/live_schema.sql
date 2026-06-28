@@ -135,7 +135,7 @@ CREATE TABLE public.orders (
   shipping_charge numeric DEFAULT 0,
   total_amount numeric NOT NULL,
   coupon_code text,
-  payment_method text DEFAULT 'razorpay'::text CHECK (payment_method = ANY (ARRAY['razorpay'::text, 'upi'::text, 'card'::text])),
+  payment_method text DEFAULT 'razorpay'::text CHECK (payment_method = ANY (ARRAY['razorpay'::text, 'upi'::text, 'card'::text, 'cod'::text])),
   payment_status text DEFAULT 'pending'::text CHECK (payment_status = ANY (ARRAY['pending'::text, 'paid'::text, 'failed'::text, 'refunded'::text])),
   razorpay_order_id text,
   razorpay_payment_id text,

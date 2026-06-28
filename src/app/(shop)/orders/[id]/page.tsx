@@ -276,7 +276,9 @@ export default async function OrderDetailPage({
           <div className="text-sm space-y-1.5">
             <div className="flex justify-between">
               <span className="text-gray-500">Method</span>
-              <span className="capitalize font-medium">{typedOrder.payment_method}</span>
+              <span className="font-medium">
+                {typedOrder.payment_method === "cod" ? "Cash on Delivery" : "Online"}
+              </span>
             </div>
             <div className="flex justify-between">
               <span className="text-gray-500">Status</span>
@@ -286,7 +288,9 @@ export default async function OrderDetailPage({
                   typedOrder.payment_status === "paid" ? "text-green-600" : "text-yellow-600"
                 )}
               >
-                {typedOrder.payment_status}
+                {typedOrder.payment_method === "cod" && typedOrder.payment_status !== "paid"
+                  ? "Pay on delivery"
+                  : typedOrder.payment_status}
               </span>
             </div>
             {typedOrder.razorpay_payment_id && (

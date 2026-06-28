@@ -106,8 +106,8 @@ export default async function AdminOrderDetailPage({
           <div className="rounded-2xl border border-gray-100 bg-white p-4">
             <h2 className="mb-3 font-semibold text-gray-900">Payment</h2>
             <div className="text-sm space-y-1">
-              <div className="flex justify-between"><span className="text-gray-500">Method</span><span className="capitalize font-medium">{order.payment_method}</span></div>
-              <div className="flex justify-between"><span className="text-gray-500">Status</span><span className="capitalize font-medium text-green-600">{order.payment_status}</span></div>
+              <div className="flex justify-between"><span className="text-gray-500">Method</span><span className="font-medium">{order.payment_method === "cod" ? "Cash on Delivery" : "Online"}</span></div>
+              <div className="flex justify-between"><span className="text-gray-500">Status</span><span className={`capitalize font-medium ${order.payment_status === "paid" ? "text-green-600" : "text-yellow-600"}`}>{order.payment_status}</span></div>
               {order.razorpay_payment_id && <p className="text-xs text-gray-400 truncate">{order.razorpay_payment_id}</p>}
             </div>
           </div>

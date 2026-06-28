@@ -89,6 +89,17 @@ export async function POST(req: NextRequest) {
   if (tsField) updateData[tsField] = new Date().toISOString();
   if (awb && !order.tracking_number) updateData.tracking_number = awb;
 
+  // A COD order is collected in cash at the doorstep, so it's only actually
+  // "paid" once the courier delivers it. Online (Razorpay) orders are already
+  // paid at checkout, so this never touches them.
+  if (
+    newStatus === "delivered" &&
+    order.payment_method === "cod" &&
+    order.payment_status !== "paid"
+  ) {
+    updateData.payment_status = "paid";
+  }
+
   const { data: updated, error } = await admin
     .from("orders")
     .update(updateData)

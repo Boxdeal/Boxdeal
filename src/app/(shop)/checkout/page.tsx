@@ -24,35 +24,56 @@ export default function CheckoutPage() {
   const [addingNew, setAddingNew] = useState(false);
   const [saving, setSaving] = useState(false);
   // Live delivery charge for the selected address (Shiprocket rate, capped).
+  // Prepaid and COD rates can differ, so we fetch both and show whichever the
+  // customer has selected.
   const [delivery, setDelivery] = useState<ShippingState>("pending");
+  const [codDelivery, setCodDelivery] = useState<ShippingState>("pending");
+  const [paymentMethod, setPaymentMethod] = useState<"online" | "cod">("online");
 
   // Whenever the selected address (pincode) or cart changes, fetch the live
-  // delivery charge so the customer sees the real total before paying.
+  // delivery charge (prepaid + COD) so the customer sees the real total before
+  // paying and we know whether COD is even serviceable for the pincode.
   useEffect(() => {
     if (!selectedAddress?.pincode || items.length === 0) {
       setDelivery("pending");
+      setCodDelivery("pending");
       return;
     }
     let cancelled = false;
-    setDelivery("loading");
-    fetch("/api/shipping/quote", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ pincode: selectedAddress.pincode, items }),
-    })
-      .then((r) => r.json())
-      .then(({ data, error }) => {
-        if (cancelled) return;
-        // A returned `error` means a system/config problem (e.g. rate API down or
-        // pickup pincode not configured) — distinct from a pincode that genuinely
-        // has no courier (`serviceable: false`).
-        if (error) { setDelivery("error"); return; }
-        if (!data?.serviceable) { setDelivery("unserviceable"); return; }
-        setDelivery(data.delivery_charge as number);
+    const quote = (cod: boolean, set: (s: ShippingState) => void) => {
+      set("loading");
+      fetch("/api/shipping/quote", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pincode: selectedAddress.pincode, items, cod }),
       })
-      .catch(() => { if (!cancelled) setDelivery("error"); });
+        .then((r) => r.json())
+        .then(({ data, error }) => {
+          if (cancelled) return;
+          // A returned `error` means a system/config problem (e.g. rate API down or
+          // pickup pincode not configured) — distinct from a pincode that genuinely
+          // has no courier (`serviceable: false`).
+          if (error) { set("error"); return; }
+          if (!data?.serviceable) { set("unserviceable"); return; }
+          set(data.delivery_charge as number);
+        })
+        .catch(() => { if (!cancelled) set("error"); });
+    };
+    quote(false, setDelivery);
+    quote(true, setCodDelivery);
     return () => { cancelled = true; };
   }, [selectedAddress?.pincode, items]);
+
+  // If the customer had COD selected but it isn't serviceable for the new
+  // address, fall back to online so they're never stuck on a dead option.
+  useEffect(() => {
+    if (paymentMethod === "cod" && codDelivery === "unserviceable") {
+      setPaymentMethod("online");
+    }
+  }, [paymentMethod, codDelivery]);
+
+  // The charge + button state follow whichever method is selected.
+  const activeDelivery = paymentMethod === "cod" ? codDelivery : delivery;
 
   useEffect(() => {
     if (authLoading) return; // wait for the Supabase session to resolve
@@ -191,14 +212,65 @@ export default function CheckoutPage() {
               {items.map((item) => <CartItem key={item.product_id} item={item} />)}
             </div>
             <div className="mt-4 pt-4 border-t">
-              <CartSummary subtotal={subtotal} discount={discount} shipping={delivery} />
+              <CartSummary subtotal={subtotal} discount={discount} shipping={activeDelivery} />
             </div>
           </div>
 
           <CouponInput />
 
+          {/* Payment method selection */}
           {selectedAddress && (
-            <PaymentButton address={selectedAddress} delivery={delivery} />
+            <div className="rounded-2xl border border-gray-100 bg-white p-4 sm:p-5">
+              <h2 className="mb-3 font-bold text-gray-900">Payment Method</h2>
+              <div className="space-y-3">
+                <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-gray-200 p-3 sm:p-4 hover:border-brand-300 transition-colors">
+                  <input
+                    type="radio"
+                    name="payment-method"
+                    checked={paymentMethod === "online"}
+                    onChange={() => setPaymentMethod("online")}
+                    className="text-brand-500"
+                  />
+                  <div className="text-sm">
+                    <p className="font-semibold text-gray-900">Online Payment</p>
+                    <p className="text-gray-500 mt-0.5">UPI, cards, netbanking & wallets via Razorpay</p>
+                  </div>
+                </label>
+
+                <label
+                  className={`flex items-center gap-3 rounded-xl border border-gray-200 p-3 sm:p-4 transition-colors ${
+                    codDelivery === "unserviceable"
+                      ? "cursor-not-allowed opacity-50"
+                      : "cursor-pointer hover:border-brand-300"
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="payment-method"
+                    checked={paymentMethod === "cod"}
+                    disabled={codDelivery === "unserviceable"}
+                    onChange={() => setPaymentMethod("cod")}
+                    className="text-brand-500"
+                  />
+                  <div className="text-sm">
+                    <p className="font-semibold text-gray-900">Cash on Delivery</p>
+                    <p className="text-gray-500 mt-0.5">
+                      {codDelivery === "unserviceable"
+                        ? "Not available for this pincode"
+                        : "Pay in cash when your order arrives"}
+                    </p>
+                  </div>
+                </label>
+              </div>
+            </div>
+          )}
+
+          {selectedAddress && (
+            <PaymentButton
+              address={selectedAddress}
+              delivery={activeDelivery}
+              paymentMethod={paymentMethod}
+            />
           )}
         </div>
       </div>
