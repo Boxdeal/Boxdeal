@@ -2,6 +2,10 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   images: {
+    // Vercel image-optimization quota (Hobby plan) khatam ho jaane par /_next/image
+    // 402 deta hai -> naye images blank aate hain. Optimizer bypass karke images
+    // seedha Supabase se serve karte hain (already compressed). Quota bhi nahi judta.
+    unoptimized: true,
     formats: ["image/avif", "image/webp"],
     remotePatterns: [
       {
