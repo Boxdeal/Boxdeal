@@ -93,13 +93,28 @@ async function fulfillShiprocket(
           0
         );
         const weightKg = Math.max(totalGrams / 1000, 0.1);
-        const rate = await getDeliveryRate(String(srOrder.shipping_pincode), weightKg);
+        // Pass the order's COD flag so serviceability picks a courier that can
+        // actually do COD to this pincode — otherwise generateAWB later fails to
+        // assign a prepaid-only courier for a COD shipment ("no courier could be
+        // assigned").
+        const isCod = srOrder.payment_method === "cod";
+        const rate = await getDeliveryRate(String(srOrder.shipping_pincode), weightKg, isCod);
         if (rate.serviceable) courierId = rate.courierId;
       } catch (e) {
         console.error(`Cheapest-courier lookup failed for order ${id}; using auto-assign:`, e);
       }
 
-      const awb = await generateAWB(shipmentId, courierId);
+      // Best-effort: if forcing the quoted cheapest courier can't be assigned
+      // (e.g. it doesn't service COD for this pincode), fall back to letting
+      // Shiprocket auto-assign its recommended courier rather than failing.
+      let awb;
+      try {
+        awb = await generateAWB(shipmentId, courierId);
+      } catch (e) {
+        if (!courierId) throw e;
+        console.error(`Forced courier ${courierId} failed for order ${id}; retrying with auto-assign:`, e);
+        awb = await generateAWB(shipmentId);
+      }
       update.tracking_number = awb.awb_code;
       update.courier_name    = awb.courier_name;
       update.tracking_url    = getTrackingUrl(awb.awb_code);
