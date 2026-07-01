@@ -175,6 +175,10 @@ export async function createShiprocketOrder(
       order_items:            orderItems,
       payment_method:         order.payment_method === "cod" ? "COD" : "Prepaid",
       sub_total:              order.subtotal,
+      // Delivery charge + discount so Shiprocket's collectible/invoice matches
+      // the order total: sub_total + shipping_charges − total_discount.
+      shipping_charges:       order.shipping_charge,
+      total_discount:         order.discount_amount,
       length,
       breadth,
       height,
