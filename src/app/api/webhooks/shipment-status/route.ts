@@ -13,13 +13,19 @@ import type { Order, OrderStatus } from "@/types";
 // unset, the endpoint accepts all calls.
 
 // Map Shiprocket's free-text status to our internal order status.
+// Uses the text label (current_status / shipment_status) rather than the numeric
+// current_status_id, since the IDs are inconsistent (e.g. both 18 and 20 report
+// "IN TRANSIT"). Order matters: negative/failure states are checked first so
+// their substrings aren't misread as success — e.g. "UNDELIVERED" contains
+// "delivered", and "RTO DELIVERED" must count as a return, not a delivery.
 function mapStatus(srStatus: string): OrderStatus | null {
   const s = srStatus.toLowerCase();
-  if (s.includes("out for delivery"))               return "out_for_delivery";
-  if (s.includes("delivered") && !s.includes("rto")) return "delivered";
-  if (s.includes("picked up") || s === "shipped" || s.includes("in transit")) return "shipped";
-  if (s.includes("rto") || s.includes("return"))    return "returned";
+  if (s.includes("rto") || s.includes("return"))     return "returned";
   if (s.includes("cancel"))                          return "cancelled";
+  if (s.includes("undelivered"))                     return null; // failed attempt — keep current state
+  if (s.includes("out for delivery"))                return "out_for_delivery";
+  if (s.includes("delivered"))                       return "delivered";
+  if (s.includes("picked up") || s.includes("shipped") || s.includes("in transit")) return "shipped";
   return null;
 }
 
@@ -51,23 +57,24 @@ export async function POST(req: NextRequest) {
   // the exact payload shape it sends.
   console.log("[sr-webhook] payload:", JSON.stringify(payload));
 
-  // Shiprocket's REAL webhook identifiers (confirmed from live production logs):
-  //   • order_id     → the order id WE passed = our `order_number` (e.g. "BD20260702-1172")
-  //   • sr_order_id  → Shiprocket's OWN internal order id = our `shiprocket_order_id` (numeric)
-  //   • awb          → the tracking number = our `tracking_number`
-  // (`order_id` is OUR number, NOT Shiprocket's internal id — an earlier version
-  //  had these swapped, so matching only ever succeeded via the AWB fallback.)
+  // Shiprocket's identifier fields are INCONSISTENT across payload versions:
+  //   • Live production orders send  order_id = OUR order_number ("BD...")  +  sr_order_id = their numeric id.
+  //   • The documented sample sends  order_id = their numeric id  +  channel_order_id = our order_number.
+  // So `order_id` may be EITHER our number or Shiprocket's id. We therefore try
+  // every identifier against every column it could plausibly be (below); there
+  // are no false positives since "BD..." never collides with a numeric id.
   const str = (v: unknown) => (v != null && v !== "" ? String(v) : undefined);
-  const orderNumber = str(payload.order_id ?? payload.channel_order_id);
-  const srOrderId   = str(payload.sr_order_id);
-  const awb         = str(payload.awb);
-  const currentStatus = (payload.current_status ?? payload.shipment_status) as string | undefined;
+  const orderId        = str(payload.order_id);
+  const channelOrderId = str(payload.channel_order_id);
+  const srOrderId      = str(payload.sr_order_id);
+  const awb            = str(payload.awb);
+  const currentStatus  = (payload.current_status ?? payload.shipment_status) as string | undefined;
 
   // Always acknowledge with 200 when there's nothing actionable (incomplete
   // payload, unknown status, unknown order). Shiprocket — including its "Test
   // Webhook" button — treats any non-2xx as "endpoint unreachable" and refuses
   // to save the config, so we must never 4xx a well-formed delivery.
-  if (!currentStatus || (!orderNumber && !srOrderId && !awb)) {
+  if (!currentStatus || (!orderId && !channelOrderId && !srOrderId && !awb)) {
     return NextResponse.json({ ok: true, ignored: "incomplete payload" });
   }
 
@@ -84,9 +91,11 @@ export async function POST(req: NextRequest) {
   // which identifiers this particular callback includes.
   let order: Order | null = null;
   for (const [column, value] of [
-    ["order_number",        orderNumber],
-    ["shiprocket_order_id", srOrderId],
-    ["tracking_number",     awb],
+    ["order_number",        channelOrderId], // explicit "our number" field
+    ["order_number",        orderId],        // live payloads put our number here
+    ["shiprocket_order_id", srOrderId],      // their numeric id (live payloads)
+    ["shiprocket_order_id", orderId],        // their numeric id (sample payloads)
+    ["tracking_number",     awb],            // last resort — always present
   ] as const) {
     if (!value) continue;
     const { data } = await admin.from("orders").select("*").eq(column, value).maybeSingle();
@@ -95,7 +104,7 @@ export async function POST(req: NextRequest) {
 
   if (!order) {
     // Acknowledge — the AWB/order may simply belong to a different channel.
-    console.warn("[sr-webhook] order not found for", { orderNumber, srOrderId, awb });
+    console.warn("[sr-webhook] order not found for", { orderId, channelOrderId, srOrderId, awb });
     return NextResponse.json({ ok: true, ignored: "order not found" });
   }
   console.log("[sr-webhook] matched order", order.order_number, "→", newStatus, "(from", currentStatus + ")");
