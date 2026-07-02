@@ -51,22 +51,23 @@ export async function POST(req: NextRequest) {
   // the exact payload shape it sends.
   console.log("[sr-webhook] payload:", JSON.stringify(payload));
 
-  // Shiprocket's webhook payload carries THREE distinct identifiers:
-  //   • channel_order_id → the order id WE passed = our `order_number`
-  //   • order_id         → Shiprocket's OWN internal order id = our `shiprocket_order_id`
-  //   • awb              → the tracking number = our `tracking_number`
-  // (Earlier this assumed `order_id` was our order_number, so every callback
-  //  matched nothing and was silently dropped — orders got stuck at "shipped".)
-  const channelOrderId = payload.channel_order_id != null ? String(payload.channel_order_id) : undefined;
-  const srOrderId      = payload.order_id        != null ? String(payload.order_id)        : undefined;
-  const awb            = payload.awb             != null ? String(payload.awb)             : undefined;
-  const currentStatus  = (payload.current_status ?? payload.shipment_status) as string | undefined;
+  // Shiprocket's REAL webhook identifiers (confirmed from live production logs):
+  //   • order_id     → the order id WE passed = our `order_number` (e.g. "BD20260702-1172")
+  //   • sr_order_id  → Shiprocket's OWN internal order id = our `shiprocket_order_id` (numeric)
+  //   • awb          → the tracking number = our `tracking_number`
+  // (`order_id` is OUR number, NOT Shiprocket's internal id — an earlier version
+  //  had these swapped, so matching only ever succeeded via the AWB fallback.)
+  const str = (v: unknown) => (v != null && v !== "" ? String(v) : undefined);
+  const orderNumber = str(payload.order_id ?? payload.channel_order_id);
+  const srOrderId   = str(payload.sr_order_id);
+  const awb         = str(payload.awb);
+  const currentStatus = (payload.current_status ?? payload.shipment_status) as string | undefined;
 
   // Always acknowledge with 200 when there's nothing actionable (incomplete
   // payload, unknown status, unknown order). Shiprocket — including its "Test
   // Webhook" button — treats any non-2xx as "endpoint unreachable" and refuses
   // to save the config, so we must never 4xx a well-formed delivery.
-  if (!currentStatus || (!channelOrderId && !srOrderId && !awb)) {
+  if (!currentStatus || (!orderNumber && !srOrderId && !awb)) {
     return NextResponse.json({ ok: true, ignored: "incomplete payload" });
   }
 
@@ -83,7 +84,7 @@ export async function POST(req: NextRequest) {
   // which identifiers this particular callback includes.
   let order: Order | null = null;
   for (const [column, value] of [
-    ["order_number",        channelOrderId],
+    ["order_number",        orderNumber],
     ["shiprocket_order_id", srOrderId],
     ["tracking_number",     awb],
   ] as const) {
@@ -94,7 +95,7 @@ export async function POST(req: NextRequest) {
 
   if (!order) {
     // Acknowledge — the AWB/order may simply belong to a different channel.
-    console.warn("[sr-webhook] order not found for", { channelOrderId, srOrderId, awb });
+    console.warn("[sr-webhook] order not found for", { orderNumber, srOrderId, awb });
     return NextResponse.json({ ok: true, ignored: "order not found" });
   }
   console.log("[sr-webhook] matched order", order.order_number, "→", newStatus, "(from", currentStatus + ")");
