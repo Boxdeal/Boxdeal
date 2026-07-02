@@ -21,6 +21,7 @@ export default async function EditProductPage({
       .select(`
         id, name, sku, description, short_description, category_id, subcategory_id, brand_id,
         mrp, selling_price, stock_quantity, low_stock_threshold, weight_grams,
+        length_cm, breadth_cm, height_cm,
         is_active, is_featured, is_deal_of_day, meta_title, meta_description,
         product_images(image_url, thumbnail_url, is_primary, sort_order),
         product_specifications(spec_group, spec_name, spec_value, sort_order)
@@ -56,6 +57,9 @@ export default async function EditProductPage({
     stock_quantity:      product.stock_quantity,
     low_stock_threshold: product.low_stock_threshold,
     weight_grams:        product.weight_grams,
+    length_cm:           product.length_cm,
+    breadth_cm:          product.breadth_cm,
+    height_cm:           product.height_cm,
     is_active:           product.is_active,
     is_featured:         product.is_featured,
     is_deal_of_day:      product.is_deal_of_day,

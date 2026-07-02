@@ -14,6 +14,8 @@ export type OrderStatus =
 
 export type PaymentStatus =
   | "pending"
+  // Partial-COD: the online portion has been paid, the COD portion is still due.
+  | "partial"
   | "paid"
   | "failed"
   | "refunded"
@@ -113,6 +115,10 @@ export interface Product {
   stock_quantity: number;
   low_stock_threshold: number;
   weight_grams: number;
+  // Parcel dimensions (cm) → volumetric weight = L×B×H / 5000.
+  length_cm: number;
+  breadth_cm: number;
+  height_cm: number;
   is_active: boolean;
   is_featured: boolean;
   is_deal_of_day: boolean;
@@ -202,6 +208,11 @@ export interface Order {
   coupon_code: string | null;
   payment_method: PaymentMethod;
   payment_status: PaymentStatus;
+  // Partial-COD (bulky/volumetric parcel): part paid online up front, the rest
+  // collected as cash on delivery. For normal orders these stay false / 0.
+  is_partial_cod: boolean;
+  online_paid_amount: number;
+  cod_amount: number;
   razorpay_order_id: string | null;
   razorpay_payment_id: string | null;
   status: OrderStatus;

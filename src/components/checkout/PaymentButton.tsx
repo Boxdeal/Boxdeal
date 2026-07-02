@@ -6,7 +6,7 @@ import { Lock, CheckCircle2, XCircle, X } from "lucide-react";
 import { useAppDispatch, useCart, useCartSubtotal, useCartDiscount } from "@/store/hooks";
 import { clearCart } from "@/store/slices/cartSlice";
 import { formatPrice } from "@/lib/utils/format";
-import { RAZORPAY_CURRENCY, RAZORPAY_THEME_COLOR } from "@/constants";
+import { RAZORPAY_CURRENCY, RAZORPAY_THEME_COLOR, splitPartialCod } from "@/constants";
 import type { Address } from "@/types";
 import type { ShippingState } from "@/components/cart/CartSummary";
 import { toast } from "sonner";
@@ -17,6 +17,11 @@ interface PaymentButtonProps {
   delivery: ShippingState;
   /** Selected payment method — drives the Razorpay vs COD flow. */
   paymentMethod: "online" | "cod";
+  /**
+   * True when a COD order is for a bulky/volumetric parcel and must be placed as
+   * PARTIAL-COD: the online slice is paid now via Razorpay, the rest on delivery.
+   */
+  isPartialCod?: boolean;
 }
 
 declare global {
@@ -29,11 +34,11 @@ declare global {
 }
 
 type Result =
-  | { kind: "success"; orderId: string; orderNumber: string; cod: boolean }
+  | { kind: "success"; orderId: string; orderNumber: string; cod: boolean; codCollect?: number }
   | { kind: "failed"; message: string }
   | null;
 
-export function PaymentButton({ address, delivery, paymentMethod }: PaymentButtonProps) {
+export function PaymentButton({ address, delivery, paymentMethod, isPartialCod = false }: PaymentButtonProps) {
   const [loading, setLoading] = useState(false);
   // The customer must accept the Terms & Conditions before they can pay / place
   // an order. Gates both the online and COD flows.
@@ -51,6 +56,10 @@ export function PaymentButton({ address, delivery, paymentMethod }: PaymentButto
   // The delivery charge must be resolved (a number) before payment is allowed.
   const shipping = typeof delivery === "number" ? delivery : null;
   const total = subtotal - discount + (shipping ?? 0);
+  // Partial-COD split: what's charged online now vs collected on delivery. Only
+  // meaningful when isPartialCod; the amounts shown here are also recomputed and
+  // enforced server-side, so display and charge always agree.
+  const partial = isPartialCod ? splitPartialCod(total) : null;
 
   async function handleCod() {
     if (shipping === null) return;
@@ -88,7 +97,9 @@ export function PaymentButton({ address, delivery, paymentMethod }: PaymentButto
       toast.error("Please accept the Terms & Conditions to continue.");
       return;
     }
-    if (paymentMethod === "cod") return handleCod();
+    // Plain COD (non-volumetric) is the only path with no online payment. A
+    // partial-COD order still goes through Razorpay for its online slice below.
+    if (paymentMethod === "cod" && !isPartialCod) return handleCod();
     setLoading(true);
     try {
       const orderRes = await fetch("/api/payments/create", {
@@ -102,6 +113,7 @@ export function PaymentButton({ address, delivery, paymentMethod }: PaymentButto
           discount,
           shipping_charge: shipping,
           total_amount: total,
+          mode: isPartialCod ? "partial_cod" : "online",
         }),
       });
 
@@ -161,11 +173,15 @@ export function PaymentButton({ address, delivery, paymentMethod }: PaymentButto
             // Success — show the confirmation popup. Cart is cleared only when
             // the user leaves (goToOrder), so clearing it here can't trigger the
             // checkout page's "cart empty → /products" redirect and unmount us.
+            // For partial-COD, flag it and pass the amount still due on delivery.
             setResult({
               kind: "success",
               orderId: data.db_order_id,
               orderNumber: data.order_number,
-              cod: false,
+              cod: isPartialCod,
+              codCollect: isPartialCod
+                ? Number(data.cod_amount) || (partial?.cod ?? 0)
+                : undefined,
             });
             setLoading(false);
           } catch {
@@ -213,12 +229,15 @@ export function PaymentButton({ address, delivery, paymentMethod }: PaymentButto
     window.location.href = `/orders/${id}`;
   }
 
-  const isCod = paymentMethod === "cod";
+  // Plain COD (no online payment) vs a razorpay-driven flow. Partial-COD still
+  // pays online now, so it uses the "Pay …" wording, not "Place Order".
+  const isPlainCod = paymentMethod === "cod" && !isPartialCod;
   const payLabel =
     loading                ? "Processing…" :
     delivery === "loading" ? "Calculating delivery…" :
-    shipping === null      ? (isCod ? "Place Order" : "Pay Securely") :
-    isCod                  ? `Place Order · ${formatPrice(total)}` :
+    shipping === null      ? (isPlainCod ? "Place Order" : "Pay Securely") :
+    isPlainCod             ? `Place Order · ${formatPrice(total)}` :
+    isPartialCod && partial ? `Pay ${formatPrice(partial.online)} Now Securely` :
     `Pay ${formatPrice(total)} Securely`;
 
   return (
@@ -265,6 +284,7 @@ export function PaymentButton({ address, delivery, paymentMethod }: PaymentButto
         <SuccessModal
           orderNumber={result.orderNumber}
           cod={result.cod}
+          codCollect={result.codCollect}
           onClose={goToOrder}
           onDismiss={() => setResult(null)}
         />
@@ -282,14 +302,19 @@ export function PaymentButton({ address, delivery, paymentMethod }: PaymentButto
 function SuccessModal({
   orderNumber,
   cod,
+  codCollect,
   onClose,
   onDismiss,
 }: {
   orderNumber: string;
   cod: boolean;
+  /** For partial-COD: the amount still to be collected in cash on delivery. */
+  codCollect?: number;
   onClose: () => void;
   onDismiss: () => void;
 }) {
+  // Partial-COD = the online part was just paid AND there's a cash amount due.
+  const isPartial = cod && typeof codCollect === "number" && codCollect > 0;
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 animate-in fade-in duration-200">
       <div className="absolute inset-0 bg-black/50" onClick={onDismiss} />
@@ -309,13 +334,17 @@ function SuccessModal({
             <CheckCircle2 className="h-12 w-12 text-green-500" strokeWidth={1.5} />
           </div>
           <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-brand-600">
-            {cod ? "Order Placed" : "Payment Successful"}
+            {isPartial ? "Payment Received" : cod ? "Order Placed" : "Payment Successful"}
           </p>
           <h2 className="mb-2 text-2xl font-extrabold leading-tight text-gray-900">
             Your Order is Confirmed!
           </h2>
           <p className="mb-1 text-sm text-gray-500">
-            {cod ? "Please keep the order amount ready in cash." : "Thank you for shopping with us."}
+            {isPartial
+              ? `Please keep ${formatPrice(codCollect!)} ready in cash for delivery.`
+              : cod
+              ? "Please keep the order amount ready in cash."
+              : "Thank you for shopping with us."}
           </p>
           <p className="mb-7 text-sm text-gray-700">
             Order <span className="font-mono font-semibold text-gray-900">{orderNumber}</span> has been placed.

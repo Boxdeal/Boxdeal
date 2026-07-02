@@ -42,7 +42,8 @@ export async function PATCH(
   const passthrough = [
     "name", "sku", "description", "short_description", "category_id",
     "subcategory_id", "brand_id", "stock_quantity", "low_stock_threshold",
-    "weight_grams", "is_active", "is_featured", "is_deal_of_day",
+    "weight_grams", "length_cm", "breadth_cm", "height_cm",
+    "is_active", "is_featured", "is_deal_of_day",
     "meta_title", "meta_description",
   ];
   for (const k of passthrough) {

@@ -173,18 +173,33 @@ async function refundOrderPayment(
     payment_method: string | null;
     razorpay_payment_id: string | null;
     total_amount: number;
+    is_partial_cod?: boolean | null;
+    online_paid_amount?: number | null;
   }
 ): Promise<{ refunded: boolean; error: string | null }> {
+  // A fully-online (razorpay/paid) order refunds the whole total. A partial-COD
+  // order (payment_status "partial") only ever took the online slice online — the
+  // COD portion was never collected — so refund just online_paid_amount.
   const wasPaidOnline =
     order.payment_status === "paid" &&
     order.payment_method === "razorpay" &&
     !!order.razorpay_payment_id;
-  if (!wasPaidOnline) return { refunded: false, error: null };
+  const isPartialPaid =
+    order.is_partial_cod === true &&
+    order.payment_status === "partial" &&
+    !!order.razorpay_payment_id;
+
+  if (!wasPaidOnline && !isPartialPaid) return { refunded: false, error: null };
+
+  const refundAmount = isPartialPaid
+    ? Number(order.online_paid_amount) || 0
+    : order.total_amount;
+  if (refundAmount <= 0) return { refunded: false, error: null };
 
   try {
     await refundRazorpayPayment(
       order.razorpay_payment_id as string,
-      Math.round(order.total_amount * 100)
+      Math.round(refundAmount * 100)
     );
     return { refunded: true, error: null };
   } catch (e) {
@@ -215,7 +230,7 @@ export async function PATCH(
     const admin = getSupabaseAdminClient();
     const { data: order } = await admin
       .from("orders")
-      .select("id, user_id, status, placed_at, payment_method, payment_status, razorpay_payment_id, total_amount")
+      .select("id, user_id, status, placed_at, payment_method, payment_status, razorpay_payment_id, total_amount, is_partial_cod, online_paid_amount")
       .eq("id", id)
       .single();
 
@@ -331,7 +346,7 @@ export async function PATCH(
     updateData.cancelled_at = new Date().toISOString();
     const { data: payInfo } = await admin
       .from("orders")
-      .select("status, payment_status, payment_method, razorpay_payment_id, total_amount")
+      .select("status, payment_status, payment_method, razorpay_payment_id, total_amount, is_partial_cod, online_paid_amount")
       .eq("id", id)
       .single();
     if (payInfo) {

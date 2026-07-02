@@ -26,6 +26,9 @@ export interface ProductInitial {
   stock_quantity: number;
   low_stock_threshold: number;
   weight_grams: number;
+  length_cm: number;
+  breadth_cm: number;
+  height_cm: number;
   is_active: boolean;
   is_featured: boolean;
   is_deal_of_day: boolean;
@@ -59,6 +62,9 @@ export function ProductForm({ categories, subcategories, brands, product }: Prod
     stock_quantity:      product ? String(product.stock_quantity) : "",
     low_stock_threshold: product ? String(product.low_stock_threshold) : "5",
     weight_grams:        product ? String(product.weight_grams) : "0",
+    length_cm:           product ? String(product.length_cm ?? 0) : "0",
+    breadth_cm:          product ? String(product.breadth_cm ?? 0) : "0",
+    height_cm:           product ? String(product.height_cm ?? 0) : "0",
     is_active:           product?.is_active ?? true,
     is_featured:         product?.is_featured ?? false,
     is_deal_of_day:      product?.is_deal_of_day ?? false,
@@ -276,7 +282,23 @@ export function ProductForm({ categories, subcategories, brands, product }: Prod
             <label className={labelCls}>Weight (grams)</label>
             <input type="number" min="0" className={inputCls} value={form.weight_grams} onChange={(e) => set("weight_grams", e.target.value)} />
           </div>
+          <div>
+            <label className={labelCls}>Length (cm)</label>
+            <input type="number" min="0" step="0.1" className={inputCls} value={form.length_cm} onChange={(e) => set("length_cm", e.target.value)} />
+          </div>
+          <div>
+            <label className={labelCls}>Breadth (cm)</label>
+            <input type="number" min="0" step="0.1" className={inputCls} value={form.breadth_cm} onChange={(e) => set("breadth_cm", e.target.value)} />
+          </div>
+          <div>
+            <label className={labelCls}>Height (cm)</label>
+            <input type="number" min="0" step="0.1" className={inputCls} value={form.height_cm} onChange={(e) => set("height_cm", e.target.value)} />
+          </div>
         </div>
+        <p className="text-xs text-gray-500">
+          Dimensions set the parcel&apos;s volumetric weight (L×B×H ÷ 5000). When it exceeds the actual
+          weight, COD orders require partial online payment.
+        </p>
       </section>
 
       {/* Images */}

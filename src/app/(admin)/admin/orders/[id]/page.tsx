@@ -77,6 +77,12 @@ export default async function AdminOrderDetailPage({
               {order.discount_amount > 0 && <div className="flex justify-between text-green-600"><span>Discount</span><span>-{formatPrice(order.discount_amount)}</span></div>}
               <div className="flex justify-between text-gray-600"><span>Shipping</span><span>{order.shipping_charge > 0 ? formatPrice(order.shipping_charge) : "FREE"}</span></div>
               <div className="flex justify-between font-bold text-base"><span>Total</span><span>{formatPrice(order.total_amount)}</span></div>
+              {order.is_partial_cod && (
+                <div className="mt-1 space-y-1 rounded-lg bg-amber-50 border border-amber-200 p-2 text-amber-900">
+                  <div className="flex justify-between"><span>Paid online</span><span className="font-medium">{formatPrice(order.online_paid_amount)}</span></div>
+                  <div className="flex justify-between"><span>Collect on delivery (COD)</span><span className="font-semibold">{formatPrice(order.cod_amount)}</span></div>
+                </div>
+              )}
             </div>
           </div>
 
@@ -106,7 +112,7 @@ export default async function AdminOrderDetailPage({
           <div className="rounded-2xl border border-gray-100 bg-white p-4">
             <h2 className="mb-3 font-semibold text-gray-900">Payment</h2>
             <div className="text-sm space-y-1">
-              <div className="flex justify-between"><span className="text-gray-500">Method</span><span className="font-medium">{order.payment_method === "cod" ? "Cash on Delivery" : "Online"}</span></div>
+              <div className="flex justify-between"><span className="text-gray-500">Method</span><span className="font-medium">{order.is_partial_cod ? "Partial COD" : order.payment_method === "cod" ? "Cash on Delivery" : "Online"}</span></div>
               <div className="flex justify-between"><span className="text-gray-500">Status</span><span className={`capitalize font-medium ${order.payment_status === "paid" ? "text-green-600" : "text-yellow-600"}`}>{order.payment_status}</span></div>
               {order.razorpay_payment_id && <p className="text-xs text-gray-400 truncate">{order.razorpay_payment_id}</p>}
             </div>

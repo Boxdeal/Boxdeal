@@ -10,6 +10,8 @@ import { PaymentButton } from "@/components/checkout/PaymentButton";
 import { CouponInput } from "@/components/checkout/CouponInput";
 import { CartItem } from "@/components/cart/CartItem";
 import { addressService } from "@/services/address";
+import { PARTIAL_COD_ONLINE_PERCENT, splitPartialCod } from "@/constants";
+import { formatPrice } from "@/lib/utils/format";
 import type { Address } from "@/types";
 
 export default function CheckoutPage() {
@@ -29,6 +31,11 @@ export default function CheckoutPage() {
   const [delivery, setDelivery] = useState<ShippingState>("pending");
   const [codDelivery, setCodDelivery] = useState<ShippingState>("pending");
   const [paymentMethod, setPaymentMethod] = useState<"online" | "cod">("online");
+  // Whether the parcel is billed on its volumetric weight (bulky but light).
+  // Same for prepaid or COD (a property of the cart), so we read it off either
+  // quote. For COD such orders require PARTIAL payment — part online now, rest
+  // collected on delivery.
+  const [isVolumetric, setIsVolumetric] = useState(false);
 
   // Whenever the selected address (pincode) or cart changes, fetch the live
   // delivery charge (prepaid + COD) so the customer sees the real total before
@@ -37,6 +44,7 @@ export default function CheckoutPage() {
     if (!selectedAddress?.pincode || items.length === 0) {
       setDelivery("pending");
       setCodDelivery("pending");
+      setIsVolumetric(false);
       return;
     }
     let cancelled = false;
@@ -56,6 +64,7 @@ export default function CheckoutPage() {
           if (error) { set("error"); return; }
           if (!data?.serviceable) { set("unserviceable"); return; }
           set(data.delivery_charge as number);
+          if (typeof data.is_volumetric === "boolean") setIsVolumetric(data.is_volumetric);
         })
         .catch(() => { if (!cancelled) set("error"); });
     };
@@ -74,6 +83,15 @@ export default function CheckoutPage() {
 
   // The charge + button state follow whichever method is selected.
   const activeDelivery = paymentMethod === "cod" ? codDelivery : delivery;
+
+  // A COD order for a volumetric (bulky) parcel becomes a partial-COD order:
+  // part paid online now, the rest on delivery. Only once the COD rate resolved.
+  const isPartialCod =
+    paymentMethod === "cod" && isVolumetric && typeof codDelivery === "number";
+  const codSplit =
+    isPartialCod && typeof codDelivery === "number"
+      ? splitPartialCod(subtotal - discount + codDelivery)
+      : null;
 
   useEffect(() => {
     if (authLoading) return; // wait for the Supabase session to resolve
@@ -253,15 +271,43 @@ export default function CheckoutPage() {
                     className="text-brand-500"
                   />
                   <div className="text-sm">
-                    <p className="font-semibold text-gray-900">Cash on Delivery</p>
+                    <p className="font-semibold text-gray-900">
+                      {isVolumetric && codDelivery !== "unserviceable"
+                        ? "Cash on Delivery (Partial)"
+                        : "Cash on Delivery"}
+                    </p>
                     <p className="text-gray-500 mt-0.5">
                       {codDelivery === "unserviceable"
                         ? "Not available for this pincode"
+                        : isVolumetric
+                        ? `Pay ${PARTIAL_COD_ONLINE_PERCENT}% online now, rest in cash on delivery`
                         : "Pay in cash when your order arrives"}
                     </p>
                   </div>
                 </label>
               </div>
+
+              {/* Partial-COD breakdown: a bulky/volumetric parcel needs part of
+                  the payment online up front. */}
+              {paymentMethod === "cod" && isPartialCod && codSplit && (
+                <div className="mt-3 rounded-xl bg-amber-50 border border-amber-200 p-3 text-sm">
+                  <p className="font-semibold text-amber-800">Partial payment required</p>
+                  <p className="mt-1 text-amber-700">
+                    This is a bulky item. Please pay part of the amount online now; the rest is
+                    collected in cash on delivery.
+                  </p>
+                  <div className="mt-2 space-y-1 text-amber-900">
+                    <div className="flex justify-between">
+                      <span>Pay online now</span>
+                      <span className="font-semibold">{formatPrice(codSplit.online)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Pay on delivery (cash)</span>
+                      <span className="font-semibold">{formatPrice(codSplit.cod)}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -270,6 +316,7 @@ export default function CheckoutPage() {
               address={selectedAddress}
               delivery={activeDelivery}
               paymentMethod={paymentMethod}
+              isPartialCod={isPartialCod}
             />
           )}
         </div>

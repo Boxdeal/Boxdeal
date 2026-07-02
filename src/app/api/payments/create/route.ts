@@ -4,6 +4,7 @@ import { getSupabaseAdminClient } from "@/lib/supabase/server";
 import { createRazorpayOrder } from "@/lib/razorpay/index";
 import { getCartDeliveryQuote } from "@/lib/shipping/index";
 import { computeOrderPricing } from "@/lib/orders/pricing";
+import { splitPartialCod } from "@/constants";
 import type { CartItem, Address } from "@/types";
 
 export async function POST(req: NextRequest) {
@@ -16,11 +17,18 @@ export async function POST(req: NextRequest) {
     items,
     address,
     coupon_code,
+    mode,
   }: {
     items:       CartItem[];
     address:     Address;
     coupon_code: string | null;
+    // "partial_cod" → a bulky/volumetric COD order: only a slice is paid online
+    // now (Razorpay), the rest is collected on delivery. Default is a normal
+    // fully-online (prepaid) order.
+    mode?:       "online" | "partial_cod";
   } = body;
+
+  const isPartial = mode === "partial_cod";
 
   if (!items?.length) return NextResponse.json({ error: "Cart is empty" }, { status: 400 });
 
@@ -38,16 +46,22 @@ export async function POST(req: NextRequest) {
   // Recompute the delivery charge server-side from the destination pincode +
   // cart weight (live Shiprocket rate, capped at ₹200). Never trust the charge
   // sent by the client. A non-serviceable pincode blocks the order entirely.
+  // A partial-COD order is a cash-on-delivery order, so quote the COD rate and
+  // require the pincode to actually support COD.
   let shipping_charge: number;
+  let is_volumetric = false;
   try {
-    const quote = await getCartDeliveryQuote(admin, items, address.pincode);
+    const quote = await getCartDeliveryQuote(admin, items, address.pincode, isPartial);
     if (!quote.serviceable) {
       return NextResponse.json(
-        { error: "Delivery isn't available to this pincode" },
+        { error: isPartial
+            ? "Cash on Delivery isn't available for this pincode. Please use online payment."
+            : "Delivery isn't available to this pincode" },
         { status: 422 }
       );
     }
     shipping_charge = quote.delivery_charge;
+    is_volumetric   = quote.is_volumetric;
   } catch {
     return NextResponse.json(
       { error: "Couldn't calculate delivery charge. Please try again." },
@@ -55,9 +69,26 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // Partial-COD is only offered for parcels billed on their volumetric weight.
+  // If the server doesn't agree it's volumetric (e.g. stale client state), block
+  // it — the client should retry as a normal COD/online order.
+  if (isPartial && !is_volumetric) {
+    return NextResponse.json(
+      { error: "This order isn't eligible for partial payment. Please refresh and try again." },
+      { status: 409 }
+    );
+  }
+
   // Total is derived server-side so a tampered client value can't change what
-  // the customer is actually charged.
+  // the customer is actually charged. For partial-COD, only `online` is paid now
+  // via Razorpay; `cod` is collected on delivery.
   const total_amount = subtotal - discount + shipping_charge;
+  const { online: online_paid_amount, cod: cod_amount } = isPartial
+    ? splitPartialCod(total_amount)
+    : { online: total_amount, cod: 0 };
+
+  // Amount actually charged through Razorpay now (paise).
+  const razorpay_charge = isPartial ? online_paid_amount : total_amount;
 
   // Generate order number. Prefer the DB sequence function; if it's missing
   // (returns null / errors), fall back to a unique JS-generated number so the
@@ -67,13 +98,16 @@ export async function POST(req: NextRequest) {
     rpcOrderNum ??
     `BD${new Date().toISOString().slice(0, 10).replace(/-/g, "")}-${Date.now().toString().slice(-6)}`;
 
-  // Create Razorpay order
+  // Create Razorpay order for whatever is collected online now (full total for a
+  // normal order, only the online slice for partial-COD).
   const rzpOrder = await createRazorpayOrder(
-    Math.round(total_amount * 100),
+    Math.round(razorpay_charge * 100),
     orderNum
   );
 
-  // Create DB order (payment still pending — no stock taken yet)
+  // Create DB order (payment still pending — no stock taken yet). A partial-COD
+  // order is stored with payment_method "cod" (the courier still collects cash)
+  // but flagged is_partial_cod with the online/COD split recorded.
   const { data: dbOrder, error } = await admin
     .from("orders")
     .insert({
@@ -91,8 +125,11 @@ export async function POST(req: NextRequest) {
       shipping_charge,
       total_amount,
       coupon_code:         pricing.coupon_code,
-      payment_method:      "razorpay",
+      payment_method:      isPartial ? "cod" : "razorpay",
       payment_status:      "pending",
+      is_partial_cod:      isPartial,
+      online_paid_amount:  isPartial ? online_paid_amount : 0,
+      cod_amount:          isPartial ? cod_amount : 0,
       razorpay_order_id:   rzpOrder.id,
       status:              "placed",
     })
@@ -130,10 +167,14 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json({
     data: {
-      db_order_id:      dbOrder.id,
-      order_number:     orderNum,
-      razorpay_order_id: rzpOrder.id,
-      razorpay_amount:  rzpOrder.amount,
+      db_order_id:        dbOrder.id,
+      order_number:       orderNum,
+      razorpay_order_id:  rzpOrder.id,
+      razorpay_amount:    rzpOrder.amount,
+      is_partial_cod:     isPartial,
+      online_paid_amount: isPartial ? online_paid_amount : total_amount,
+      cod_amount:         isPartial ? cod_amount : 0,
+      total_amount,
     },
   });
 }
