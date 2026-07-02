@@ -48,7 +48,13 @@ export async function POST(req: NextRequest) {
 
   // Payment already succeeded, so confirm the order first — never block a
   // paying customer on a stock hiccup.
-  const { error } = await admin
+  //
+  // Idempotency: only the transition from "pending" → "paid" is allowed to run
+  // the stock/coupon/email side-effects. If verify is called twice (network
+  // retry, double submit), the guard `.eq("payment_status", "pending")` means
+  // the second call updates zero rows, so we return success WITHOUT decrementing
+  // stock or consuming the coupon a second time.
+  const { data: flipped, error } = await admin
     .from("orders")
     .update({
       payment_status:      "paid",
@@ -57,9 +63,16 @@ export async function POST(req: NextRequest) {
       status:              "confirmed",
       confirmed_at:        new Date().toISOString(),
     })
-    .eq("id", db_order_id);
+    .eq("id", db_order_id)
+    .eq("payment_status", "pending")
+    .select("id");
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  // Already processed by an earlier verify call — nothing more to do.
+  if (!flipped || flipped.length === 0) {
+    return NextResponse.json({ data: { success: true, already_processed: true } });
+  }
 
   // Decrement stock now that payment is confirmed. Run in parallel and don't
   // fail the request if one product is short — log it for admin reconciliation.
@@ -78,21 +91,13 @@ export async function POST(req: NextRequest) {
     }
   });
 
-  // Consume the coupon now (not at create), so abandoned checkouts don't use it up.
+  // Consume the coupon now (not at create), so abandoned checkouts don't use it
+  // up. Atomic increment that only counts up while under the usage limit, so
+  // concurrent orders can't push past it (see increment_coupon_usage).
   if (fullOrder.coupon_code) {
     const couponCode = String(fullOrder.coupon_code).toUpperCase();
-    const { data: coupon } = await admin
-      .from("coupons")
-      .select("id, used_count, usage_limit")
-      .eq("code", couponCode)
-      .single();
-
-    if (coupon && (coupon.usage_limit == null || coupon.used_count < coupon.usage_limit)) {
-      await admin
-        .from("coupons")
-        .update({ used_count: coupon.used_count + 1 })
-        .eq("code", couponCode);
-    }
+    const { error: couponErr } = await admin.rpc("increment_coupon_usage", { p_code: couponCode });
+    if (couponErr) console.error(`Coupon usage increment failed for ${couponCode} on order ${db_order_id}:`, couponErr);
   }
 
   await admin.from("order_status_history").insert({

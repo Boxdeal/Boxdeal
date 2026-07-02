@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServerClient, getSupabaseAdminClient } from "@/lib/supabase/server";
 import { getCartDeliveryQuote } from "@/lib/shipping/index";
+import { computeOrderPricing } from "@/lib/orders/pricing";
 import { sendOrderConfirmation } from "@/lib/resend/index";
 import type { CartItem, Address } from "@/types";
 
@@ -23,42 +24,22 @@ export async function POST(req: NextRequest) {
     items,
     address,
     coupon_code,
-    subtotal,
-    discount,
   }: {
     items:       CartItem[];
     address:     Address;
     coupon_code: string | null;
-    subtotal:    number;
-    discount:    number;
   } = body;
 
   if (!items?.length) return NextResponse.json({ error: "Cart is empty" }, { status: 400 });
 
   const admin = getSupabaseAdminClient();
 
-  // Fetch product details + live stock for all items in one query
-  const itemProductIds = items.map(i => i.product_id);
-  const { data: products } = await admin
-    .from("products")
-    .select("id, name, sku, stock_quantity, product_images(image_url, is_primary)")
-    .in("id", itemProductIds);
-
-  const productMap = new Map(products?.map(p => [p.id, p]) ?? []);
-
-  // Validate stock availability before placing the order.
-  for (const item of items) {
-    const product = productMap.get(item.product_id);
-    if (!product) {
-      return NextResponse.json({ error: "A product in your cart is no longer available" }, { status: 400 });
-    }
-    if (product.stock_quantity < item.quantity) {
-      return NextResponse.json(
-        { error: `Only ${product.stock_quantity} left of "${product.name}"` },
-        { status: 409 }
-      );
-    }
-  }
+  // Price the cart ENTIRELY server-side (real prices → subtotal, coupon re-
+  // validated → discount) and validate stock. The client's money values are
+  // never trusted. Unlike the online flow, COD takes stock right here.
+  const pricing = await computeOrderPricing(admin, items, coupon_code, user.id);
+  if (!pricing.ok) return NextResponse.json({ error: pricing.error }, { status: pricing.status });
+  const { subtotal, discount } = pricing;
 
   // Recompute the COD delivery charge server-side (cod = true). A pincode with no
   // COD courier blocks the order — the customer should use online payment instead.
@@ -105,7 +86,7 @@ export async function POST(req: NextRequest) {
       discount_amount:     discount,
       shipping_charge,
       total_amount,
-      coupon_code:         coupon_code ?? null,
+      coupon_code:         pricing.coupon_code,
       payment_method:      "cod",
       payment_status:      "pending",
       status:              "confirmed",
@@ -117,23 +98,17 @@ export async function POST(req: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  // Build order items
-  const orderItemsToInsert = items.map(item => {
-    const product = productMap.get(item.product_id);
-    const imgs = (product?.product_images as Array<{ image_url: string; is_primary: boolean }>) ?? [];
-    const img = imgs.find((i) => i.is_primary) ?? imgs[0];
-
-    return {
-      order_id:      dbOrder.id,
-      product_id:    item.product_id,
-      product_name:  product?.name ?? item.name,
-      product_image: img?.image_url ?? null,
-      product_sku:   product?.sku ?? "",
-      quantity:      item.quantity,
-      mrp:           item.mrp,
-      selling_price: item.selling_price,
-    };
-  });
+  // Build order items from server-priced line items (real DB prices).
+  const orderItemsToInsert = pricing.items.map(item => ({
+    order_id:      dbOrder.id,
+    product_id:    item.product_id,
+    product_name:  item.product_name,
+    product_image: item.product_image,
+    product_sku:   item.product_sku,
+    quantity:      item.quantity,
+    mrp:           item.mrp,
+    selling_price: item.selling_price,
+  }));
 
   await Promise.all([
     orderItemsToInsert.length > 0
@@ -149,7 +124,7 @@ export async function POST(req: NextRequest) {
   // Decrement stock now — there is no later verify step for COD. Best-effort:
   // don't fail the placed order on a stock hiccup, log for reconciliation.
   const stockResults = await Promise.allSettled(
-    items.map(item =>
+    pricing.items.map(item =>
       admin.rpc("decrement_stock", {
         p_product_id: item.product_id,
         p_quantity:   item.quantity,
@@ -158,25 +133,16 @@ export async function POST(req: NextRequest) {
   );
   stockResults.forEach((r, i) => {
     if (r.status === "rejected") {
-      console.error(`Stock decrement failed for ${items[i].product_id} on COD order ${dbOrder.id}:`, r.reason);
+      console.error(`Stock decrement failed for ${pricing.items[i].product_id} on COD order ${dbOrder.id}:`, r.reason);
     }
   });
 
-  // Consume the coupon now.
-  if (coupon_code) {
-    const couponCode = String(coupon_code).toUpperCase();
-    const { data: coupon } = await admin
-      .from("coupons")
-      .select("id, used_count, usage_limit")
-      .eq("code", couponCode)
-      .single();
-
-    if (coupon && (coupon.usage_limit == null || coupon.used_count < coupon.usage_limit)) {
-      await admin
-        .from("coupons")
-        .update({ used_count: coupon.used_count + 1 })
-        .eq("code", couponCode);
-    }
+  // Consume the coupon now — atomic increment that only counts up while under
+  // the usage limit, so concurrent orders can't push past it (see the
+  // increment_coupon_usage DB function).
+  if (pricing.coupon_code) {
+    const { error: couponErr } = await admin.rpc("increment_coupon_usage", { p_code: pricing.coupon_code });
+    if (couponErr) console.error(`Coupon usage increment failed for ${pricing.coupon_code} on COD order ${dbOrder.id}:`, couponErr);
   }
 
   // Send confirmation email (best-effort).

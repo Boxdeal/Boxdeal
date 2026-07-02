@@ -1,8 +1,11 @@
 import { getSupabaseAdminClient } from "@/lib/supabase/server";
+import { istDayKey, istDayStart, addDaysKey } from "@/lib/admin/periods";
 import type { DashboardStats, RevenueChartPoint, Order } from "@/types";
 
 const CHART_DAYS = 30;
-const dayKey = (d: Date) => d.toISOString().slice(0, 10);
+// All day bucketing is done in IST so "today"/"this month" match the business
+// day in India regardless of the (UTC) server timezone.
+const dayKey = istDayKey;
 
 export interface TopProduct {
   product_id: string;
@@ -21,12 +24,14 @@ export async function getAdminDashboard(): Promise<{
 }> {
   const admin = getSupabaseAdminClient();
   const now = new Date();
-  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-  const chartStart = new Date(now);
-  chartStart.setDate(now.getDate() - (CHART_DAYS - 1));
-  chartStart.setHours(0, 0, 0, 0);
-  const fetchSince = chartStart < startOfMonth ? chartStart : startOfMonth;
+
+  // Boundaries as IST calendar days → concrete UTC instants.
   const todayKey = dayKey(now);
+  const monthStartKey = `${todayKey.slice(0, 7)}-01`;
+  const chartStartKey = addDaysKey(todayKey, -(CHART_DAYS - 1));
+  const startOfMonth = istDayStart(monthStartKey);
+  const chartStart = istDayStart(chartStartKey);
+  const fetchSince = chartStart < startOfMonth ? chartStart : startOfMonth;
 
   const [ordersRes, pendingRes, overdueRes, productsRes, customersRes, recentRes] = await Promise.all([
     admin.from("orders").select("placed_at, total_amount, payment_status").gte("placed_at", fetchSince.toISOString()),
@@ -40,12 +45,10 @@ export async function getAdminDashboard(): Promise<{
   const orders = ordersRes.data ?? [];
   const paid = (s: string) => s === "paid";
 
-  // Pre-seed every chart day so gaps render as zero.
+  // Pre-seed every chart day (as IST day keys) so gaps render as zero.
   const buckets = new Map<string, { revenue: number; orders: number }>();
   for (let i = 0; i < CHART_DAYS; i++) {
-    const d = new Date(chartStart);
-    d.setDate(chartStart.getDate() + i);
-    buckets.set(dayKey(d), { revenue: 0, orders: 0 });
+    buckets.set(addDaysKey(chartStartKey, i), { revenue: 0, orders: 0 });
   }
 
   let today_orders = 0, today_revenue = 0, month_orders = 0, month_revenue = 0;

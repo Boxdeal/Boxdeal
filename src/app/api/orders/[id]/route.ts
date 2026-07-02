@@ -130,6 +130,36 @@ async function fulfillShiprocket(
   }
 }
 
+// Statuses at which an order's stock has already been decremented (online at
+// payment verify, COD at creation). Cancelling from any of these must give the
+// stock back; cancelling a still-"placed" (unpaid online) order must not.
+const STOCK_TAKEN_STATUSES: OrderStatus[] = [
+  "confirmed", "packed", "shipped", "out_for_delivery", "delivered",
+];
+
+/**
+ * Return an order's items to stock. Best-effort & idempotent-safe to call once
+ * per cancellation: only call it when the order was in a stock-taken status.
+ */
+async function restoreOrderStock(admin: SupabaseClient, id: string): Promise<void> {
+  const { data: items } = await admin
+    .from("order_items")
+    .select("product_id, quantity")
+    .eq("order_id", id);
+  if (!items?.length) return;
+
+  const results = await Promise.allSettled(
+    items.map((it) =>
+      admin.rpc("restore_stock", { p_product_id: it.product_id, p_quantity: it.quantity })
+    )
+  );
+  results.forEach((r, i) => {
+    if (r.status === "rejected") {
+      console.error(`Stock restore failed for ${items[i].product_id} on order ${id}:`, r.reason);
+    }
+  });
+}
+
 /**
  * Refund a cancelled order's payment back to the customer, if it was paid
  * online via Razorpay. Best-effort & safe to call for any order: COD or unpaid
@@ -227,6 +257,12 @@ export async function PATCH(
     if (cancelError)
       return NextResponse.json({ error: cancelError.message }, { status: 500 });
 
+    // Give the stock back if it had already been taken (i.e. not a still-unpaid
+    // "placed" online order).
+    if (STOCK_TAKEN_STATUSES.includes(order.status as OrderStatus)) {
+      await restoreOrderStock(admin, id);
+    }
+
     await admin.from("order_status_history").insert({
       order_id:   id,
       status:     "cancelled",
@@ -295,12 +331,16 @@ export async function PATCH(
     updateData.cancelled_at = new Date().toISOString();
     const { data: payInfo } = await admin
       .from("orders")
-      .select("payment_status, payment_method, razorpay_payment_id, total_amount")
+      .select("status, payment_status, payment_method, razorpay_payment_id, total_amount")
       .eq("id", id)
       .single();
     if (payInfo) {
       ({ refunded, error: refundError } = await refundOrderPayment(id, payInfo));
       if (refunded) updateData.payment_status = "refunded";
+      // Give stock back if it had already been taken for this order.
+      if (STOCK_TAKEN_STATUSES.includes(payInfo.status as OrderStatus)) {
+        await restoreOrderStock(admin, id);
+      }
     }
   }
 

@@ -43,6 +43,26 @@ BEGIN
 END;
 $$;
 
+-- Atomically consume one use of a coupon, but ONLY while it is still under its
+-- usage limit. A single UPDATE statement holds a row lock for the duration of
+-- the check + increment, so two concurrent orders can never both slip past the
+-- limit (which the old read-then-write in JS allowed). Returns TRUE if a use
+-- was actually counted, FALSE if the coupon is missing or already maxed out.
+CREATE OR REPLACE FUNCTION increment_coupon_usage(p_code TEXT)
+RETURNS BOOLEAN LANGUAGE plpgsql SECURITY DEFINER AS $$
+DECLARE
+  v_updated INTEGER;
+BEGIN
+  UPDATE coupons
+  SET used_count = used_count + 1
+  WHERE UPPER(code) = UPPER(p_code)
+    AND (usage_limit IS NULL OR used_count < usage_limit);
+
+  GET DIAGNOSTICS v_updated = ROW_COUNT;
+  RETURN v_updated > 0;
+END;
+$$;
+
 -- Restore stock if an order is cancelled/refunded later
 CREATE OR REPLACE FUNCTION restore_stock(
   p_product_id UUID,

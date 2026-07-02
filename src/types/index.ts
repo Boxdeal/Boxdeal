@@ -368,6 +368,32 @@ export interface RevenueChartPoint {
   orders: number;
 }
 
+export type DashboardPeriod =
+  | "today"
+  | "week"
+  | "month"
+  | "last_month"
+  | "all"
+  | "custom";
+
+// Period-scoped analytics, all computed in IST. Revenue fields count PAID
+// orders only; `orders` counts every order in the window.
+export interface PeriodStats {
+  label: string;
+  start: string;
+  end: string;
+  orders: number;
+  paidOrders: number;
+  revenue: number;
+  onlineRevenue: number;
+  codRevenue: number;
+  avgOrderValue: number;
+  byStatus: Record<OrderStatus, { count: number; revenue: number }>;
+  chart: RevenueChartPoint[];
+  prevRevenue: number;
+  prevOrders: number;
+}
+
 // ────────────────────────────────────────────────────────────
 // API response wrappers
 // ────────────────────────────────────────────────────────────

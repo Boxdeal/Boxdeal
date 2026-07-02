@@ -3,6 +3,7 @@ import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { getSupabaseAdminClient } from "@/lib/supabase/server";
 import { createRazorpayOrder } from "@/lib/razorpay/index";
 import { getCartDeliveryQuote } from "@/lib/shipping/index";
+import { computeOrderPricing } from "@/lib/orders/pricing";
 import type { CartItem, Address } from "@/types";
 
 export async function POST(req: NextRequest) {
@@ -15,44 +16,24 @@ export async function POST(req: NextRequest) {
     items,
     address,
     coupon_code,
-    subtotal,
-    discount,
   }: {
     items:       CartItem[];
     address:     Address;
     coupon_code: string | null;
-    subtotal:    number;
-    discount:    number;
   } = body;
 
   if (!items?.length) return NextResponse.json({ error: "Cart is empty" }, { status: 400 });
 
   const admin = getSupabaseAdminClient();
 
-  // Fetch product details + live stock for all items in one query
-  const itemProductIds = items.map(i => i.product_id);
-  const { data: products } = await admin
-    .from("products")
-    .select("id, name, sku, stock_quantity, product_images(image_url, is_primary)")
-    .in("id", itemProductIds);
-
-  const productMap = new Map(products?.map(p => [p.id, p]) ?? []);
-
-  // Validate stock availability BEFORE creating any order or charging.
-  // Stock is only decremented after payment succeeds (see verify route),
-  // so here we just confirm the requested quantities are still in stock.
-  for (const item of items) {
-    const product = productMap.get(item.product_id);
-    if (!product) {
-      return NextResponse.json({ error: "A product in your cart is no longer available" }, { status: 400 });
-    }
-    if (product.stock_quantity < item.quantity) {
-      return NextResponse.json(
-        { error: `Only ${product.stock_quantity} left of "${product.name}"` },
-        { status: 409 }
-      );
-    }
-  }
+  // Price the cart ENTIRELY server-side: real product prices → subtotal, and
+  // the discount is recomputed by re-validating the coupon. The client's
+  // subtotal/discount/prices are never trusted (they could be tampered to pay
+  // ₹1). This also validates stock availability. Stock itself is only
+  // decremented once payment succeeds (see verify route).
+  const pricing = await computeOrderPricing(admin, items, coupon_code, user.id);
+  if (!pricing.ok) return NextResponse.json({ error: pricing.error }, { status: pricing.status });
+  const { subtotal, discount } = pricing;
 
   // Recompute the delivery charge server-side from the destination pincode +
   // cart weight (live Shiprocket rate, capped at ₹200). Never trust the charge
@@ -109,7 +90,7 @@ export async function POST(req: NextRequest) {
       discount_amount:     discount,
       shipping_charge,
       total_amount,
-      coupon_code:         coupon_code ?? null,
+      coupon_code:         pricing.coupon_code,
       payment_method:      "razorpay",
       payment_status:      "pending",
       razorpay_order_id:   rzpOrder.id,
@@ -120,23 +101,18 @@ export async function POST(req: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  // Build batch insert for order items
-  const orderItemsToInsert = items.map(item => {
-    const product = productMap.get(item.product_id);
-    const imgs = (product?.product_images as Array<{ image_url: string; is_primary: boolean }>) ?? [];
-    const img = imgs.find((i) => i.is_primary) ?? imgs[0];
-
-    return {
-      order_id:      dbOrder.id,
-      product_id:    item.product_id,
-      product_name:  product?.name ?? item.name,
-      product_image: img?.image_url ?? null,
-      product_sku:   product?.sku ?? "",
-      quantity:      item.quantity,
-      mrp:           item.mrp,
-      selling_price: item.selling_price,
-    };
-  });
+  // Build batch insert for order items — from server-priced line items, so the
+  // stored mrp/selling_price are the real DB prices, not whatever the client sent.
+  const orderItemsToInsert = pricing.items.map(item => ({
+    order_id:      dbOrder.id,
+    product_id:    item.product_id,
+    product_name:  item.product_name,
+    product_image: item.product_image,
+    product_sku:   item.product_sku,
+    quantity:      item.quantity,
+    mrp:           item.mrp,
+    selling_price: item.selling_price,
+  }));
 
   // Insert order items + initial status history.
   // NOTE: stock is NOT decremented here and the coupon is NOT consumed —

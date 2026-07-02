@@ -42,8 +42,14 @@ export async function POST(req: NextRequest) {
   try {
     payload = await req.json();
   } catch {
+    console.error("[sr-webhook] invalid JSON body");
     return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
   }
+
+  // Temporary observability: log every inbound call so we can confirm in the
+  // Vercel Runtime Logs that Shiprocket is actually delivering webhooks and see
+  // the exact payload shape it sends.
+  console.log("[sr-webhook] payload:", JSON.stringify(payload));
 
   // Shiprocket's webhook payload carries THREE distinct identifiers:
   //   • channel_order_id → the order id WE passed = our `order_number`
@@ -88,8 +94,10 @@ export async function POST(req: NextRequest) {
 
   if (!order) {
     // Acknowledge — the AWB/order may simply belong to a different channel.
+    console.warn("[sr-webhook] order not found for", { channelOrderId, srOrderId, awb });
     return NextResponse.json({ ok: true, ignored: "order not found" });
   }
+  console.log("[sr-webhook] matched order", order.order_number, "→", newStatus, "(from", currentStatus + ")");
 
   // Don't regress a delivered/cancelled order back to an earlier state.
   if (["delivered", "cancelled", "returned"].includes(order.status) && order.status !== newStatus) {

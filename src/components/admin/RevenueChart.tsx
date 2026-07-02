@@ -14,6 +14,7 @@ import type { RevenueChartPoint } from "@/types";
 
 interface RevenueChartProps {
   data: RevenueChartPoint[];
+  title?: string;
 }
 
 function CustomTooltip({ active, payload, label }: {
@@ -35,7 +36,7 @@ function CustomTooltip({ active, payload, label }: {
   );
 }
 
-export function RevenueChart({ data }: RevenueChartProps) {
+export function RevenueChart({ data, title = "Revenue (Last 30 Days)" }: RevenueChartProps) {
   const formatted = data.map((d) => ({
     ...d,
     dateLabel: format(new Date(d.date), "dd MMM"),
@@ -43,7 +44,12 @@ export function RevenueChart({ data }: RevenueChartProps) {
 
   return (
     <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-      <h3 className="mb-4 font-semibold text-gray-900">Revenue (Last 30 Days)</h3>
+      <h3 className="mb-4 font-semibold text-gray-900">{title}</h3>
+      {formatted.length === 0 ? (
+        <div className="flex h-[240px] items-center justify-center text-sm text-gray-400">
+          No orders in this period.
+        </div>
+      ) : (
       <ResponsiveContainer width="100%" height={240}>
         <AreaChart data={formatted} margin={{ top: 5, right: 5, left: 0, bottom: 5 }}>
           <defs>
@@ -83,6 +89,7 @@ export function RevenueChart({ data }: RevenueChartProps) {
           />
         </AreaChart>
       </ResponsiveContainer>
+      )}
     </div>
   );
 }
