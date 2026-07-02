@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdminClient } from "@/lib/supabase/server";
 import { sendOrderShipped, sendOrderDelivered } from "@/lib/resend/index";
-import type { OrderStatus } from "@/types";
+import type { Order, OrderStatus } from "@/types";
 
 // Shiprocket pushes shipment status changes here. Configure this URL under
 // Shiprocket → Settings → Webhooks:  https://<your-domain>/api/webhooks/shipment-status
@@ -45,16 +45,22 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
   }
 
-  // Shiprocket sends our order_number back as `order_id`; AWB as `awb`.
-  const orderNumber  = (payload.order_id ?? payload.channel_order_id) as string | undefined;
-  const awb          = payload.awb as string | undefined;
-  const currentStatus = (payload.current_status ?? payload.shipment_status) as string | undefined;
+  // Shiprocket's webhook payload carries THREE distinct identifiers:
+  //   • channel_order_id → the order id WE passed = our `order_number`
+  //   • order_id         → Shiprocket's OWN internal order id = our `shiprocket_order_id`
+  //   • awb              → the tracking number = our `tracking_number`
+  // (Earlier this assumed `order_id` was our order_number, so every callback
+  //  matched nothing and was silently dropped — orders got stuck at "shipped".)
+  const channelOrderId = payload.channel_order_id != null ? String(payload.channel_order_id) : undefined;
+  const srOrderId      = payload.order_id        != null ? String(payload.order_id)        : undefined;
+  const awb            = payload.awb             != null ? String(payload.awb)             : undefined;
+  const currentStatus  = (payload.current_status ?? payload.shipment_status) as string | undefined;
 
   // Always acknowledge with 200 when there's nothing actionable (incomplete
   // payload, unknown status, unknown order). Shiprocket — including its "Test
   // Webhook" button — treats any non-2xx as "endpoint unreachable" and refuses
   // to save the config, so we must never 4xx a well-formed delivery.
-  if (!currentStatus || (!orderNumber && !awb)) {
+  if (!currentStatus || (!channelOrderId && !srOrderId && !awb)) {
     return NextResponse.json({ ok: true, ignored: "incomplete payload" });
   }
 
@@ -66,10 +72,19 @@ export async function POST(req: NextRequest) {
 
   const admin = getSupabaseAdminClient();
 
-  // Locate the order by order_number, falling back to AWB / tracking number.
-  let query = admin.from("orders").select("*");
-  query = orderNumber ? query.eq("order_number", orderNumber) : query.eq("tracking_number", awb!);
-  const { data: order } = await query.single();
+  // Locate the order by our order_number, cascading through Shiprocket's
+  // internal order id and finally the AWB so a match is found regardless of
+  // which identifiers this particular callback includes.
+  let order: Order | null = null;
+  for (const [column, value] of [
+    ["order_number",        channelOrderId],
+    ["shiprocket_order_id", srOrderId],
+    ["tracking_number",     awb],
+  ] as const) {
+    if (!value) continue;
+    const { data } = await admin.from("orders").select("*").eq(column, value).maybeSingle();
+    if (data) { order = data as Order; break; }
+  }
 
   if (!order) {
     // Acknowledge — the AWB/order may simply belong to a different channel.
