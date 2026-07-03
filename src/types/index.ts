@@ -221,6 +221,7 @@ export interface Order {
   tracking_url: string | null;
   shiprocket_order_id: string | null;
   shiprocket_shipment_id: string | null;
+  shiprocket_attempt: number;
   notes: string | null;
   placed_at: string;
   confirmed_at: string | null;

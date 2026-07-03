@@ -130,7 +130,11 @@ export type ShipmentItem = OrderItem & {
  * Returns { order_id, shipment_id }.
  */
 export async function createShiprocketOrder(
-  order: Order & { items?: ShipmentItem[] }
+  order: Order & { items?: ShipmentItem[] },
+  // Channel order_id to register on Shiprocket. Defaults to our order_number, but
+  // a re-ship (after a prior cancellation) must pass a unique value — Shiprocket
+  // dedupes ad-hoc orders by this id and would otherwise return the old shipment.
+  channelOrderId?: string
 ) {
   const items = (order.items ?? []) as ShipmentItem[];
 
@@ -159,7 +163,7 @@ export async function createShiprocketOrder(
   const res = await shiprocketFetch("/orders/create/adhoc", {
     method: "POST",
     body: JSON.stringify({
-      order_id:               order.order_number,
+      order_id:               channelOrderId ?? order.order_number,
       order_date:             order.placed_at,
       pickup_location:        PICKUP_LOCATION,
       billing_customer_name:  order.shipping_full_name,

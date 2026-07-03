@@ -59,10 +59,21 @@ async function fulfillShiprocket(
         })
       );
 
-      const created = await createShiprocketOrder({ ...(srOrder as Order), items });
+      // Shiprocket dedupes ad-hoc orders by channel order_id. A restored order was
+      // already pushed once under its plain number (now cancelled on Shiprocket's
+      // side), so re-shipping under the same number returns the OLD cancelled
+      // shipment and AWB generation fails. Suffix "-R<n>" from a per-order push
+      // counter so each re-ship gets a brand-new Shiprocket shipment.
+      const attempt = Number(srOrder.shiprocket_attempt ?? 0);
+      const channelOrderId = attempt === 0
+        ? srOrder.order_number
+        : `${srOrder.order_number}-R${attempt}`;
+
+      const created = await createShiprocketOrder({ ...(srOrder as Order), items }, channelOrderId);
       shipmentId = created.shipment_id;
       update.shiprocket_order_id    = String(created.order_id);
       update.shiprocket_shipment_id = String(created.shipment_id);
+      update.shiprocket_attempt     = attempt + 1;
 
       // Persist the IDs right away, BEFORE attempting AWB. If AWB fails, the
       // order is still linked — the next retry skips creation (no duplicate).
@@ -71,6 +82,7 @@ async function fulfillShiprocket(
         .update({
           shiprocket_order_id:    update.shiprocket_order_id,
           shiprocket_shipment_id: update.shiprocket_shipment_id,
+          shiprocket_attempt:     update.shiprocket_attempt,
         })
         .eq("id", id);
     }
