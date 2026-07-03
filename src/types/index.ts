@@ -203,6 +203,10 @@ export interface Order {
   shipping_pincode: string;
   subtotal: number;
   discount_amount: number;
+  // Extra discount an admin applies from the panel, on top of any coupon. Folded
+  // into the Shiprocket total_discount at pack time so the COD collectible /
+  // invoice reflect it.
+  admin_discount: number;
   shipping_charge: number;
   total_amount: number;
   coupon_code: string | null;

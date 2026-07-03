@@ -320,6 +320,57 @@ export async function PATCH(
 
   const admin = getSupabaseAdminClient();
 
+  // Admin applies an EXTRA discount on the order total from the panel. Allowed
+  // only BEFORE the order is packed — the value is sent to Shiprocket at pack
+  // time (folded into total_discount), so it must be finalised before then.
+  if (action === "set_discount") {
+    const amount = Number(body.admin_discount);
+    if (!Number.isFinite(amount) || amount < 0) {
+      return NextResponse.json({ error: "Enter a valid discount amount." }, { status: 400 });
+    }
+    const { data: o } = await admin
+      .from("orders")
+      .select("status, subtotal, discount_amount, shipping_charge, online_paid_amount, is_partial_cod")
+      .eq("id", id)
+      .single();
+    if (!o) return NextResponse.json({ error: "Order not found" }, { status: 404 });
+    if (!["placed", "confirmed"].includes(o.status)) {
+      return NextResponse.json(
+        { error: "Discount can only be changed before the order is packed." },
+        { status: 400 }
+      );
+    }
+
+    // Base amount that's still collectible from the customer (for a partial-COD
+    // order the online slice is already paid, so only the COD portion remains).
+    // The extra discount can't exceed this — the total must not go negative.
+    const online = o.is_partial_cod ? Number(o.online_paid_amount) || 0 : 0;
+    const base = Number(o.subtotal) - Number(o.discount_amount) + Number(o.shipping_charge) - online;
+    if (amount > base) {
+      return NextResponse.json(
+        { error: `Discount can't exceed ${base}.` },
+        { status: 400 }
+      );
+    }
+
+    const newTotal = Number(o.subtotal) - Number(o.discount_amount) + Number(o.shipping_charge) - amount;
+    const update: Record<string, unknown> = { admin_discount: amount, total_amount: newTotal };
+    // For partial-COD the discount comes off the remaining COD collectible.
+    if (o.is_partial_cod) update.cod_amount = base - amount;
+
+    const { data: updated, error } = await admin
+      .from("orders").update(update).eq("id", id).select().single();
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+    await admin.from("order_status_history").insert({
+      order_id:   id,
+      status:     o.status,
+      note:       amount > 0 ? `Admin discount of ${amount} applied` : "Admin discount removed",
+      updated_by: user.id,
+    });
+    return NextResponse.json({ data: updated });
+  }
+
   // Retry-only path: re-run Shiprocket fulfillment (create order if needed +
   // generate AWB) WITHOUT changing the order status. Used by the admin "Retry
   // tracking" button after fixing wallet balance / serviceability.

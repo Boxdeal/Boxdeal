@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getSupabaseAdminClient } from "@/lib/supabase/server";
 import { OrderStatusUpdater } from "./OrderStatusUpdater";
+import { AdminDiscount } from "./AdminDiscount";
 import { ORDER_STATUS_LABELS, ORDER_STATUS_COLORS } from "@/constants";
 import { formatPrice, formatDateTime } from "@/lib/utils/format";
 import { cn } from "@/lib/utils/helpers";
@@ -75,6 +76,7 @@ export default async function AdminOrderDetailPage({
             <div className="mt-4 space-y-1 border-t pt-4 text-sm">
               <div className="flex justify-between text-gray-600"><span>Subtotal</span><span>{formatPrice(order.subtotal)}</span></div>
               {order.discount_amount > 0 && <div className="flex justify-between text-green-600"><span>Discount</span><span>-{formatPrice(order.discount_amount)}</span></div>}
+              {order.admin_discount > 0 && <div className="flex justify-between text-green-600"><span>Extra discount</span><span>-{formatPrice(order.admin_discount)}</span></div>}
               <div className="flex justify-between text-gray-600"><span>Shipping</span><span>{order.shipping_charge > 0 ? formatPrice(order.shipping_charge) : "FREE"}</span></div>
               <div className="flex justify-between font-bold text-base"><span>Total</span><span>{formatPrice(order.total_amount)}</span></div>
               {order.is_partial_cod && (
@@ -82,6 +84,16 @@ export default async function AdminOrderDetailPage({
                   <div className="flex justify-between"><span>Paid online</span><span className="font-medium">{formatPrice(order.online_paid_amount)}</span></div>
                   <div className="flex justify-between"><span>Collect on delivery (COD)</span><span className="font-semibold">{formatPrice(order.cod_amount)}</span></div>
                 </div>
+              )}
+              {["placed", "confirmed"].includes(order.status) && (
+                <AdminDiscount
+                  orderId={order.id}
+                  currentDiscount={order.admin_discount ?? 0}
+                  maxDiscount={
+                    order.subtotal - order.discount_amount + order.shipping_charge -
+                    (order.is_partial_cod ? order.online_paid_amount : 0)
+                  }
+                />
               )}
             </div>
           </div>
