@@ -29,9 +29,10 @@ const social = [
 ];
 
 export const metadata: Metadata = {
-  title: "About Us | BoxDeal",
+  title: "About Us",
   description:
     "BoxDeal brings you genuine open-box products in like-new condition at 30–60% off retail — backed by an 8-step quality check, brand warranty and BoxDeal Assurance. Good for your pocket, good for the planet.",
+  alternates: { canonical: "/about" },
 };
 
 const values = [

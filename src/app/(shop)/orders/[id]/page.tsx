@@ -17,7 +17,7 @@ import { formatPrice, formatDate, formatDateTime } from "@/lib/utils/format";
 import { cn } from "@/lib/utils/helpers";
 import type { Order, OrderItem, OrderStatusHistory } from "@/types";
 
-export const metadata: Metadata = { title: "Order Details" };
+export const metadata: Metadata = { title: "Order Details", robots: { index: false, follow: false } };
 
 export default async function OrderDetailPage({
   params,

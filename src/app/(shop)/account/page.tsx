@@ -4,7 +4,7 @@ import { MapPin, Package, Heart, Settings } from "lucide-react";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import Link from "next/link";
 
-export const metadata: Metadata = { title: "My Account" };
+export const metadata: Metadata = { title: "My Account", robots: { index: false, follow: false } };
 
 export default async function AccountPage() {
   const supabase = await getSupabaseServerClient();

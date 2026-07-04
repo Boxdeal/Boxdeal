@@ -10,7 +10,12 @@ interface Props {
 
 export async function generateMetadata({ searchParams }: Props): Promise<Metadata> {
   const { q } = await searchParams;
-  return { title: q ? `"${q}" — Search Results` : "Search" };
+  return {
+    title: q ? `"${q}" — Search Results` : "Search",
+    // Search result pages thin/duplicate hote hain — index se bahar, par
+    // product links crawl hone do.
+    robots: { index: false, follow: true },
+  };
 }
 
 export default async function SearchPage({ searchParams }: Props) {

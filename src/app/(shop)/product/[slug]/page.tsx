@@ -11,6 +11,12 @@ import { PriceDisplay } from "@/components/shared/PriceDisplay";
 import { Breadcrumb } from "@/components/shared/Breadcrumb";
 import { ProductGrid } from "@/components/product/ProductGrid";
 import { AddToCartButton } from "./AddToCartButton";
+import {
+  absoluteUrl,
+  productJsonLd,
+  breadcrumbJsonLd,
+  jsonLdScriptProps,
+} from "@/lib/seo";
 
 export const revalidate = 3600;  // Cache for 1 hour
 
@@ -72,10 +78,44 @@ async function getRelated(categoryId: string, excludeId: string) {
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
   const product = await getProduct(slug);
-  if (!product) return {};
+  if (!product) {
+    return { title: "Product not found", robots: { index: false, follow: false } };
+  }
+
+  const title = product.meta_title ?? product.name;
+  const description =
+    product.meta_description ??
+    product.short_description ??
+    `Buy ${product.name} online at BoxDeal. Genuine product, best price, and fast delivery across India.`;
+  const canonical = `/product/${product.slug}`;
+
+  const imgs = [...(product.images ?? [])].sort(
+    (a: { is_primary: boolean; sort_order: number }, b: { is_primary: boolean; sort_order: number }) =>
+      a.is_primary ? -1 : b.is_primary ? 1 : a.sort_order - b.sort_order
+  );
+  const ogImages = imgs
+    .map((i: { image_url?: string }) => i.image_url)
+    .filter((url): url is string => Boolean(url))
+    .slice(0, 4)
+    .map((url) => ({ url, alt: product.name }));
+
   return {
-    title: product.meta_title ?? product.name,
-    description: product.meta_description ?? product.short_description ?? "",
+    title,
+    description,
+    alternates: { canonical },
+    openGraph: {
+      type: "website",
+      title,
+      description,
+      url: canonical,
+      ...(ogImages.length ? { images: ogImages } : {}),
+    },
+    twitter: {
+      card: "summary_large_image",
+      title,
+      description,
+      ...(ogImages.length ? { images: ogImages.map((i) => i.url) } : {}),
+    },
   };
 }
 
@@ -100,8 +140,28 @@ export default async function ProductDetailPage({ params }: Props) {
     { label: product.name },
   ];
 
+  // Structured data — Google rich results (price, stock, star rating) ke liye.
+  const productSchema = productJsonLd({
+    name: product.name,
+    slug: product.slug,
+    description: product.meta_description ?? product.short_description,
+    sku: product.sku,
+    brand: product.brand?.name ?? null,
+    images: sortedImages
+      .map((i: { image_url?: string }) => i.image_url)
+      .filter((url): url is string => Boolean(url))
+      .map((url) => absoluteUrl(url)),
+    price: product.selling_price,
+    inStock: (product.stock_quantity ?? 0) > 0,
+    rating: product.rating,
+    reviewCount: product.review_count,
+  });
+  const breadcrumbSchema = breadcrumbJsonLd(breadcrumbs);
+
   return (
     <div className="mx-auto max-w-7xl px-4 py-6 space-y-8">
+      <script {...jsonLdScriptProps(productSchema)} />
+      <script {...jsonLdScriptProps(breadcrumbSchema)} />
       <Breadcrumb items={breadcrumbs} />
 
       <div className="grid gap-8 lg:grid-cols-2">

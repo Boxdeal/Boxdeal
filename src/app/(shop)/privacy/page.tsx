@@ -6,9 +6,10 @@ import {
 } from "@/components/shared/PolicyLayout";
 
 export const metadata: Metadata = {
-  title: "Privacy Policy | BoxDeal",
+  title: "Privacy Policy",
   description:
     "How BoxDeal collects, uses, and protects your personal information when you shop open-box products with us.",
+  alternates: { canonical: "/privacy" },
 };
 
 export default function PrivacyPolicyPage() {

@@ -8,7 +8,7 @@ import { ORDER_STATUS_LABELS, ORDER_STATUS_COLORS } from "@/constants";
 import { formatPrice, formatDate } from "@/lib/utils/format";
 import { cn } from "@/lib/utils/helpers";
 
-export const metadata: Metadata = { title: "My Orders" };
+export const metadata: Metadata = { title: "My Orders", robots: { index: false, follow: false } };
 
 export default async function OrdersPage() {
   const supabase = await getSupabaseServerClient();

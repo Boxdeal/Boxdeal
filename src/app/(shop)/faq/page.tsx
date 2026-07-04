@@ -5,9 +5,10 @@ import { FaqAccordion, type FaqCategory } from "@/components/shared/FaqAccordion
 import { DELIVERY_CHARGE_CAP } from "@/constants";
 
 export const metadata: Metadata = {
-  title: "Frequently Asked Questions | BoxDeal",
+  title: "Frequently Asked Questions",
   description:
     "Answers to common questions about open-box products, returns, warranty, shipping and payments on BoxDeal.",
+  alternates: { canonical: "/faq" },
 };
 
 const categories: FaqCategory[] = [

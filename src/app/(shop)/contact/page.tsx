@@ -4,9 +4,10 @@ import { ChevronRight, Mail, Phone, MapPin, Clock } from "lucide-react";
 import { ContactForm } from "./ContactForm";
 
 export const metadata: Metadata = {
-  title: "Contact Us | BoxDeal",
+  title: "Contact Us",
   description:
     "Get in touch with the BoxDeal support team for help with orders, returns, shipping or anything else.",
+  alternates: { canonical: "/contact" },
 };
 
 const contactInfo = [

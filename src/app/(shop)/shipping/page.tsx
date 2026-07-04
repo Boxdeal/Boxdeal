@@ -8,9 +8,10 @@ import {
 import { DELIVERY_CHARGE_CAP } from "@/constants";
 
 export const metadata: Metadata = {
-  title: "Shipping & Delivery Policy | BoxDeal",
+  title: "Shipping & Delivery Policy",
   description:
     "Shipping charges, delivery timelines and order tracking for BoxDeal open-box orders across India.",
+  alternates: { canonical: "/shipping" },
 };
 
 export default function ShippingPolicyPage() {

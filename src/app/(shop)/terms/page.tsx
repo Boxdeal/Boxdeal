@@ -6,9 +6,10 @@ import {
 } from "@/components/shared/PolicyLayout";
 
 export const metadata: Metadata = {
-  title: "Terms & Conditions | BoxDeal",
+  title: "Terms & Conditions",
   description:
     "The terms that govern your use of BoxDeal and your purchase of open-box products.",
+  alternates: { canonical: "/terms" },
 };
 
 export default function TermsPage() {

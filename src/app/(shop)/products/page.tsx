@@ -14,10 +14,50 @@ import Link from "next/link";
 
 
 export const revalidate = 3600;  // Cache for 1 hour
-export const metadata: Metadata = { title: "All Products" };
 
 interface Props {
   searchParams: Promise<Record<string, string>>;
+}
+
+// Filter ke hisaab se dynamic title/description/canonical — har category ka
+// apna indexable page banta hai (e.g. "Chargers — Buy Online | BoxDeal").
+export async function generateMetadata({ searchParams }: Props): Promise<Metadata> {
+  const params = await searchParams;
+  const filters = await getFilters();
+
+  const category = params.category
+    ? filters.categories.find((c) => c.slug === params.category)
+    : null;
+  const subcategory = params.subcategory
+    ? filters.subcategories.find((s) => s.slug === params.subcategory)
+    : null;
+  const brand = params.brand
+    ? filters.brands.find((b) => b.slug === params.brand)
+    : null;
+
+  const focus = subcategory?.name ?? category?.name ?? brand?.name;
+  const title = focus ? `${focus} — Buy Online at Best Prices` : "All Products";
+  const description = focus
+    ? `Shop ${focus} at BoxDeal. Genuine products, unbeatable deals, secure payments, and fast delivery across India.`
+    : "Browse all products at BoxDeal — electronics, mobile accessories and more at the best prices in India.";
+
+  // Canonical: sirf ek clean filter param rakho; page/sort/search variants
+  // ko canonical me include nahi karte taaki duplicate content na bane.
+  let canonical = "/products";
+  if (params.category) canonical = `/products?category=${params.category}`;
+  else if (params.subcategory) canonical = `/products?subcategory=${params.subcategory}`;
+  else if (params.brand) canonical = `/products?brand=${params.brand}`;
+
+  // Search-within-listing ya paginated pages ko index se hataao (thin/duplicate).
+  const noindex = Boolean(params.q) || Number(params.page ?? 1) > 1;
+
+  return {
+    title,
+    description,
+    alternates: { canonical },
+    ...(noindex ? { robots: { index: false, follow: true } } : {}),
+    openGraph: { title, description, url: canonical },
+  };
 }
 
 interface Filters {

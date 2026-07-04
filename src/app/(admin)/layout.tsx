@@ -1,6 +1,13 @@
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { AdminSidebar } from "@/components/layout/AdminSidebar";
+
+// Admin panel poori tarah private — search engines se bilkul door.
+export const metadata: Metadata = {
+  title: "Admin",
+  robots: { index: false, follow: false, nocache: true },
+};
 
 export default async function AdminLayout({
   children,

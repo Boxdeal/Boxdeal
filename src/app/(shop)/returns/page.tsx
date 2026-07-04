@@ -7,9 +7,10 @@ import {
 } from "@/components/shared/PolicyLayout";
 
 export const metadata: Metadata = {
-  title: "Return, Replacement & Cancellation Policy | BoxDeal",
+  title: "Return, Replacement & Cancellation Policy",
   description:
     "Everything about returns, replacements, cancellations, warranty and product grading for open-box products on BoxDeal.",
+  alternates: { canonical: "/returns" },
 };
 
 const grades = [

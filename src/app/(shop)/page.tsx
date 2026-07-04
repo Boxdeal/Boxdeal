@@ -8,6 +8,19 @@ import { ProductGridSkeleton } from "@/components/shared/LoadingSpinner";
 import { BrandMarquee } from "@/components/home/BrandMarquee";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import type { Category, Subcategory } from "@/types";
+import type { Metadata } from "next";
+import { SITE_DESCRIPTION } from "@/lib/seo";
+
+export const metadata: Metadata = {
+  title: "BoxDeal — Best Deals on Electronics & Mobile Accessories in India",
+  description: SITE_DESCRIPTION,
+  alternates: { canonical: "/" },
+  openGraph: {
+    title: "BoxDeal — Best Deals on Electronics & Mobile Accessories in India",
+    description: SITE_DESCRIPTION,
+    url: "/",
+  },
+};
 
 export const revalidate = 1800;
 

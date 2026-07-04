@@ -4,7 +4,7 @@ import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { WishlistGrid } from "./WishlistGrid";
 import { EmptyState } from "@/components/shared/EmptyState";
 
-export const metadata: Metadata = { title: "Wishlist" };
+export const metadata: Metadata = { title: "Wishlist", robots: { index: false, follow: false } };
 
 export default async function WishlistPage() {
   const supabase = await getSupabaseServerClient();
