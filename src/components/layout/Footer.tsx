@@ -1,7 +1,12 @@
 import Link from "next/link";
-import { Mail, Phone, MapPin, Instagram, Facebook, Send } from "lucide-react";
+import { Mail, Phone, MapPin, Instagram, Facebook, Linkedin, Send } from "lucide-react";
 
 const social = [
+  {
+    label: "LinkedIn",
+    href: "https://www.linkedin.com/company/boxdealindia",
+    icon: Linkedin,
+  },
   {
     label: "Instagram",
     href: "https://www.instagram.com/smartaccessorieshub_",

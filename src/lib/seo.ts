@@ -36,6 +36,7 @@ export const DEFAULT_OG_IMAGE = `${SITE_URL}/about1.png`;
  * verified profiles, utna strong brand signal.
  */
 export const SOCIAL_LINKS: string[] = [
+  "https://www.linkedin.com/company/boxdealindia",
   "https://www.instagram.com/smartaccessorieshub_",
   "https://www.facebook.com/p/Smart-Accessories-Hub-100092980800251/",
   "https://t.me/smartaccessorieshub",
