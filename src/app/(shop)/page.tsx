@@ -103,7 +103,8 @@ async function getHomeData() {
       .from("products")
       .select("id, name, slug, mrp, selling_price, discount_percent, stock_quantity, rating, review_count, category_id, subcategory_id, product_images(image_url, thumbnail_url, is_primary)")
       .eq("is_active", true)
-      .limit(80)
+      .order("created_at", { ascending: false })
+      .limit(2000)
   ]);
 
   interface ProductImage {

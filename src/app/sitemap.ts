@@ -31,7 +31,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     const [{ data: products }, { data: categories }] = await Promise.all([
       supabase
         .from("products")
-        .select("slug, updated_at")
+        .select("slug, updated_at, product_images(image_url, is_primary)")
         .eq("is_active", true)
         .order("updated_at", { ascending: false })
         .limit(50000),
@@ -42,13 +42,25 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     ]);
 
     type Row = { slug: string; updated_at: string | null };
+    type ProductRow = Row & {
+      product_images?: Array<{ image_url: string | null; is_primary: boolean }>;
+    };
 
-    const productRoutes: MetadataRoute.Sitemap = ((products ?? []) as Row[]).map((p) => ({
-      url: `${SITE_URL}/product/${p.slug}`,
-      lastModified: p.updated_at ? new Date(p.updated_at) : now,
-      changeFrequency: "weekly",
-      priority: 0.8,
-    }));
+    const productRoutes: MetadataRoute.Sitemap = ((products ?? []) as ProductRow[]).map((p) => {
+      // Image sitemap — Google Images me product photos index/rank hote hain.
+      const imgs = (p.product_images ?? [])
+        .slice()
+        .sort((a, b) => (a.is_primary ? -1 : b.is_primary ? 1 : 0))
+        .map((i) => i.image_url)
+        .filter((u): u is string => Boolean(u));
+      return {
+        url: `${SITE_URL}/product/${p.slug}`,
+        lastModified: p.updated_at ? new Date(p.updated_at) : now,
+        changeFrequency: "weekly",
+        priority: 0.8,
+        ...(imgs.length ? { images: imgs.slice(0, 5) } : {}),
+      };
+    });
 
     const categoryRoutes: MetadataRoute.Sitemap = ((categories ?? []) as Row[]).map((c) => ({
       url: `${SITE_URL}/products?category=${c.slug}`,

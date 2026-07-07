@@ -29,24 +29,94 @@ export const SITE_DESCRIPTION =
 /** Default social-share image (1200x630 recommended). */
 export const DEFAULT_OG_IMAGE = `${SITE_URL}/about1.png`;
 
+/**
+ * Brand ke official social/profile links. Knowledge-panel ("boxdeal" search pe
+ * Google ke right side wala brand box) aur brand SERP ke liye ye `sameAs` me
+ * jaate hain. Jo accounts aapke real ho, unhe yahan daalein — jitne zyada
+ * verified profiles, utna strong brand signal.
+ */
+export const SOCIAL_LINKS: string[] = [
+  "https://www.instagram.com/smartaccessorieshub_",
+  "https://www.facebook.com/p/Smart-Accessories-Hub-100092980800251/",
+  "https://t.me/smartaccessorieshub",
+];
+
+/** Customer-support email — schema + contact pages me use hota hai. */
+export const SUPPORT_EMAIL = "admin@boxdeal.in";
+
+/**
+ * Company founders — Organization schema ke `founder` me jaate hain (Person +
+ * LinkedIn sameAs). Ye brand trust / E-E-A-T signal aur knowledge panel me
+ * founders dikhane me madad karta hai.
+ */
+export const FOUNDERS: Array<{ name: string; linkedin: string; jobTitle: string }> = [
+  { name: "Sahib Sahni", linkedin: "https://www.linkedin.com/in/sahib-sahni-80365514b/", jobTitle: "Co-Founder" },
+  { name: "Mohit Bhasin", linkedin: "https://www.linkedin.com/in/mohit-bhasin-2a9745237/", jobTitle: "Co-Founder" },
+];
+
+/** Public business contact — Organization schema + footer me use hota hai. */
+export const BUSINESS_PHONE = "+91 93551 51182";
+export const BUSINESS_ADDRESS = {
+  street: "15A/59 Karol Bagh",
+  locality: "New Delhi",
+  region: "Delhi",
+  postalCode: "110005",
+  country: "IN",
+} as const;
+
 /** Relative path -> absolute canonical URL. */
 export function absoluteUrl(path = "/"): string {
   if (/^https?:\/\//.test(path)) return path;
   return `${SITE_URL}${path.startsWith("/") ? path : `/${path}`}`;
 }
 
-/** Organization schema — sirf ek baar (root layout me) inject hota hai. */
+/**
+ * Organization schema — sirf ek baar (root layout me) inject hota hai.
+ * "Store" type + logo + sameAs se Google ka brand knowledge panel banta hai.
+ */
 export function organizationJsonLd() {
   return {
     "@context": "https://schema.org",
-    "@type": "Organization",
+    "@type": "OnlineStore",
+    "@id": `${SITE_URL}/#organization`,
     name: SITE_NAME,
+    alternateName: "BoxDeal India",
     url: SITE_URL,
-    logo: `${SITE_URL}/icon-512.png`,
+    logo: {
+      "@type": "ImageObject",
+      url: `${SITE_URL}/icon-512.png`,
+      width: 512,
+      height: 512,
+    },
+    image: DEFAULT_OG_IMAGE,
     description: SITE_DESCRIPTION,
+    slogan: "Genuine open-box deals, up to 60% off.",
+    email: SUPPORT_EMAIL,
+    telephone: BUSINESS_PHONE,
+    address: {
+      "@type": "PostalAddress",
+      streetAddress: BUSINESS_ADDRESS.street,
+      addressLocality: BUSINESS_ADDRESS.locality,
+      addressRegion: BUSINESS_ADDRESS.region,
+      postalCode: BUSINESS_ADDRESS.postalCode,
+      addressCountry: BUSINESS_ADDRESS.country,
+    },
+    areaServed: { "@type": "Country", name: "India" },
+    ...(FOUNDERS.length
+      ? {
+          founder: FOUNDERS.map((f) => ({
+            "@type": "Person",
+            name: f.name,
+            jobTitle: f.jobTitle,
+            sameAs: [f.linkedin],
+          })),
+        }
+      : {}),
+    ...(SOCIAL_LINKS.length ? { sameAs: SOCIAL_LINKS } : {}),
     contactPoint: {
       "@type": "ContactPoint",
-      email: "support@boxdeal.in",
+      email: SUPPORT_EMAIL,
+      telephone: BUSINESS_PHONE,
       contactType: "customer support",
       areaServed: "IN",
       availableLanguage: ["en", "hi"],
@@ -91,21 +161,76 @@ export function breadcrumbJsonLd(items: BreadcrumbItem[]) {
   } as const;
 }
 
+export interface ProductReviewInput {
+  author?: string | null;
+  rating: number;
+  title?: string | null;
+  body?: string | null;
+  datePublished?: string | null;
+}
+
 interface ProductJsonLdInput {
   name: string;
   slug: string;
   description?: string | null;
   sku?: string | null;
+  mpn?: string | null;
   brand?: string | null;
+  category?: string | null;
   images?: string[];
   price: number;
   currency?: string;
   inStock: boolean;
+  condition?: "new" | "used" | "refurbished";
   rating?: number | null;
   reviewCount?: number | null;
+  reviews?: ProductReviewInput[];
 }
 
-/** Product schema with Offer + optional AggregateRating (rich results ke liye). */
+/** In-stock offer ke liye ~1 saal aage ki price-validity date. */
+function defaultPriceValidUntil(): string {
+  const d = new Date();
+  d.setFullYear(d.getFullYear() + 1);
+  return d.toISOString().split("T")[0];
+}
+
+/** Free-shipping OfferShippingDetails (Google Merchant listing warnings kam karta hai). */
+function shippingDetails() {
+  return {
+    "@type": "OfferShippingDetails",
+    shippingRate: { "@type": "MonetaryAmount", value: "0", currency: "INR" },
+    shippingDestination: { "@type": "DefinedRegion", addressCountry: "IN" },
+    deliveryTime: {
+      "@type": "ShippingDeliveryTime",
+      handlingTime: { "@type": "QuantitativeValue", minValue: 0, maxValue: 2, unitCode: "DAY" },
+      transitTime: { "@type": "QuantitativeValue", minValue: 2, maxValue: 7, unitCode: "DAY" },
+    },
+  };
+}
+
+/** 7-day return policy (rich results ke merchant fields ke liye). */
+function returnPolicy() {
+  return {
+    "@type": "MerchantReturnPolicy",
+    applicableCountry: "IN",
+    returnPolicyCategory: "https://schema.org/MerchantReturnFiniteReturnWindow",
+    merchantReturnDays: 7,
+    returnMethod: "https://schema.org/ReturnByMail",
+    returnFees: "https://schema.org/FreeReturn",
+  };
+}
+
+const CONDITION_MAP = {
+  new: "https://schema.org/NewCondition",
+  used: "https://schema.org/UsedCondition",
+  refurbished: "https://schema.org/RefurbishedCondition",
+} as const;
+
+/**
+ * Product schema — Offer + AggregateRating + individual reviews + shipping/return
+ * policy. Ye sab milke Google ke product rich results (price, ⭐ rating, stock,
+ * "Free delivery", "7-day returns") enable karte hain.
+ */
 export function productJsonLd(p: ProductJsonLdInput) {
   const url = absoluteUrl(`/product/${p.slug}`);
   const data: Record<string, unknown> = {
@@ -114,7 +239,8 @@ export function productJsonLd(p: ProductJsonLdInput) {
     name: p.name,
     url,
     ...(p.description ? { description: p.description } : {}),
-    ...(p.sku ? { sku: p.sku } : {}),
+    ...(p.sku ? { sku: p.sku, mpn: p.mpn ?? p.sku } : {}),
+    ...(p.category ? { category: p.category } : {}),
     ...(p.brand ? { brand: { "@type": "Brand", name: p.brand } } : {}),
     ...(p.images && p.images.length ? { image: p.images } : {}),
     offers: {
@@ -122,11 +248,14 @@ export function productJsonLd(p: ProductJsonLdInput) {
       url,
       priceCurrency: p.currency ?? "INR",
       price: p.price.toFixed(2),
+      priceValidUntil: defaultPriceValidUntil(),
       availability: p.inStock
         ? "https://schema.org/InStock"
         : "https://schema.org/OutOfStock",
-      itemCondition: "https://schema.org/NewCondition",
+      itemCondition: CONDITION_MAP[p.condition ?? "new"],
       seller: { "@type": "Organization", name: SITE_NAME },
+      shippingDetails: shippingDetails(),
+      hasMerchantReturnPolicy: returnPolicy(),
     },
   };
   if (p.rating && p.reviewCount && p.reviewCount > 0) {
@@ -138,7 +267,47 @@ export function productJsonLd(p: ProductJsonLdInput) {
       worstRating: "1",
     };
   }
+  const reviews = (p.reviews ?? []).filter((r) => r.rating > 0).slice(0, 10);
+  if (reviews.length) {
+    data.review = reviews.map((r) => ({
+      "@type": "Review",
+      reviewRating: {
+        "@type": "Rating",
+        ratingValue: r.rating,
+        bestRating: "5",
+        worstRating: "1",
+      },
+      author: { "@type": "Person", name: r.author?.trim() || "Verified Buyer" },
+      ...(r.title ? { name: r.title } : {}),
+      ...(r.body ? { reviewBody: r.body } : {}),
+      ...(r.datePublished ? { datePublished: r.datePublished.split("T")[0] } : {}),
+    }));
+  }
   return data;
+}
+
+interface ItemListEntry {
+  name: string;
+  slug: string;
+}
+
+/**
+ * ItemList schema for category/search listing pages — Google ko batata hai ki
+ * ye ek product-list page hai (carousel/rich-listing eligibility).
+ */
+export function itemListJsonLd(items: ItemListEntry[], name?: string) {
+  return {
+    "@context": "https://schema.org",
+    "@type": "ItemList",
+    ...(name ? { name } : {}),
+    numberOfItems: items.length,
+    itemListElement: items.map((it, i) => ({
+      "@type": "ListItem",
+      position: i + 1,
+      url: absoluteUrl(`/product/${it.slug}`),
+      name: it.name,
+    })),
+  } as const;
 }
 
 /** Reusable <script type="application/ld+json"> props builder. */

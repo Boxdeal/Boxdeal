@@ -82,11 +82,35 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     return { title: "Product not found", robots: { index: false, follow: false } };
   }
 
-  const title = product.meta_title ?? product.name;
-  const description =
-    product.meta_description ??
-    product.short_description ??
-    `Buy ${product.name} online at BoxDeal. Genuine product, best price, and fast delivery across India.`;
+  // Keyword-rich title/description — taaki "<product> price", "<product> buy",
+  // "<product> open box" jaise saare search variations match karein.
+  const nameLower = product.name.toLowerCase();
+  const brandName: string | undefined = product.brand?.name;
+  const catName: string | undefined = product.category?.name;
+
+  const titleParts = [product.name];
+  if (catName && !nameLower.includes(catName.toLowerCase())) titleParts.push(catName);
+  let title = product.meta_title ?? titleParts.join(" ");
+  // Naam chhota ho to "Open Box" hook add karo (long-tail ke liye), 60 char ke andar.
+  if (!product.meta_title && title.length <= 48) title += " – Open Box";
+
+  let description = product.meta_description;
+  if (!description) {
+    const brandPrefix =
+      brandName && !nameLower.includes(brandName.toLowerCase()) ? `${brandName} ` : "";
+    const priceBit = `₹${Math.round(product.selling_price).toLocaleString("en-IN")}`;
+    const discBit =
+      product.discount_percent > 0 ? ` at ${product.discount_percent}% off` : "";
+    const lead = `Buy ${brandPrefix}${product.name} online${discBit} — ${priceBit} on BoxDeal.`;
+    const tail =
+      "Genuine open-box, like-new condition with brand warranty & fast delivery across India.";
+    description = product.short_description
+      ? `${lead} ${product.short_description} ${tail}`
+      : `${lead} ${tail}`;
+  }
+  // SERP ~160 char pe truncate hota hai — clean cut.
+  if (description.length > 300) description = description.slice(0, 297).trimEnd() + "…";
+
   const canonical = `/product/${product.slug}`;
 
   const imgs = [...(product.images ?? [])].sort(
@@ -147,6 +171,7 @@ export default async function ProductDetailPage({ params }: Props) {
     description: product.meta_description ?? product.short_description,
     sku: product.sku,
     brand: product.brand?.name ?? null,
+    category: product.category?.name ?? null,
     images: sortedImages
       .map((i: { image_url?: string }) => i.image_url)
       .filter((url): url is string => Boolean(url))
@@ -155,6 +180,19 @@ export default async function ProductDetailPage({ params }: Props) {
     inStock: (product.stock_quantity ?? 0) > 0,
     rating: product.rating,
     reviewCount: product.review_count,
+    reviews: (reviews ?? []).map((r: {
+      rating: number;
+      title: string | null;
+      body: string | null;
+      created_at: string;
+      user?: { full_name?: string | null };
+    }) => ({
+      author: r.user?.full_name ?? null,
+      rating: r.rating,
+      title: r.title,
+      body: r.body,
+      datePublished: r.created_at,
+    })),
   });
   const breadcrumbSchema = breadcrumbJsonLd(breadcrumbs);
 

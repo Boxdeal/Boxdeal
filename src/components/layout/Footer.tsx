@@ -1,17 +1,28 @@
 import Link from "next/link";
-import { Mail, Phone, MapPin, Instagram, Send } from "lucide-react";
+import { Mail, Phone, MapPin, Instagram, Facebook, Send } from "lucide-react";
 
 const social = [
   {
     label: "Instagram",
-    href: "https://www.instagram.com/smartaccessorieshub_?igsh=dnBnNHphYzUzcjZu&utm_source=qr",
+    href: "https://www.instagram.com/smartaccessorieshub_",
     icon: Instagram,
+  },
+  {
+    label: "Facebook",
+    href: "https://www.facebook.com/p/Smart-Accessories-Hub-100092980800251/",
+    icon: Facebook,
   },
   {
     label: "Telegram",
     href: "https://t.me/smartaccessorieshub",
     icon: Send,
   },
+];
+
+// Backet — hamara in-house brand (BoxDeal store se alag entity).
+const backetSocial = [
+  { label: "Backet on Instagram", href: "https://www.instagram.com/backet_india/", icon: Instagram },
+  { label: "Backet on Facebook", href: "https://www.facebook.com/backetindia001/", icon: Facebook },
 ];
 
 const links = {
@@ -80,6 +91,33 @@ export function Footer() {
                   </a>
                 );
               })}
+            </div>
+
+            {/* Backet — in-house brand */}
+            <div className="mt-6">
+              <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                Our in-house brand
+              </p>
+              <div className="mt-2 flex items-center gap-2">
+                <span className="text-sm font-bold text-white">Backet</span>
+                <div className="flex gap-2">
+                  {backetSocial.map((s) => {
+                    const Icon = s.icon;
+                    return (
+                      <a
+                        key={s.label}
+                        href={s.href}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        aria-label={s.label}
+                        className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-800 text-gray-300 transition-colors hover:bg-brand-500 hover:text-white"
+                      >
+                        <Icon className="h-3.5 w-3.5" />
+                      </a>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
           </div>
 

@@ -24,6 +24,52 @@ const colorPalettes = [
   { ltr: styles.gradientTealLtr, rtl: styles.gradientTealRtl },
 ];
 
+// Pick a palette from a stable key (the category/subcategory slug) so each
+// category keeps the SAME colour regardless of its position in the list.
+// Adding/removing a category no longer shifts everyone else's colour, and a
+// new category deterministically gets its own colour from its slug.
+function paletteIndexForKey(key: string): number {
+  let hash = 0;
+  for (let i = 0; i < key.length; i++) {
+    hash = (hash * 31 + key.charCodeAt(i)) >>> 0;
+  }
+  return hash % colorPalettes.length;
+}
+
+// Explicit brand colour per category/subcategory slug. These always win over
+// the hashed palette, so each of these sections keeps exactly this colour.
+const categoryBaseColors: Record<string, string> = {
+  earbuds: "#05458c",
+  "gaming-headphone": "#68225f",
+  "normal-headphone": "#5e0e16",
+  "mobile-charger": "#d54e0a",
+  "laptop-charger": "#0b8f5d",
+  neckband: "#0a8ca6",
+  mic: "#8f1716",
+  "portable-speaker": "#4c47df",
+  soundbar: "#b35a00",
+  "home-theatre": "#004ba8",
+  partybox: "#018d82",
+  tablet: "#662a9e",
+  "smart-watches": "#a92a47",
+  "graphic-pads": "#f95702",
+  "landline-phones": "#5047e5",
+};
+
+// Build a vibrant, glossy left-to-right gradient from a base colour. The full
+// saturated base holds across the coloured edge (so the colour really pops),
+// then transitions through a rich tint to white (reversed when the image sits
+// on the right), with a soft white sheen on top for a shiny look.
+function buildGradient(base: string, imageFirst: boolean): string {
+  const light = `color-mix(in srgb, ${base} 45%, #ffffff)`;
+  const colorLayer = imageFirst
+    ? `linear-gradient(to right, ${base} 0%, ${base} 22%, ${light} 62%, #ffffff 100%)`
+    : `linear-gradient(to right, #ffffff 0%, ${light} 38%, ${base} 78%, ${base} 100%)`;
+  // Glossy highlight: bright at the top, fading out toward the middle.
+  const sheen = "linear-gradient(to bottom, rgba(255,255,255,0.28), rgba(255,255,255,0) 50%)";
+  return `${sheen}, ${colorLayer}`;
+}
+
 export function CategorySection({
   category,
   subcategory,
@@ -39,29 +85,17 @@ export function CategorySection({
     ? `/products?${subcategory ? "subcategory" : "category"}=${categorySlug}`
     : null;
   const isImageFirst = index % 2 === 0;
-  const colorScheme = colorPalettes[index % colorPalettes.length];
-  // Home Theatre gets a solid blue (#2664ec) background instead of the rotating gradient.
   const slugLower = (categorySlug ?? "").toLowerCase();
-  const nameLower = (categoryName ?? "").toLowerCase();
-  const isHomeTheatre =
-    slugLower.includes("home-theatre") ||
-    slugLower.includes("home-theater") ||
-    nameLower.includes("home theatre") ||
-    nameLower.includes("home theater");
-  const isPartyBox =
-    slugLower.includes("partybox") ||
-    slugLower.includes("party-box") ||
-    nameLower.includes("partybox") ||
-    nameLower.includes("party box");
 
-  let gradientColor: string;
-  if (isHomeTheatre) {
-    gradientColor = isImageFirst ? styles.gradientHomeLtr : styles.gradientHomeRtl;
-  } else if (isPartyBox) {
-    gradientColor = isImageFirst ? styles.gradientPartyLtr : styles.gradientPartyRtl;
-  } else {
-    gradientColor = isImageFirst ? colorScheme.ltr : colorScheme.rtl;
-  }
+  // Prefer an explicit pinned colour for this slug; otherwise fall back to the
+  // stable hashed palette class.
+  const baseColor = categoryBaseColors[slugLower];
+  const colorScheme =
+    colorPalettes[paletteIndexForKey(categorySlug ?? categoryName ?? String(index))];
+  const gradientColor = baseColor ? "" : isImageFirst ? colorScheme.ltr : colorScheme.rtl;
+  const gradientStyle: { background: string } | undefined = baseColor
+    ? { background: buildGradient(baseColor, isImageFirst) }
+    : undefined;
 
   return (
     <div className={styles.container}>
@@ -79,7 +113,7 @@ export function CategorySection({
 
       {/* Mobile App-like Structure: Image on top, 2x2 grid (< 800px) */}
       {products.length > 0 && (
-      <div className={`${styles.mobileWrapper} ${gradientColor}`}>
+      <div className={`${styles.mobileWrapper} ${gradientColor}`} style={gradientStyle}>
         {/* Category Image - Full Width on Top */}
         <CategoryImageCard
           href={categoryHref}
@@ -102,7 +136,7 @@ export function CategorySection({
 
       {/* Desktop Layout: Original alternating design (>= 800px) */}
       {products.length > 0 && (
-      <div className={`${styles.desktopWrapper} ${gradientColor}`}>
+      <div className={`${styles.desktopWrapper} ${gradientColor}`} style={gradientStyle}>
         <div className={styles.desktopProductsGrid}>
         {/* Image First (Even Index) */}
         {isImageFirst && (

@@ -11,6 +11,7 @@ import { ShoppingBag, ChevronRight } from "lucide-react";
 import { PRODUCTS_PER_PAGE } from "@/constants";
 import type { Brand, Category, Subcategory } from "@/types";
 import Link from "next/link";
+import { itemListJsonLd, breadcrumbJsonLd, jsonLdScriptProps } from "@/lib/seo";
 
 
 export const revalidate = 3600;  // Cache for 1 hour
@@ -218,8 +219,31 @@ export default async function ProductsPage({ searchParams }: Props) {
     ? [...subOrder.filter((k) => grouped[k]), ...Object.keys(grouped).filter((k) => !subOrder.includes(k))]
     : [];
 
+  // Structured data — listing page ke liye ItemList + Breadcrumb.
+  const listName = subcategoryInfo?.name ?? categoryInfo?.name ?? "All Products";
+  const itemListSchema = itemListJsonLd(
+    (products as unknown as Array<{ name: string; slug: string }>).map((p) => ({
+      name: p.name,
+      slug: p.slug,
+    })),
+    listName
+  );
+  const crumbItems = [
+    { label: "Home", href: "/" },
+    { label: "All Products", href: "/products" },
+    ...(isCategoryView && categoryInfo ? [{ label: categoryInfo.name }] : []),
+    ...(isSubcategoryView && subcategoryInfo
+      ? [
+          { label: subcategoryInfo.category.name, href: `/products?category=${subcategoryInfo.category.slug}` },
+          { label: subcategoryInfo.name },
+        ]
+      : []),
+  ];
+
   return (
     <div className="mx-auto max-w-7xl px-4 py-6">
+      <script {...jsonLdScriptProps(breadcrumbJsonLd(crumbItems))} />
+      {products.length > 0 && <script {...jsonLdScriptProps(itemListSchema)} />}
 
       {/* Breadcrumb */}
       {(isCategoryView || isSubcategoryView) && (
