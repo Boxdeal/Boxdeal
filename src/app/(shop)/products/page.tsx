@@ -11,7 +11,7 @@ import { ShoppingBag, ChevronRight } from "lucide-react";
 import { PRODUCTS_PER_PAGE } from "@/constants";
 import type { Brand, Category, Subcategory } from "@/types";
 import Link from "next/link";
-import { itemListJsonLd, breadcrumbJsonLd, jsonLdScriptProps } from "@/lib/seo";
+import { itemListJsonLd, breadcrumbJsonLd, brandJsonLd, jsonLdScriptProps, BRANDS } from "@/lib/seo";
 
 
 export const revalidate = 3600;  // Cache for 1 hour
@@ -37,10 +37,22 @@ export async function generateMetadata({ searchParams }: Props): Promise<Metadat
     : null;
 
   const focus = subcategory?.name ?? category?.name ?? brand?.name;
-  const title = focus ? `${focus} — Buy Online at Best Prices` : "All Products";
-  const description = focus
-    ? `Shop ${focus} at BoxDeal. Genuine products, unbeatable deals, secure payments, and fast delivery across India.`
-    : "Browse all products at BoxDeal — electronics, mobile accessories and more at the best prices in India.";
+  const knownBrand = brand ? BRANDS[brand.slug.toLowerCase()] : undefined;
+
+  // Brand landing page ke liye brand-specific title/description (promotion),
+  // warna generic category/subcategory copy.
+  const title = brand
+    ? `${brand.name} — Shop ${brand.name} Products Online`
+    : focus
+      ? `${focus} — Buy Online at Best Prices`
+      : "All Products";
+  const description = knownBrand
+    ? knownBrand.description
+    : brand
+      ? `Shop official ${brand.name} products at BoxDeal — genuine, warranty-backed, with fast delivery across India.`
+      : focus
+        ? `Shop ${focus} at BoxDeal. Genuine products, unbeatable deals, secure payments, and fast delivery across India.`
+        : "Browse all products at BoxDeal — electronics, mobile accessories and more at the best prices in India.";
 
   // Canonical: sirf ek clean filter param rakho; page/sort/search variants
   // ko canonical me include nahi karte taaki duplicate content na bane.
@@ -240,10 +252,20 @@ export default async function ProductsPage({ searchParams }: Props) {
       : []),
   ];
 
+  // Brand landing page pe Brand JSON-LD (brand promotion / entity building).
+  const brandInfo = params.brand
+    ? filters.brands.find((b) => b.slug === params.brand)
+    : null;
+
   return (
     <div className="mx-auto max-w-7xl px-4 py-6">
       <script {...jsonLdScriptProps(breadcrumbJsonLd(crumbItems))} />
       {products.length > 0 && <script {...jsonLdScriptProps(itemListSchema)} />}
+      {brandInfo && (
+        <script
+          {...jsonLdScriptProps(brandJsonLd(brandInfo.slug, brandInfo.name, brandInfo.logo_url))}
+        />
+      )}
 
       {/* Breadcrumb */}
       {(isCategoryView || isSubcategoryView) && (

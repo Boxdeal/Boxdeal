@@ -45,6 +45,57 @@ export const SOCIAL_LINKS: string[] = [
 export const SUPPORT_EMAIL = "admin@boxdeal.in";
 
 /**
+ * In-house / featured brands — jinhe hum khud promote karna chahte hain.
+ * Key = brand ka slug (jaisa DB brands.slug me hai). Ye info Brand schema me
+ * jaati hai (sameAs = brand ke apne social profiles, description) taaki Google
+ * "Backet" ko ek alag brand entity ke roop me samjhe aur "Backet <product>"
+ * searches pe hamara page rank kare.
+ */
+export const BRANDS: Record<string, { name: string; sameAs: string[]; description: string }> = {
+  backet: {
+    name: "Backet",
+    sameAs: [
+      "https://www.instagram.com/backet_india/",
+      "https://www.facebook.com/backetindia001/",
+    ],
+    description:
+      "Backet is BoxDeal's in-house electronics brand — party speakers, audio and lifestyle gadgets built for bold sound, RGB lighting and unbeatable value. Available exclusively on BoxDeal.",
+  },
+};
+
+/** Product/brand-page ke liye poora Brand entity (name + url + logo + sameAs). */
+export function brandEntity(input?: {
+  name?: string | null;
+  slug?: string | null;
+  logo?: string | null;
+}) {
+  if (!input?.name) return undefined;
+  const known = input.slug ? BRANDS[input.slug.toLowerCase()] : undefined;
+  return {
+    "@type": "Brand",
+    name: input.name,
+    ...(input.slug ? { url: absoluteUrl(`/products?brand=${input.slug}`) } : {}),
+    ...(input.logo ? { logo: input.logo } : {}),
+    ...(known?.sameAs ? { sameAs: known.sameAs } : {}),
+  };
+}
+
+/** Standalone Brand JSON-LD — brand landing page (/products?brand=slug) ke liye. */
+export function brandJsonLd(slug: string, name: string, logo?: string | null) {
+  const known = BRANDS[slug.toLowerCase()];
+  return {
+    "@context": "https://schema.org",
+    "@type": "Brand",
+    "@id": `${SITE_URL}/products?brand=${slug}#brand`,
+    name,
+    url: absoluteUrl(`/products?brand=${slug}`),
+    ...(logo ? { logo } : {}),
+    ...(known?.description ? { description: known.description } : {}),
+    ...(known?.sameAs ? { sameAs: known.sameAs } : {}),
+  } as const;
+}
+
+/**
  * Company founders — Organization schema ke `founder` me jaate hain (Person +
  * LinkedIn sameAs). Ye brand trust / E-E-A-T signal aur knowledge panel me
  * founders dikhane me madad karta hai.
@@ -176,6 +227,8 @@ interface ProductJsonLdInput {
   sku?: string | null;
   mpn?: string | null;
   brand?: string | null;
+  brandSlug?: string | null;
+  brandLogo?: string | null;
   category?: string | null;
   images?: string[];
   price: number;
@@ -241,7 +294,9 @@ export function productJsonLd(p: ProductJsonLdInput) {
     ...(p.description ? { description: p.description } : {}),
     ...(p.sku ? { sku: p.sku, mpn: p.mpn ?? p.sku } : {}),
     ...(p.category ? { category: p.category } : {}),
-    ...(p.brand ? { brand: { "@type": "Brand", name: p.brand } } : {}),
+    ...(p.brand
+      ? { brand: brandEntity({ name: p.brand, slug: p.brandSlug, logo: p.brandLogo }) }
+      : {}),
     ...(p.images && p.images.length ? { image: p.images } : {}),
     offers: {
       "@type": "Offer",

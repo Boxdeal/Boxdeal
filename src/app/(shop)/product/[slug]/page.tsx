@@ -171,6 +171,8 @@ export default async function ProductDetailPage({ params }: Props) {
     description: product.meta_description ?? product.short_description,
     sku: product.sku,
     brand: product.brand?.name ?? null,
+    brandSlug: product.brand?.slug ?? null,
+    brandLogo: product.brand?.logo_url ?? null,
     category: product.category?.name ?? null,
     images: sortedImages
       .map((i: { image_url?: string }) => i.image_url)
