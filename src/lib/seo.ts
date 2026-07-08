@@ -136,7 +136,7 @@ export function organizationJsonLd() {
     url: SITE_URL,
     logo: {
       "@type": "ImageObject",
-      url: `${SITE_URL}/icon-512.png`,
+      url: `${SITE_URL}/logo-512.png`,
       width: 512,
       height: 512,
     },

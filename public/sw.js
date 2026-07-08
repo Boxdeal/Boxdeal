@@ -1,10 +1,12 @@
-const CACHE_NAME = 'boxdeal-v2';
-const HERO_CACHE = 'boxdeal-hero-images-v2';
-const API_CACHE = 'boxdeal-api-v2';
+const CACHE_NAME = 'boxdeal-v3';
+const HERO_CACHE = 'boxdeal-hero-images-v3';
+const API_CACHE = 'boxdeal-api-v3';
 
+// Sirf wahi assets pre-cache karo jo sach me exist karte hain. `cache.addAll`
+// atomic hai — ek bhi 404 (jaise purana non-existent /app.css) poore addAll ko
+// reject kar deta tha, jisse `/` bhi offline-fallback ke liye cache nahi hota tha.
 const CRITICAL_ASSETS = [
   '/',
-  '/app.css',
 ];
 
 const HERO_IMAGE_PATTERNS = [
@@ -45,6 +47,16 @@ self.addEventListener('fetch', (event) => {
   if (request.method !== 'GET') return;
 
   const url = new URL(request.url);
+
+  // NEVER intercept Next.js build assets. Ye files content-hashed hain aur
+  // already `immutable` HTTP-cache hoti hain, isliye browser inhe khud
+  // efficiently handle karta hai. Pehle SW inhe cache-first serve karta tha,
+  // jisse naye deploy ke baad purani chunk serve/expect hoti thi aur
+  // ChunkLoadError aata tha ("Something went wrong" flash + auto reload).
+  // Inhe seedha network par jaane do.
+  if (url.origin === self.location.origin && url.pathname.startsWith('/_next/')) {
+    return;
+  }
 
   // Cache hero images aggressively (these live on cross-origin Supabase storage).
   if (HERO_IMAGE_PATTERNS.some(pattern => pattern.test(url.href))) {
