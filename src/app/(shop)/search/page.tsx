@@ -42,6 +42,7 @@ export default async function SearchPage({ searchParams }: Props) {
     `)
     .eq("is_active", true)
     .or(`name.ilike.%${safe}%,slug.ilike.%${safe}%,short_description.ilike.%${safe}%`)
+    .order("in_stock", { ascending: false })
     .order("sold_count", { ascending: false })
     .limit(48);
 

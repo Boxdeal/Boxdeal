@@ -150,7 +150,13 @@ async function getProducts(params: Record<string, string>, filters: Filters) {
     popular:    { column: "sold_count",    ascending: false },
   };
   const sort = sortMap[params.sort ?? "popular"] ?? sortMap.popular;
-  query = query.order(sort.column, { ascending: sort.ascending }).range(from, to);
+  // In-stock products always rank before out-of-stock ones, whatever the chosen
+  // sort. `in_stock` is a generated column (stock_quantity > 0) so this ordering
+  // holds across pagination — out-of-stock items sink to the last pages.
+  query = query
+    .order("in_stock", { ascending: false })
+    .order(sort.column, { ascending: sort.ascending })
+    .range(from, to);
 
   const { data, count } = await query;
 

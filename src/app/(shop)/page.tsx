@@ -153,15 +153,22 @@ async function getHomeData() {
     }
   });
 
+  // Stable sort that floats in-stock products ahead of out-of-stock ones while
+  // preserving the existing (created_at desc) order within each group.
+  const inStockFirst = (arr: ReturnType<typeof mapProduct>[]) =>
+    [...arr].sort(
+      (a, b) => Number(b.stock_quantity > 0) - Number(a.stock_quantity > 0)
+    );
+
   const categoryData = (categories ?? []).map((category: Category) => {
     const subcats = (allSubcategories ?? []).filter((s: Subcategory) => s.category_id === category.id);
     const subcategoryData = subcats.map((subcat: Subcategory) => ({
       subcategory: subcat,
-      products: (productsBySubcategory.get(subcat.id) ?? []).slice(0, 4),
+      products: inStockFirst(productsBySubcategory.get(subcat.id) ?? []).slice(0, 4),
     }));
     return {
       category,
-      categoryProducts: (productsByCategory.get(category.id) ?? []).slice(0, 4),
+      categoryProducts: inStockFirst(productsByCategory.get(category.id) ?? []).slice(0, 4),
       subcategoryData,
     };
   });
