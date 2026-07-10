@@ -74,10 +74,10 @@ export const metadata: Metadata = {
   },
   icons: {
     icon: [
-      { url: "/favicon-16x16.png", sizes: "16x16", type: "image/png" },
-      { url: "/favicon-32x32.png", sizes: "32x32", type: "image/png" },
+      { url: "/favicon-16x16.png?v=3", sizes: "16x16", type: "image/png" },
+      { url: "/favicon-32x32.png?v=3", sizes: "32x32", type: "image/png" },
       // Google SERP favicon ke liye min 48x48 square chahiye — ye wahi hai.
-      { url: "/favicon-48x48.png", sizes: "48x48", type: "image/png" },
+      { url: "/favicon-48x48.png?v=3", sizes: "48x48", type: "image/png" },
       { url: "/logo-192.png", sizes: "192x192", type: "image/png" },
       { url: "/logo.png", sizes: "500x500", type: "image/png" },
     ],
