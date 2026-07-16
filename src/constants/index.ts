@@ -3,9 +3,9 @@ import type { OrderStatus } from "@/types";
 export const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
 
 // Delivery is charged at the live Shiprocket courier rate, capped at this
-// amount — the customer never pays more than ₹200 even if the real rate is
+// amount — the customer never pays more than ₹499 even if the real rate is
 // higher (BoxDeal absorbs the difference).
-export const DELIVERY_CHARGE_CAP = 200;
+export const DELIVERY_CHARGE_CAP = 499;
 
 // Volumetric (dimensional) weight divisor. A parcel's volumetric weight in kg
 // is (length_cm × breadth_cm × height_cm) / VOLUMETRIC_DIVISOR. 5000 is the

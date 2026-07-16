@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
   const { subtotal, discount } = pricing;
 
   // Recompute the delivery charge server-side from the destination pincode +
-  // cart weight (live Shiprocket rate, capped at ₹200). Never trust the charge
+  // cart weight (live Shiprocket rate, capped at ₹499). Never trust the charge
   // sent by the client. A non-serviceable pincode blocks the order entirely.
   let shipping_charge: number;
   try {

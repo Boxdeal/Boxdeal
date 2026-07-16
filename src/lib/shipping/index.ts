@@ -5,7 +5,7 @@ import type { CartItem } from "@/types";
 
 /**
  * Apply BoxDeal's delivery-charge cap. The customer pays the live courier rate
- * rounded up to the next rupee, but never more than DELIVERY_CHARGE_CAP (₹200).
+ * rounded up to the next rupee, but never more than DELIVERY_CHARGE_CAP (₹499).
  */
 export function applyDeliveryCap(rate: number): number {
   return Math.min(Math.ceil(rate), DELIVERY_CHARGE_CAP);
@@ -63,7 +63,7 @@ export type DeliveryQuote =
  * items don't carry them), floored at 0.1kg to match what we send Shiprocket at
  * fulfillment. Sending the chargeable weight means the quoted rate matches what
  * the courier actually bills us for a bulky parcel. The live rate is capped at
- * ₹200.
+ * ₹499.
  *
  * Returns `serviceable: false` when no courier covers the destination —
  * callers should block the order in that case. Pass `cod: true` to get the
