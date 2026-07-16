@@ -39,7 +39,8 @@ function paletteIndexForKey(key: string): number {
 // Explicit brand colour per category/subcategory slug. These always win over
 // the hashed palette, so each of these sections keeps exactly this colour.
 const categoryBaseColors: Record<string, string> = {
-  earbuds: "#05458c",
+  "tws-earbuds": "#3494f4",
+  handsfree: "#babebc",
   "gaming-headphone": "#68225f",
   "normal-headphone": "#5e0e16",
   "mobile-charger": "#d54e0a",
