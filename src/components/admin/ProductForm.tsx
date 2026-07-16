@@ -296,8 +296,8 @@ export function ProductForm({ categories, subcategories, brands, product }: Prod
           </div>
         </div>
         <p className="text-xs text-gray-500">
-          Dimensions set the parcel&apos;s volumetric weight (L×B×H ÷ 5000). When it exceeds the actual
-          weight, COD orders require partial online payment.
+          Dimensions set the parcel&apos;s volumetric weight (L×B×H ÷ 5000), used to calculate the
+          courier&apos;s chargeable weight for delivery rates.
         </p>
       </section>
 

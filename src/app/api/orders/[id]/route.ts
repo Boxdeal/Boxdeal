@@ -185,27 +185,16 @@ async function refundOrderPayment(
     payment_method: string | null;
     razorpay_payment_id: string | null;
     total_amount: number;
-    is_partial_cod?: boolean | null;
-    online_paid_amount?: number | null;
   }
 ): Promise<{ refunded: boolean; error: string | null }> {
-  // A fully-online (razorpay/paid) order refunds the whole total. A partial-COD
-  // order (payment_status "partial") only ever took the online slice online — the
-  // COD portion was never collected — so refund just online_paid_amount.
   const wasPaidOnline =
     order.payment_status === "paid" &&
     order.payment_method === "razorpay" &&
     !!order.razorpay_payment_id;
-  const isPartialPaid =
-    order.is_partial_cod === true &&
-    order.payment_status === "partial" &&
-    !!order.razorpay_payment_id;
 
-  if (!wasPaidOnline && !isPartialPaid) return { refunded: false, error: null };
+  if (!wasPaidOnline) return { refunded: false, error: null };
 
-  const refundAmount = isPartialPaid
-    ? Number(order.online_paid_amount) || 0
-    : order.total_amount;
+  const refundAmount = order.total_amount;
   if (refundAmount <= 0) return { refunded: false, error: null };
 
   try {
@@ -242,7 +231,7 @@ export async function PATCH(
     const admin = getSupabaseAdminClient();
     const { data: order } = await admin
       .from("orders")
-      .select("id, user_id, status, placed_at, payment_method, payment_status, razorpay_payment_id, total_amount, is_partial_cod, online_paid_amount")
+      .select("id, user_id, status, placed_at, payment_method, payment_status, razorpay_payment_id, total_amount")
       .eq("id", id)
       .single();
 
@@ -330,7 +319,7 @@ export async function PATCH(
     }
     const { data: o } = await admin
       .from("orders")
-      .select("status, subtotal, discount_amount, shipping_charge, online_paid_amount, is_partial_cod")
+      .select("status, subtotal, discount_amount, shipping_charge")
       .eq("id", id)
       .single();
     if (!o) return NextResponse.json({ error: "Order not found" }, { status: 404 });
@@ -341,11 +330,9 @@ export async function PATCH(
       );
     }
 
-    // Base amount that's still collectible from the customer (for a partial-COD
-    // order the online slice is already paid, so only the COD portion remains).
-    // The extra discount can't exceed this — the total must not go negative.
-    const online = o.is_partial_cod ? Number(o.online_paid_amount) || 0 : 0;
-    const base = Number(o.subtotal) - Number(o.discount_amount) + Number(o.shipping_charge) - online;
+    // Base amount that's still collectible from the customer — the extra
+    // discount can't exceed this, the total must not go negative.
+    const base = Number(o.subtotal) - Number(o.discount_amount) + Number(o.shipping_charge);
     if (amount > base) {
       return NextResponse.json(
         { error: `Discount can't exceed ${base}.` },
@@ -353,10 +340,8 @@ export async function PATCH(
       );
     }
 
-    const newTotal = Number(o.subtotal) - Number(o.discount_amount) + Number(o.shipping_charge) - amount;
+    const newTotal = base - amount;
     const update: Record<string, unknown> = { admin_discount: amount, total_amount: newTotal };
-    // For partial-COD the discount comes off the remaining COD collectible.
-    if (o.is_partial_cod) update.cod_amount = base - amount;
 
     const { data: updated, error } = await admin
       .from("orders").update(update).eq("id", id).select().single();
@@ -409,7 +394,7 @@ export async function PATCH(
     updateData.cancelled_at = new Date().toISOString();
     const { data: payInfo } = await admin
       .from("orders")
-      .select("status, payment_status, payment_method, razorpay_payment_id, total_amount, is_partial_cod, online_paid_amount")
+      .select("status, payment_status, payment_method, razorpay_payment_id, total_amount")
       .eq("id", id)
       .single();
     if (payInfo) {

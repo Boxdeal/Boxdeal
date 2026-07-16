@@ -52,16 +52,6 @@ export async function POST(req: NextRequest) {
         { status: 422 }
       );
     }
-    // A bulky/volumetric parcel billed on its volumetric weight can't be placed
-    // as plain COD — it must go through partial-COD (part paid online up front).
-    // The client detects this from the quote too and routes to the partial flow;
-    // this guard stops a direct/stale call from bypassing it.
-    if (quote.is_volumetric) {
-      return NextResponse.json(
-        { error: "This parcel requires part of the payment online. Please refresh and complete the partial payment." },
-        { status: 409 }
-      );
-    }
     shipping_charge = quote.delivery_charge;
   } catch {
     return NextResponse.json(

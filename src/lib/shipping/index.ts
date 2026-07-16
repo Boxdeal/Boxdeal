@@ -27,16 +27,12 @@ export interface WeightBreakdown {
   volumetricKg: number;
   /** What the courier bills on: max(actual, volumetric), floored at 0.1kg. */
   chargeableKg: number;
-  /** True when the parcel is billed on its volumetric weight (bulky but light). */
-  isVolumetric: boolean;
 }
 
 /**
  * Compute a cart's actual, volumetric and chargeable weight.
  *
- * Couriers bill on the GREATER of actual and volumetric weight. When the
- * volumetric weight wins (`isVolumetric`), the parcel is a bulky-but-light box —
- * the trigger for partial-COD collection.
+ * Couriers bill on the GREATER of actual and volumetric weight.
  */
 export function computeWeight(items: WeighableItem[]): WeightBreakdown {
   let actualGrams = 0;
@@ -51,14 +47,13 @@ export function computeWeight(items: WeighableItem[]): WeightBreakdown {
     volumetricKg += (vol / VOLUMETRIC_DIVISOR) * qty;
   }
   const actualKg = actualGrams / 1000;
-  const isVolumetric = volumetricKg > actualKg;
   const chargeableKg = Math.max(actualKg, volumetricKg, 0.1);
-  return { actualKg, volumetricKg, chargeableKg, isVolumetric };
+  return { actualKg, volumetricKg, chargeableKg };
 }
 
 export type DeliveryQuote =
-  | { serviceable: true;  delivery_charge: number; courier_name: string | null; is_volumetric: boolean }
-  | { serviceable: false; delivery_charge: null;   courier_name: null;          is_volumetric: false };
+  | { serviceable: true;  delivery_charge: number; courier_name: string | null }
+  | { serviceable: false; delivery_charge: null;   courier_name: null };
 
 /**
  * Compute the delivery charge for a cart shipping to `pincode`.
@@ -70,11 +65,9 @@ export type DeliveryQuote =
  * the courier actually bills us for a bulky parcel. The live rate is capped at
  * ₹200.
  *
- * `is_volumetric` reports whether this parcel is billed on its volumetric weight
- * (the trigger for partial-COD collection). Returns `serviceable: false` when no
- * courier covers the destination — callers should block the order in that case.
- * Pass `cod: true` to get the cash-on-delivery rate (some pincodes have COD
- * couriers only, or none).
+ * Returns `serviceable: false` when no courier covers the destination —
+ * callers should block the order in that case. Pass `cod: true` to get the
+ * cash-on-delivery rate (some pincodes have COD couriers only, or none).
  */
 export async function getCartDeliveryQuote(
   admin: SupabaseClient,
@@ -103,17 +96,16 @@ export async function getCartDeliveryQuote(
     };
   });
 
-  const { chargeableKg, isVolumetric } = computeWeight(weighable);
+  const { chargeableKg } = computeWeight(weighable);
 
   const result = await getDeliveryRate(pincode, chargeableKg, cod);
   if (!result.serviceable) {
-    return { serviceable: false, delivery_charge: null, courier_name: null, is_volumetric: false };
+    return { serviceable: false, delivery_charge: null, courier_name: null };
   }
 
   return {
     serviceable:     true,
     delivery_charge: applyDeliveryCap(result.rate),
     courier_name:    result.courierName,
-    is_volumetric:   isVolumetric,
   };
 }

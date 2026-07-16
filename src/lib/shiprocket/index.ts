@@ -181,15 +181,9 @@ export async function createShiprocketOrder(
       sub_total:              order.subtotal,
       // Delivery charge + discount so Shiprocket's collectible/invoice matches
       // the order total: sub_total + shipping_charges − total_discount.
-      //
-      // For a partial-COD order the online slice was already paid up front, so
-      // the courier must collect only the remaining COD amount. We fold the
-      // already-paid online amount into total_discount, which reduces the COD
-      // collectible to exactly order.cod_amount:
-      //   sub_total + shipping − (discount + admin_discount + online_paid) = total − online = cod
       // admin_discount is any extra discount the admin applied from the panel.
       shipping_charges:       order.shipping_charge,
-      total_discount:         order.discount_amount + (order.admin_discount ?? 0) + (order.is_partial_cod ? order.online_paid_amount : 0),
+      total_discount:         order.discount_amount + (order.admin_discount ?? 0),
       length,
       breadth,
       height,

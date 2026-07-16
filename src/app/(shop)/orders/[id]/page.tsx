@@ -248,19 +248,6 @@ export default async function OrderDetailPage({
             <span>Total</span>
             <span>{formatPrice(typedOrder.total_amount)}</span>
           </div>
-          {/* Partial-COD: online part already paid, rest collected on delivery. */}
-          {typedOrder.is_partial_cod && (
-            <div className="mt-1 space-y-1.5 rounded-lg bg-amber-50 border border-amber-200 p-2.5">
-              <div className="flex justify-between text-amber-900">
-                <span>Paid online</span>
-                <span className="font-medium">{formatPrice(typedOrder.online_paid_amount)}</span>
-              </div>
-              <div className="flex justify-between text-amber-900">
-                <span>To pay on delivery (cash)</span>
-                <span className="font-semibold">{formatPrice(typedOrder.cod_amount)}</span>
-              </div>
-            </div>
-          )}
         </div>
       </div>
 
@@ -290,11 +277,7 @@ export default async function OrderDetailPage({
             <div className="flex justify-between">
               <span className="text-gray-500">Method</span>
               <span className="font-medium">
-                {typedOrder.is_partial_cod
-                  ? "Partial COD"
-                  : typedOrder.payment_method === "cod"
-                  ? "Cash on Delivery"
-                  : "Online"}
+                {typedOrder.payment_method === "cod" ? "Cash on Delivery" : "Online"}
               </span>
             </div>
             <div className="flex justify-between">
@@ -305,9 +288,7 @@ export default async function OrderDetailPage({
                   typedOrder.payment_status === "paid" ? "text-green-600" : "text-yellow-600"
                 )}
               >
-                {typedOrder.is_partial_cod
-                  ? `${formatPrice(typedOrder.cod_amount)} due on delivery`
-                  : typedOrder.payment_method === "cod" && typedOrder.payment_status !== "paid"
+                {typedOrder.payment_method === "cod" && typedOrder.payment_status !== "paid"
                   ? "Pay on delivery"
                   : typedOrder.payment_status}
               </span>

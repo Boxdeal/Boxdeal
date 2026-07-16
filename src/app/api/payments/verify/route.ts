@@ -49,19 +49,15 @@ export async function POST(req: NextRequest) {
   // Payment already succeeded, so confirm the order first — never block a
   // paying customer on a stock hiccup.
   //
-  // For a partial-COD order only the online slice was just paid, so it lands in
-  // "partial" (online done, COD still due) rather than "paid" (fully collected).
-  const paidStatus = fullOrder.is_partial_cod ? "partial" : "paid";
-  //
-  // Idempotency: only the transition from "pending" → paid/partial is allowed to
-  // run the stock/coupon/email side-effects. If verify is called twice (network
+  // Idempotency: only the transition from "pending" → "paid" is allowed to run
+  // the stock/coupon/email side-effects. If verify is called twice (network
   // retry, double submit), the guard `.eq("payment_status", "pending")` means
   // the second call updates zero rows, so we return success WITHOUT decrementing
   // stock or consuming the coupon a second time.
   const { data: flipped, error } = await admin
     .from("orders")
     .update({
-      payment_status:      paidStatus,
+      payment_status:      "paid",
       razorpay_payment_id: razorpay_payment_id,
       razorpay_signature:  razorpay_signature,
       status:              "confirmed",

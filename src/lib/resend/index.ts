@@ -99,9 +99,6 @@ export async function sendOrderConfirmation(order: Order, email: string) {
       ${order.discount_amount > 0 ? `<tr><td style="padding:4px 0;color:#16a34a">Discount</td><td style="padding:4px 0;text-align:right;color:#16a34a">-${formatPrice(order.discount_amount)}</td></tr>` : ""}
       <tr><td style="padding:4px 0;color:#6b7280">Shipping</td><td style="padding:4px 0;text-align:right">${order.shipping_charge > 0 ? formatPrice(order.shipping_charge) : "FREE"}</td></tr>
       <tr><td style="padding:8px 0 0;font-weight:700;font-size:16px">Total</td><td style="padding:8px 0 0;text-align:right;font-weight:700;font-size:16px">${formatPrice(order.total_amount)}</td></tr>
-      ${order.is_partial_cod ? `
-      <tr><td style="padding:8px 0 0;color:#16a34a">Paid online</td><td style="padding:8px 0 0;text-align:right;color:#16a34a">${formatPrice(order.online_paid_amount)}</td></tr>
-      <tr><td style="padding:4px 0;color:#b45309;font-weight:700">To pay on delivery (cash)</td><td style="padding:4px 0;text-align:right;color:#b45309;font-weight:700">${formatPrice(order.cod_amount)}</td></tr>` : ""}
     </table>
     <div style="background:#f9fafb;border-radius:8px;padding:16px">
       <p style="margin:0 0 4px;font-weight:600">Delivering to:</p>

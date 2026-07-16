@@ -13,29 +13,6 @@ export const DELIVERY_CHARGE_CAP = 200;
 // the GREATER of actual and volumetric weight ("chargeable weight").
 export const VOLUMETRIC_DIVISOR = 5000;
 
-// Partial-COD split. When a COD order is billed on its volumetric weight (a
-// bulky-but-light parcel), we collect this percentage of the order total online
-// via Razorpay up front and leave the remainder as cash-on-delivery. Set
-// NEXT_PUBLIC_PARTIAL_COD_ONLINE_PERCENT to change it (read on both client &
-// server so the displayed split and the charged split always match).
-export const PARTIAL_COD_ONLINE_PERCENT = (() => {
-  const raw = Number(process.env.NEXT_PUBLIC_PARTIAL_COD_ONLINE_PERCENT);
-  return Number.isFinite(raw) && raw > 0 && raw < 100 ? raw : 50;
-})();
-
-/**
- * Split an order total into the online (prepaid) and COD portions for a
- * partial-COD order. The online part is rounded to the rupee and the COD part
- * takes the remainder, so the two always sum back to exactly `total`.
- */
-export function splitPartialCod(
-  total: number,
-  onlinePercent: number = PARTIAL_COD_ONLINE_PERCENT
-): { online: number; cod: number } {
-  const online = Math.round((total * onlinePercent) / 100);
-  return { online, cod: Math.max(0, total - online) };
-}
-
 // Customers can cancel their own order within this many hours of placing it,
 // as long as it hasn't moved past "confirmed" (i.e. not yet packed/shipped).
 // Mirrors the Return & Cancellation Policy (/returns).
