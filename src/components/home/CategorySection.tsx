@@ -55,6 +55,7 @@ const categoryBaseColors: Record<string, string> = {
   "smart-watches": "#a92a47",
   "graphic-pads": "#f95702",
   "landline-phones": "#5047e5",
+  keyboard: "#6c4121",
 };
 
 // Build a vibrant, glossy left-to-right gradient from a base colour. The full
