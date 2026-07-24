@@ -3,6 +3,7 @@ import { Inter } from "next/font/google";
 import { Toaster } from "sonner";
 import { ReduxProvider } from "@/store/provider";
 import { ServiceWorkerRegister } from "@/components/shared/ServiceWorkerRegister";
+import { MetaPixel } from "@/components/shared/MetaPixel";
 import {
   SITE_URL,
   SITE_NAME,
@@ -110,6 +111,7 @@ export default function RootLayout({
         <meta name="mobile-web-app-capable" content="yes" />
       </head>
       <body>
+        <MetaPixel />
         <script {...jsonLdScriptProps(organizationJsonLd())} />
         <script {...jsonLdScriptProps(websiteJsonLd())} />
         <ReduxProvider>
