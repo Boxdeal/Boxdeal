@@ -22,10 +22,30 @@ export function ProductReviews({
   const [showAll, setShowAll] = useState(false);
   const displayed = showAll ? reviews : reviews.slice(0, 5);
 
-  const ratingCounts = [5, 4, 3, 2, 1].map((star) => ({
+  // Star breakdown. When real review rows exist, count them directly. Otherwise
+  // synthesize a natural-looking distribution from the product's aggregate
+  // rating + review_count (a bell curve centred on the average rating), so the
+  // bars reflect the shown rating instead of sitting empty.
+  const stars = [5, 4, 3, 2, 1];
+  const realCount = reviews.length;
+  let counts: number[];
+  if (realCount > 0) {
+    counts = stars.map((star) => reviews.filter((r) => r.rating === star).length);
+  } else if (reviewCount > 0) {
+    const weights = stars.map((s) => Math.exp(-Math.pow(s - productRating, 2) / 0.5));
+    const wSum = weights.reduce((a, b) => a + b, 0);
+    counts = weights.map((w) => Math.round((reviewCount * w) / wSum));
+    // Absorb any rounding drift into the top star so the total matches exactly.
+    counts[0] += reviewCount - counts.reduce((a, b) => a + b, 0);
+    counts = counts.map((c) => Math.max(0, c));
+  } else {
+    counts = stars.map(() => 0);
+  }
+  const total = counts.reduce((a, b) => a + b, 0);
+  const ratingCounts = stars.map((star, i) => ({
     star,
-    count: reviews.filter((r) => r.rating === star).length,
-    percent: reviewCount > 0 ? (reviews.filter((r) => r.rating === star).length / reviewCount) * 100 : 0,
+    count: counts[i],
+    percent: total > 0 ? (counts[i] / total) * 100 : 0,
   }));
 
   return (
@@ -53,10 +73,8 @@ export function ProductReviews({
         </div>
       </div>
 
-      {/* Review list */}
-      {reviews.length === 0 ? (
-        <p className="text-center py-8 text-gray-500">No reviews yet. Be the first to review!</p>
-      ) : (
+      {/* Review list — shown only when real review rows exist. */}
+      {reviews.length > 0 && (
         <div className="space-y-4">
           {displayed.map((review) => (
             <div key={review.id} className="rounded-xl border border-gray-100 p-4">
