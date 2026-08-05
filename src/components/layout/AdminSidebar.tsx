@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard, ShoppingBag, Package, Users,
-  Tag, Ticket, BarChart3, LogOut,
+  Tag, Ticket, BarChart3, LogOut, Sparkles,
 } from "lucide-react";
 import { cn } from "@/lib/utils/helpers";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
@@ -15,6 +15,7 @@ const navItems = [
   { label: "Dashboard",   href: "/admin",            icon: LayoutDashboard },
   { label: "Orders",      href: "/admin/orders",     icon: Package },
   { label: "Products",    href: "/admin/products",   icon: ShoppingBag },
+  { label: "Featured & Deals", href: "/admin/featured", icon: Sparkles },
   { label: "Categories",  href: "/admin/categories", icon: Tag },
   { label: "Customers",   href: "/admin/customers",  icon: Users },
   { label: "Coupons",     href: "/admin/coupons",    icon: Ticket },

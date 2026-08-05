@@ -24,6 +24,32 @@ function slugify(s: string) {
     .slice(0, 80);
 }
 
+// GET: admin product search, used by the Featured & Deals picker.
+export async function GET(req: NextRequest) {
+  const auth = await requireAdmin();
+  if ("error" in auth) return NextResponse.json({ error: auth.error }, { status: auth.status });
+
+  const q = (req.nextUrl.searchParams.get("q") ?? "").trim();
+  if (q.length < 2) return NextResponse.json({ data: [] });
+
+  // Escape PostgREST's or() delimiters so a stray comma/paren can't break the filter.
+  const safe = q.replace(/[,()\\]/g, " ");
+
+  const admin = getSupabaseAdminClient();
+  const { data, error } = await admin
+    .from("products")
+    .select(`
+      id, name, sku, selling_price, stock_quantity, is_active, is_featured, is_deal_of_day,
+      product_images(image_url, thumbnail_url, is_primary)
+    `)
+    .or(`name.ilike.%${safe}%,sku.ilike.%${safe}%`)
+    .order("created_at", { ascending: false })
+    .limit(20);
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+  return NextResponse.json({ data: data ?? [] });
+}
+
 export async function POST(req: NextRequest) {
   const auth = await requireAdmin();
   if ("error" in auth) return NextResponse.json({ error: auth.error }, { status: auth.status });

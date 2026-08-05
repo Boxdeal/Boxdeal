@@ -99,15 +99,17 @@ export default async function AdminProductsPage({ searchParams }: Props) {
         ))}
       </div>
 
-      {/* The homepage only renders the first N of each list, so flag overflow here. */}
-      {active === "featured" && counts.featured > 10 && (
+      {(active === "featured" || active === "deal-of-day") && (
         <p className="text-xs text-gray-500">
-          The homepage shows only the top 10 featured products (by units sold).
-        </p>
-      )}
-      {active === "deal-of-day" && counts["deal-of-day"] > 8 && (
-        <p className="text-xs text-gray-500">
-          The homepage shows only the 8 most recently created deal-of-the-day products.
+          {active === "featured"
+            ? "The homepage shows the top 10 featured products (by units sold)."
+            : "The homepage shows the 8 newest deal-of-the-day products."}{" "}
+          <Link
+            href={active === "featured" ? "/admin/featured" : "/admin/featured?tab=deal-of-day"}
+            className="font-semibold text-brand-600 hover:underline"
+          >
+            Manage this section →
+          </Link>
         </p>
       )}
 
