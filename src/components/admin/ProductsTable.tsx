@@ -15,6 +15,8 @@ interface ProductRow {
   selling_price: number;
   stock_quantity: number;
   is_active: boolean;
+  is_featured: boolean;
+  is_deal_of_day: boolean;
   category: { name: string } | null;
   subcategory: { name: string } | null;
   brand: { name: string } | null;
@@ -86,13 +88,14 @@ export function ProductsTable({ products }: { products: ProductRow[] }) {
               <th className="px-4 py-3 text-left font-semibold text-gray-600">Price</th>
               <th className="px-4 py-3 text-left font-semibold text-gray-600">Stock</th>
               <th className="px-4 py-3 text-left font-semibold text-gray-600">Status</th>
+              <th className="px-4 py-3 text-left font-semibold text-gray-600">Placement</th>
               <th className="px-4 py-3" />
             </tr>
           </thead>
           <tbody>
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-4 py-10 text-center text-gray-400">
+                <td colSpan={7} className="px-4 py-10 text-center text-gray-400">
                   No products found
                 </td>
               </tr>
@@ -131,6 +134,23 @@ export function ProductsTable({ products }: { products: ProductRow[] }) {
                     <span className={cn("rounded-full px-2 py-0.5 text-xs font-semibold", p.is_active ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500")}>
                       {p.is_active ? "Active" : "Hidden"}
                     </span>
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex flex-wrap gap-1">
+                      {p.is_featured && (
+                        <span className="rounded-full bg-purple-100 px-2 py-0.5 text-xs font-semibold text-purple-700">
+                          Featured
+                        </span>
+                      )}
+                      {p.is_deal_of_day && (
+                        <span className="rounded-full bg-orange-100 px-2 py-0.5 text-xs font-semibold text-orange-700">
+                          Deal of Day
+                        </span>
+                      )}
+                      {!p.is_featured && !p.is_deal_of_day && (
+                        <span className="text-xs text-gray-300">—</span>
+                      )}
+                    </div>
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-end gap-1">

@@ -6,19 +6,24 @@ import { ProductsTable } from "@/components/admin/ProductsTable";
 
 export const metadata: Metadata = { title: "Products — Admin" };
 
+type Filter = "all" | "low-stock" | "featured" | "deal-of-day";
+
 interface Props {
   searchParams: Promise<{ filter?: string }>;
 }
 
 export default async function AdminProductsPage({ searchParams }: Props) {
   const { filter } = await searchParams;
-  const lowStockOnly = filter === "low-stock";
+  const active: Filter =
+    filter === "low-stock" || filter === "featured" || filter === "deal-of-day"
+      ? filter
+      : "all";
 
   const supabase = await getSupabaseServerClient();
   const { data } = await supabase
     .from("products")
     .select(`
-      id, name, sku, selling_price, mrp, stock_quantity, low_stock_threshold, is_active, is_featured,
+      id, name, sku, selling_price, mrp, stock_quantity, low_stock_threshold, is_active, is_featured, is_deal_of_day,
       category:categories!category_id(name),
       subcategory:subcategories!subcategory_id(name),
       brand:brands!brand_id(name),
@@ -26,22 +31,51 @@ export default async function AdminProductsPage({ searchParams }: Props) {
     `)
     .order("created_at", { ascending: false });
 
+  const all = data ?? [];
+
   // Low-stock = active products at/under their threshold. PostgREST can't compare
   // two columns in a filter, so we narrow in JS.
-  const products = lowStockOnly
-    ? (data ?? []).filter(
-        (p) => p.is_active && (p.stock_quantity ?? 0) <= (p.low_stock_threshold ?? 0)
-      )
-    : (data ?? []);
+  const isLowStock = (p: (typeof all)[number]) =>
+    p.is_active && (p.stock_quantity ?? 0) <= (p.low_stock_threshold ?? 0);
+
+  const counts = {
+    all: all.length,
+    "low-stock": all.filter(isLowStock).length,
+    featured: all.filter((p) => p.is_featured).length,
+    "deal-of-day": all.filter((p) => p.is_deal_of_day).length,
+  } satisfies Record<Filter, number>;
+
+  const products =
+    active === "low-stock"  ? all.filter(isLowStock)
+    : active === "featured"    ? all.filter((p) => p.is_featured)
+    : active === "deal-of-day" ? all.filter((p) => p.is_deal_of_day)
+    : all;
+
+  const tabs: Array<{ key: Filter; label: string; href: string }> = [
+    { key: "all",         label: "All",             href: "/admin/products" },
+    { key: "low-stock",   label: "Low Stock",       href: "/admin/products?filter=low-stock" },
+    { key: "featured",    label: "Featured",        href: "/admin/products?filter=featured" },
+    { key: "deal-of-day", label: "Deal of the Day", href: "/admin/products?filter=deal-of-day" },
+  ];
 
   return (
     <div className="p-6 space-y-4">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <h1 className="text-2xl font-bold text-gray-900">Products</h1>
-          {lowStockOnly && (
+          {active === "low-stock" && (
             <span className="rounded-full bg-yellow-100 px-3 py-1 text-xs font-semibold text-yellow-700">
               Low stock ({products.length})
+            </span>
+          )}
+          {active === "featured" && (
+            <span className="rounded-full bg-purple-100 px-3 py-1 text-xs font-semibold text-purple-700">
+              Featured ({products.length})
+            </span>
+          )}
+          {active === "deal-of-day" && (
+            <span className="rounded-full bg-orange-100 px-3 py-1 text-xs font-semibold text-orange-700">
+              Deal of the Day ({products.length})
             </span>
           )}
         </div>
@@ -53,20 +87,29 @@ export default async function AdminProductsPage({ searchParams }: Props) {
         </Link>
       </div>
 
-      <div className="flex gap-2">
-        <Link
-          href="/admin/products"
-          className={`rounded-full px-4 py-1.5 text-sm font-medium ${!lowStockOnly ? "bg-brand-500 text-white" : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-50"}`}
-        >
-          All
-        </Link>
-        <Link
-          href="/admin/products?filter=low-stock"
-          className={`rounded-full px-4 py-1.5 text-sm font-medium ${lowStockOnly ? "bg-brand-500 text-white" : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-50"}`}
-        >
-          Low Stock
-        </Link>
+      <div className="flex flex-wrap gap-2">
+        {tabs.map((t) => (
+          <Link
+            key={t.key}
+            href={t.href}
+            className={`rounded-full px-4 py-1.5 text-sm font-medium ${active === t.key ? "bg-brand-500 text-white" : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-50"}`}
+          >
+            {t.label} ({counts[t.key]})
+          </Link>
+        ))}
       </div>
+
+      {/* The homepage only renders the first N of each list, so flag overflow here. */}
+      {active === "featured" && counts.featured > 10 && (
+        <p className="text-xs text-gray-500">
+          The homepage shows only the top 10 featured products (by units sold).
+        </p>
+      )}
+      {active === "deal-of-day" && counts["deal-of-day"] > 8 && (
+        <p className="text-xs text-gray-500">
+          The homepage shows only the 8 most recently created deal-of-the-day products.
+        </p>
+      )}
 
       <ProductsTable products={products as never} />
     </div>
