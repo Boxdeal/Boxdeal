@@ -177,6 +177,7 @@ export async function getPeriodStats(
     orders: 0, paidOrders: 0, revenue: 0,
     pendingOrders: 0, pendingRevenue: 0,
     lostOrders: 0, lostRevenue: 0,
+    byStatus: emptyStatus(),
   });
 
   const byStatus = emptyStatus();
@@ -205,6 +206,8 @@ export async function getPeriodStats(
     // COD is the "postpaid" bucket; anything else is money taken up front.
     const pay = byPayment[o.payment_method === "cod" ? "cod" : "prepaid"];
     pay.orders++;
+    const payBucket = pay.byStatus[o.status] ?? (pay.byStatus[o.status] = { count: 0, revenue: 0 });
+    payBucket.count++;
 
     if (paid) {
       revenue += amount;
@@ -213,6 +216,7 @@ export async function getPeriodStats(
       day.revenue += amount;
       pay.paidOrders++;
       pay.revenue += amount;
+      payBucket.revenue += amount;
       if (o.payment_method === "cod") day.codRevenue += amount;
       else day.prepaidRevenue += amount;
     } else if (o.status === "cancelled" || o.status === "returned" || o.payment_status === "refunded") {

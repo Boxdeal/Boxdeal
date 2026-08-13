@@ -406,6 +406,8 @@ export interface PaymentSplit {
   pendingRevenue: number;
   lostOrders: number;
   lostRevenue: number;
+  /** Status breakdown for THIS method only, so drill-down pills stay in scope. */
+  byStatus: Record<OrderStatus, { count: number; revenue: number }>;
 }
 
 // Period-scoped analytics, all computed in IST. Revenue fields count PAID

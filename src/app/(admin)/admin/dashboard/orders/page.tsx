@@ -78,6 +78,9 @@ export default async function OrdersDetailPage({ searchParams }: Props) {
   const totals = split
     ? { orders: split.orders, paidOrders: split.paidOrders, revenue: split.revenue }
     : { orders: p.orders, paidOrders: p.paidOrders, revenue: p.revenue };
+  // Status pills must count only the selected payment bucket, otherwise they
+  // contradict the totals above them.
+  const statusCounts = split ? split.byStatus : p.byStatus;
 
   const title = filter === "pending" ? "Pending Orders"
     : filter === "overdue" ? "Overdue Packing"
@@ -175,15 +178,15 @@ export default async function OrdersDetailPage({ searchParams }: Props) {
           href={linkWith({})}
           className={`rounded-full px-4 py-1.5 text-sm font-medium ${allActive ? "bg-brand-500 text-white" : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-50"}`}
         >
-          All ({p.orders})
+          All ({totals.orders})
         </Link>
-        {STATUS_ORDER.filter((s) => p.byStatus[s].count > 0).map((s) => (
+        {STATUS_ORDER.filter((s) => statusCounts[s].count > 0).map((s) => (
           <Link
             key={s}
             href={linkWith({ status: s })}
             className={`rounded-full px-4 py-1.5 text-sm font-medium ${status === s && !filter ? "bg-brand-500 text-white" : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-50"}`}
           >
-            {ORDER_STATUS_LABELS[s]} ({p.byStatus[s].count})
+            {ORDER_STATUS_LABELS[s]} ({statusCounts[s].count})
           </Link>
         ))}
       </div>
