@@ -1,4 +1,4 @@
-import type { OrderStatus } from "@/types";
+import type { OrderStatus, PaymentBucket, PaymentMethod, PaymentStatus } from "@/types";
 
 export const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
 
@@ -39,6 +39,27 @@ export const ORDER_STATUS_COLORS: Record<OrderStatus, string> = {
   delivered:        "bg-green-100 text-green-700",
   cancelled:        "bg-red-100 text-red-700",
   returned:         "bg-gray-100 text-gray-700",
+};
+
+export const PAYMENT_STATUS_LABELS: Record<PaymentStatus, string> = {
+  pending:            "Unpaid",
+  paid:               "Paid",
+  failed:             "Failed",
+  refunded:           "Refunded",
+  partially_refunded: "Part refunded",
+};
+
+// The dashboard groups payment methods into two buckets: money taken up front
+// (prepaid) and money collected on delivery (COD / "postpaid").
+export const PAYMENT_BUCKET_LABELS: Record<PaymentBucket, string> = {
+  prepaid: "Prepaid",
+  cod:     "COD",
+};
+
+/** Which payment_method values roll up into each dashboard bucket. */
+export const PAYMENT_BUCKET_METHODS: Record<PaymentBucket, PaymentMethod[]> = {
+  prepaid: ["razorpay"],
+  cod:     ["cod"],
 };
 
 export const SORT_OPTIONS = [

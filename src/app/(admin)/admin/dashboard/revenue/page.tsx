@@ -8,8 +8,10 @@ import { OrdersTable } from "@/components/admin/OrdersTable";
 import { PeriodSelector } from "@/components/admin/PeriodSelector";
 import { getPeriodStats, getISTPeriodRange, pctChange } from "@/lib/admin/periods";
 import { formatPrice, formatCompactNumber } from "@/lib/utils/format";
-import { ORDER_STATUS_LABELS } from "@/constants";
-import type { DashboardPeriod, Order, OrderStatus } from "@/types";
+import { ORDER_STATUS_LABELS, PAYMENT_BUCKET_LABELS } from "@/constants";
+import type { DashboardPeriod, Order, OrderStatus, PaymentBucket } from "@/types";
+
+const PAY_BUCKETS: PaymentBucket[] = ["prepaid", "cod"];
 
 export const metadata: Metadata = { title: "Revenue — Admin" };
 export const dynamic = "force-dynamic";
@@ -23,6 +25,12 @@ export default async function RevenueDetailPage({ searchParams }: Props) {
 
   const p = await getPeriodStats(period, { from, to });
   const range = getISTPeriodRange(period, { from, to });
+
+  // Keep the active period on drill-down links.
+  const q = new URLSearchParams({ period });
+  if (from) q.set("from", from);
+  if (to) q.set("to", to);
+  const qs = `?${q.toString()}`;
 
   // The paid orders that make up this revenue.
   const admin = getSupabaseAdminClient();
@@ -66,12 +74,54 @@ export default async function RevenueDetailPage({ searchParams }: Props) {
 
       <div className="grid gap-4 md:grid-cols-2">
         <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-          <p className="mb-3 text-sm font-semibold text-gray-700">Payment method split (paid)</p>
-          <div className="space-y-2 text-sm">
-            <div className="flex justify-between"><span className="text-gray-500">Online (prepaid)</span><span className="font-semibold">{formatPrice(p.onlineRevenue)}</span></div>
-            <div className="flex justify-between"><span className="text-gray-500">COD (delivered)</span><span className="font-semibold">{formatPrice(p.codRevenue)}</span></div>
-            <div className="flex justify-between border-t border-gray-100 pt-2"><span className="text-gray-700 font-medium">Total</span><span className="font-black">{formatPrice(p.revenue)}</span></div>
-          </div>
+          <p className="mb-3 text-sm font-semibold text-gray-700">Prepaid vs COD</p>
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-xs text-gray-400">
+                <th className="pb-2 text-left font-medium">Method</th>
+                <th className="pb-2 text-right font-medium">Orders</th>
+                <th className="pb-2 text-right font-medium">Paid</th>
+                <th className="pb-2 text-right font-medium">Revenue</th>
+              </tr>
+            </thead>
+            <tbody>
+              {PAY_BUCKETS.map((b) => (
+                <tr key={b} className="border-t border-gray-50">
+                  <td className="py-2">
+                    <Link href={`/admin/dashboard/orders${qs}&pay=${b}`} className="font-medium text-gray-700 hover:text-brand-600">
+                      {PAYMENT_BUCKET_LABELS[b]}
+                    </Link>
+                  </td>
+                  <td className="py-2 text-right text-gray-500">{p.byPayment[b].orders}</td>
+                  <td className="py-2 text-right text-gray-500">{p.byPayment[b].paidOrders}</td>
+                  <td className="py-2 text-right font-semibold text-gray-900">{formatPrice(p.byPayment[b].revenue)}</td>
+                </tr>
+              ))}
+              <tr className="border-t border-gray-200">
+                <td className="pt-2 font-medium text-gray-700">Total</td>
+                <td className="pt-2 text-right text-gray-500">{p.orders}</td>
+                <td className="pt-2 text-right text-gray-500">{p.paidOrders}</td>
+                <td className="pt-2 text-right font-black">{formatPrice(p.revenue)}</td>
+              </tr>
+            </tbody>
+          </table>
+
+          {(p.byPayment.cod.pendingOrders > 0 || p.byPayment.prepaid.pendingOrders > 0) && (
+            <div className="mt-3 space-y-1 border-t border-gray-100 pt-3 text-xs text-gray-500">
+              {p.byPayment.cod.pendingOrders > 0 && (
+                <p>
+                  COD yet to collect: <strong className="text-gray-700">{formatPrice(p.byPayment.cod.pendingRevenue)}</strong>{" "}
+                  ({p.byPayment.cod.pendingOrders} orders in transit)
+                </p>
+              )}
+              {p.byPayment.prepaid.pendingOrders > 0 && (
+                <p>
+                  Prepaid unpaid: <strong className="text-gray-700">{formatPrice(p.byPayment.prepaid.pendingRevenue)}</strong>{" "}
+                  ({p.byPayment.prepaid.pendingOrders} orders)
+                </p>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
@@ -89,7 +139,7 @@ export default async function RevenueDetailPage({ searchParams }: Props) {
       </div>
 
       <section>
-        <RevenueChart data={p.chart} title="Daily revenue (paid)" />
+        <RevenueChart split data={p.chart} title="Daily revenue — prepaid vs COD" />
       </section>
 
       <section>

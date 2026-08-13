@@ -375,15 +375,34 @@ export interface RevenueChartPoint {
   date: string;
   revenue: number;
   orders: number;
+  /** Same-day revenue split by how the money came in (paid orders only). */
+  prepaidRevenue: number;
+  codRevenue: number;
 }
 
 export type DashboardPeriod =
   | "today"
+  | "yesterday"
   | "week"
   | "month"
   | "last_month"
   | "all"
   | "custom";
+
+/** How the dashboard buckets a payment method. COD is the "postpaid" bucket. */
+export type PaymentBucket = "prepaid" | "cod";
+
+// One payment method's slice of a period. `revenue` is money actually realised
+// (prepaid = captured by Razorpay, COD = collected on delivery); `pending` is
+// money still in flight — COD parcels not yet delivered, or prepaid orders
+// where the customer never completed payment.
+export interface PaymentSplit {
+  orders: number;
+  paidOrders: number;
+  revenue: number;
+  pendingOrders: number;
+  pendingRevenue: number;
+}
 
 // Period-scoped analytics, all computed in IST. Revenue fields count PAID
 // orders only; `orders` counts every order in the window.
@@ -394,10 +413,9 @@ export interface PeriodStats {
   orders: number;
   paidOrders: number;
   revenue: number;
-  onlineRevenue: number;
-  codRevenue: number;
   avgOrderValue: number;
   byStatus: Record<OrderStatus, { count: number; revenue: number }>;
+  byPayment: Record<PaymentBucket, PaymentSplit>;
   chart: RevenueChartPoint[];
   prevRevenue: number;
   prevOrders: number;

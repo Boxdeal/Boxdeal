@@ -1,6 +1,8 @@
 import { fromZonedTime, formatInTimeZone } from "date-fns-tz";
 import { getSupabaseAdminClient } from "@/lib/supabase/server";
-import type { DashboardPeriod, OrderStatus, PeriodStats, RevenueChartPoint } from "@/types";
+import type {
+  DashboardPeriod, OrderStatus, PaymentBucket, PaymentSplit, PeriodStats, RevenueChartPoint,
+} from "@/types";
 
 // All admin analytics are computed in IST so a "day" matches the business day
 // in India regardless of the (UTC) server timezone. Never slice toISOString()
@@ -20,6 +22,11 @@ export function istDayStart(ymd: string): Date {
 /** UTC instant for the very end (23:59:59.999) of the IST calendar day `ymd`. */
 function istDayEnd(ymd: string): Date {
   return fromZonedTime(`${ymd}T23:59:59.999`, IST);
+}
+
+/** Human label for an IST calendar day key, e.g. "13 Aug 2026". */
+export function prettyDay(ymd: string): string {
+  return formatInTimeZone(istDayStart(ymd), IST, "dd MMM yyyy");
 }
 
 /** Add `days` to a YYYY-MM-DD string (calendar arithmetic, no timezone drift). */
@@ -69,6 +76,11 @@ export function getISTPeriodRange(
     case "today":
       return build(todayKey, todayKey, "Today");
 
+    case "yesterday": {
+      const y = addDaysKey(todayKey, -1);
+      return build(y, y, "Yesterday");
+    }
+
     case "week": {
       // ISO week: Monday-start. getUTCDay on the IST day key gives the weekday.
       const [y, m, d] = todayKey.split("-").map(Number);
@@ -96,7 +108,8 @@ export function getISTPeriodRange(
       const to = opts.to && /^\d{4}-\d{2}-\d{2}$/.test(opts.to) ? opts.to : todayKey;
       // Guard reversed range.
       const [s, e] = from <= to ? [from, to] : [to, from];
-      return build(s, e, `${s} → ${e}`);
+      // A single-day pick ("kisi bhi din") reads better as just that date.
+      return build(s, e, s === e ? prettyDay(s) : `${prettyDay(s)} → ${prettyDay(e)}`);
     }
 
     case "all":
@@ -160,14 +173,20 @@ export async function getPeriodStats(
     returned: { count: 0, revenue: 0 },
   });
 
+  const emptySplit = (): PaymentSplit => ({
+    orders: 0, paidOrders: 0, revenue: 0, pendingOrders: 0, pendingRevenue: 0,
+  });
+
   const byStatus = emptyStatus();
-  const chartMap = new Map<string, { revenue: number; orders: number }>();
+  const byPayment: Record<PaymentBucket, PaymentSplit> = {
+    prepaid: emptySplit(),
+    cod:     emptySplit(),
+  };
+  const chartMap = new Map<string, { revenue: number; orders: number; prepaidRevenue: number; codRevenue: number }>();
 
   let orders = 0;
   let revenue = 0;
   let paidOrders = 0;
-  let onlineRevenue = 0;
-  let codRevenue = 0;
 
   for (const o of rows) {
     const amount = Number(o.total_amount) || 0;
@@ -178,16 +197,28 @@ export async function getPeriodStats(
     bucket.count++;
 
     const key = istDayKey(new Date(o.placed_at));
-    const day = chartMap.get(key) ?? { revenue: 0, orders: 0 };
+    const day = chartMap.get(key) ?? { revenue: 0, orders: 0, prepaidRevenue: 0, codRevenue: 0 };
     day.orders++;
+
+    // COD is the "postpaid" bucket; anything else is money taken up front.
+    const pay = byPayment[o.payment_method === "cod" ? "cod" : "prepaid"];
+    pay.orders++;
 
     if (paid) {
       revenue += amount;
       paidOrders++;
       bucket.revenue += amount;
       day.revenue += amount;
-      if (o.payment_method === "cod") codRevenue += amount;
-      else onlineRevenue += amount;
+      pay.paidOrders++;
+      pay.revenue += amount;
+      if (o.payment_method === "cod") day.codRevenue += amount;
+      else day.prepaidRevenue += amount;
+    } else if (o.status !== "cancelled" && o.status !== "returned" && o.payment_status !== "refunded") {
+      // Still in flight: COD yet to be collected, or a prepaid order the
+      // customer never paid for. Dead orders are excluded so the number
+      // reflects money that can still land.
+      pay.pendingOrders++;
+      pay.pendingRevenue += amount;
     }
     chartMap.set(key, day);
   }
@@ -202,7 +233,7 @@ export async function getPeriodStats(
 
   const chart: RevenueChartPoint[] = Array.from(chartMap.entries())
     .sort(([a], [b]) => (a < b ? -1 : 1))
-    .map(([date, v]) => ({ date, revenue: v.revenue, orders: v.orders }));
+    .map(([date, v]) => ({ date, ...v }));
 
   return {
     label: range.label,
@@ -211,10 +242,9 @@ export async function getPeriodStats(
     orders,
     paidOrders,
     revenue,
-    onlineRevenue,
-    codRevenue,
     avgOrderValue: paidOrders > 0 ? Math.round(revenue / paidOrders) : 0,
     byStatus,
+    byPayment,
     chart,
     prevRevenue,
     prevOrders,

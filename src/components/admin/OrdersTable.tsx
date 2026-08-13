@@ -2,7 +2,7 @@ import Link from "next/link";
 import { AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils/helpers";
 import { formatPrice, formatDateTime } from "@/lib/utils/format";
-import { ORDER_STATUS_LABELS, ORDER_STATUS_COLORS } from "@/constants";
+import { ORDER_STATUS_LABELS, ORDER_STATUS_COLORS, PAYMENT_STATUS_LABELS } from "@/constants";
 import type { Order } from "@/types";
 
 interface OrdersTableProps {
@@ -20,6 +20,7 @@ export function OrdersTable({ orders }: OrdersTableProps) {
             <th className="px-4 py-3 text-left font-semibold text-gray-600">Order</th>
             <th className="px-4 py-3 text-left font-semibold text-gray-600">Customer</th>
             <th className="px-4 py-3 text-left font-semibold text-gray-600">Amount</th>
+            <th className="px-4 py-3 text-left font-semibold text-gray-600">Payment</th>
             <th className="px-4 py-3 text-left font-semibold text-gray-600">Status</th>
             <th className="px-4 py-3 text-left font-semibold text-gray-600">Date</th>
             <th className="px-4 py-3" />
@@ -54,6 +55,28 @@ export function OrdersTable({ orders }: OrdersTableProps) {
                 </td>
                 <td className="px-4 py-3 font-semibold text-gray-900">
                   {formatPrice(order.total_amount)}
+                </td>
+                <td className="px-4 py-3">
+                  <div className="flex flex-col gap-0.5">
+                    <span
+                      className={cn(
+                        "w-fit rounded-full px-2.5 py-0.5 text-xs font-semibold",
+                        order.payment_method === "cod"
+                          ? "bg-indigo-100 text-indigo-700"
+                          : "bg-brand-100 text-brand-700"
+                      )}
+                    >
+                      {order.payment_method === "cod" ? "COD" : "Prepaid"}
+                    </span>
+                    <span
+                      className={cn(
+                        "text-[11px] font-medium",
+                        order.payment_status === "paid" ? "text-green-600" : "text-gray-400"
+                      )}
+                    >
+                      {PAYMENT_STATUS_LABELS[order.payment_status] ?? order.payment_status}
+                    </span>
+                  </div>
                 </td>
                 <td className="px-4 py-3">
                   <span

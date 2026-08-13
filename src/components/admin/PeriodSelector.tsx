@@ -2,15 +2,21 @@
 
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { useState } from "react";
+import { CalendarDays } from "lucide-react";
 import type { DashboardPeriod } from "@/types";
 
 const PRESETS: { value: DashboardPeriod; label: string }[] = [
   { value: "today",      label: "Today" },
+  { value: "yesterday",  label: "Yesterday" },
   { value: "week",       label: "This Week" },
   { value: "month",      label: "This Month" },
   { value: "last_month", label: "Last Month" },
   { value: "all",        label: "All Time" },
 ];
+
+const pillBase = "rounded-full px-4 py-1.5 text-sm font-medium whitespace-nowrap transition-colors";
+const pillOn   = "bg-brand-500 text-white";
+const pillOff  = "bg-white border border-gray-200 text-gray-600 hover:bg-gray-50";
 
 /**
  * URL-driven period picker: preset pills + a custom from–to range. Preserves
@@ -22,8 +28,13 @@ export function PeriodSelector({ defaultPeriod = "today" }: { defaultPeriod?: Da
   const params = useSearchParams();
 
   const activePeriod = (params.get("period") as DashboardPeriod | null) ?? defaultPeriod;
-  const [from, setFrom] = useState(params.get("from") ?? "");
-  const [to, setTo] = useState(params.get("to") ?? "");
+  const urlFrom = params.get("from") ?? "";
+  const urlTo = params.get("to") ?? "";
+  const [from, setFrom] = useState(urlFrom);
+  const [to, setTo] = useState(urlTo);
+  // A custom range where both ends are the same day is a single-day view.
+  const isSingleDay = activePeriod === "custom" && !!urlFrom && urlFrom === urlTo;
+  const [day, setDay] = useState(isSingleDay ? urlFrom : "");
 
   function apply(next: Record<string, string | null>) {
     const sp = new URLSearchParams(params.toString());
@@ -34,12 +45,21 @@ export function PeriodSelector({ defaultPeriod = "today" }: { defaultPeriod?: Da
     router.push(`${pathname}?${sp.toString()}`);
   }
 
-  const selectPreset = (value: DashboardPeriod) =>
+  const selectPreset = (value: DashboardPeriod) => {
+    setDay("");
     apply({ period: value, from: null, to: null });
+  };
 
   const applyCustom = () => {
     if (!from || !to) return;
+    setDay(from === to ? from : "");
     apply({ period: "custom", from, to });
+  };
+
+  // "Kisi bhi din" — a single date is just a custom range with from === to.
+  const applyDay = (value: string) => {
+    setDay(value);
+    if (value) apply({ period: "custom", from: value, to: value });
   };
 
   return (
@@ -49,19 +69,32 @@ export function PeriodSelector({ defaultPeriod = "today" }: { defaultPeriod?: Da
           key={p.value}
           type="button"
           onClick={() => selectPreset(p.value)}
-          className={`rounded-full px-4 py-1.5 text-sm font-medium whitespace-nowrap transition-colors ${
-            activePeriod === p.value
-              ? "bg-brand-500 text-white"
-              : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-50"
-          }`}
+          className={`${pillBase} ${activePeriod === p.value ? pillOn : pillOff}`}
         >
           {p.label}
         </button>
       ))}
 
+      {/* Pick any single day */}
+      <label
+        className={`flex items-center gap-1.5 rounded-full border px-3 py-1 ${
+          isSingleDay ? "border-brand-500 bg-brand-50" : "border-gray-200 bg-white"
+        }`}
+      >
+        <CalendarDays className="h-3.5 w-3.5 text-gray-400" />
+        <span className="text-xs font-medium text-gray-500">Any day</span>
+        <input
+          type="date"
+          value={day}
+          onChange={(e) => applyDay(e.target.value)}
+          className="rounded bg-transparent px-1 py-0.5 text-sm text-gray-700 outline-none"
+          aria-label="Pick a single day"
+        />
+      </label>
+
       <div
         className={`flex items-center gap-1.5 rounded-full border px-2 py-1 ${
-          activePeriod === "custom" ? "border-brand-500 bg-brand-50" : "border-gray-200 bg-white"
+          activePeriod === "custom" && !isSingleDay ? "border-brand-500 bg-brand-50" : "border-gray-200 bg-white"
         }`}
       >
         <input

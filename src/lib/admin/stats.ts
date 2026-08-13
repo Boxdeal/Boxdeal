@@ -34,7 +34,7 @@ export async function getAdminDashboard(): Promise<{
   const fetchSince = chartStart < startOfMonth ? chartStart : startOfMonth;
 
   const [ordersRes, pendingRes, overdueRes, productsRes, customersRes, recentRes] = await Promise.all([
-    admin.from("orders").select("placed_at, total_amount, payment_status").gte("placed_at", fetchSince.toISOString()),
+    admin.from("orders").select("placed_at, total_amount, payment_status, payment_method").gte("placed_at", fetchSince.toISOString()),
     admin.from("orders").select("id", { count: "exact", head: true }).in("status", ["placed", "confirmed"]),
     admin.from("orders").select("id", { count: "exact", head: true }).eq("status", "placed").lt("pack_deadline", now.toISOString()),
     admin.from("products").select("stock_quantity, low_stock_threshold, is_active"),
@@ -46,9 +46,9 @@ export async function getAdminDashboard(): Promise<{
   const paid = (s: string) => s === "paid";
 
   // Pre-seed every chart day (as IST day keys) so gaps render as zero.
-  const buckets = new Map<string, { revenue: number; orders: number }>();
+  const buckets = new Map<string, { revenue: number; orders: number; prepaidRevenue: number; codRevenue: number }>();
   for (let i = 0; i < CHART_DAYS; i++) {
-    buckets.set(addDaysKey(chartStartKey, i), { revenue: 0, orders: 0 });
+    buckets.set(addDaysKey(chartStartKey, i), { revenue: 0, orders: 0, prepaidRevenue: 0, codRevenue: 0 });
   }
 
   let today_orders = 0, today_revenue = 0, month_orders = 0, month_revenue = 0;
@@ -68,7 +68,11 @@ export async function getAdminDashboard(): Promise<{
     const b = buckets.get(k);
     if (b) {
       b.orders++;
-      if (paid(o.payment_status)) b.revenue += amount;
+      if (paid(o.payment_status)) {
+        b.revenue += amount;
+        if (o.payment_method === "cod") b.codRevenue += amount;
+        else b.prepaidRevenue += amount;
+      }
     }
   }
 
@@ -87,11 +91,7 @@ export async function getAdminDashboard(): Promise<{
     month_orders,
   };
 
-  const chart: RevenueChartPoint[] = Array.from(buckets.entries()).map(([date, v]) => ({
-    date,
-    revenue: v.revenue,
-    orders:  v.orders,
-  }));
+  const chart: RevenueChartPoint[] = Array.from(buckets.entries()).map(([date, v]) => ({ date, ...v }));
 
   return { stats, chart, recentOrders: (recentRes.data ?? []) as Order[] };
 }

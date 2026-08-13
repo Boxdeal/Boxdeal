@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import {
   ShoppingBag, IndianRupee, Package, AlertTriangle,
-  Users, Clock, Receipt,
+  Users, Clock, Receipt, CreditCard, Banknote, Hourglass,
 } from "lucide-react";
 import { StatsCard } from "@/components/admin/StatsCard";
 import { RevenueChart } from "@/components/admin/RevenueChart";
@@ -63,6 +63,39 @@ export default async function AdminDashboard({ searchParams }: Props) {
     },
   ];
 
+  // Prepaid vs COD — counts and revenue kept strictly apart.
+  const { prepaid, cod } = p.byPayment;
+  const paymentCards = [
+    {
+      title:   `Prepaid Revenue · ${p.label}`,
+      value:   formatPrice(prepaid.revenue),
+      icon:    CreditCard,
+      variant: "success" as const,
+      href:    `/admin/dashboard/orders${qs}&pay=prepaid`,
+    },
+    {
+      title:   `COD Revenue · ${p.label}`,
+      value:   formatPrice(cod.revenue),
+      icon:    Banknote,
+      variant: "default" as const,
+      href:    `/admin/dashboard/orders${qs}&pay=cod`,
+    },
+    {
+      title:   `Prepaid Orders · ${p.label}`,
+      value:   `${prepaid.orders}`,
+      icon:    ShoppingBag,
+      variant: "default" as const,
+      href:    `/admin/dashboard/orders${qs}&pay=prepaid`,
+    },
+    {
+      title:   `COD Orders · ${p.label}`,
+      value:   `${cod.orders}`,
+      icon:    ShoppingBag,
+      variant: "default" as const,
+      href:    `/admin/dashboard/orders${qs}&pay=cod`,
+    },
+  ];
+
   // Live operational cards (always "right now", not period-scoped).
   const opsCards = [
     {
@@ -110,6 +143,39 @@ export default async function AdminDashboard({ searchParams }: Props) {
       </section>
 
       <section>
+        <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
+          <h2 className="text-lg font-semibold text-gray-700">Prepaid vs COD · {p.label}</h2>
+          <p className="text-xs text-gray-400">
+            Revenue counts paid orders only — prepaid captured online, COD collected on delivery.
+          </p>
+        </div>
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          {paymentCards.map((stat) => (
+            <StatsCard key={stat.title} {...stat} />
+          ))}
+        </div>
+        {(cod.pendingOrders > 0 || prepaid.pendingOrders > 0) && (
+          <div className="mt-4 flex flex-wrap gap-4 rounded-2xl border border-gray-100 bg-white p-4 text-sm shadow-sm">
+            <Hourglass className="h-4 w-4 flex-shrink-0 text-gray-400" />
+            {cod.pendingOrders > 0 && (
+              <span className="text-gray-600">
+                COD yet to collect:{" "}
+                <strong className="text-gray-900">{formatPrice(cod.pendingRevenue)}</strong>{" "}
+                <span className="text-gray-400">({cod.pendingOrders} orders in transit)</span>
+              </span>
+            )}
+            {prepaid.pendingOrders > 0 && (
+              <span className="text-gray-600">
+                Prepaid unpaid:{" "}
+                <strong className="text-gray-900">{formatPrice(prepaid.pendingRevenue)}</strong>{" "}
+                <span className="text-gray-400">({prepaid.pendingOrders} orders)</span>
+              </span>
+            )}
+          </div>
+        )}
+      </section>
+
+      <section>
         <h2 className="mb-4 text-lg font-semibold text-gray-700">Operations</h2>
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           {opsCards.map((stat) => (
@@ -119,7 +185,7 @@ export default async function AdminDashboard({ searchParams }: Props) {
       </section>
 
       <section>
-        <RevenueChart data={p.chart} title={`Revenue Trend · ${p.label}`} />
+        <RevenueChart split data={p.chart} title={`Revenue Trend · ${p.label}`} />
       </section>
 
       <section>
