@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, TrendingDown } from "lucide-react";
 import { getSupabaseAdminClient } from "@/lib/supabase/server";
 import { OrdersTable } from "@/components/admin/OrdersTable";
 import { PeriodSelector } from "@/components/admin/PeriodSelector";
@@ -74,8 +74,9 @@ export default async function OrdersDetailPage({ searchParams }: Props) {
 
   // Totals follow the payment bucket when one is selected, so the headline
   // numbers always match the list below them.
-  const totals = pay
-    ? { orders: p.byPayment[pay].orders, paidOrders: p.byPayment[pay].paidOrders, revenue: p.byPayment[pay].revenue }
+  const split = pay ? p.byPayment[pay] : null;
+  const totals = split
+    ? { orders: split.orders, paidOrders: split.paidOrders, revenue: split.revenue }
     : { orders: p.orders, paidOrders: p.paidOrders, revenue: p.revenue };
 
   const title = filter === "pending" ? "Pending Orders"
@@ -96,20 +97,54 @@ export default async function OrdersDetailPage({ searchParams }: Props) {
       </div>
 
       {/* Totals — scoped to the selected payment bucket when there is one */}
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className={`grid gap-4 ${split ? "sm:grid-cols-2 lg:grid-cols-4" : "sm:grid-cols-3"}`}>
         <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
           <p className="text-sm text-gray-500">Total Orders</p>
           <p className="mt-1 text-2xl font-black text-gray-900">{totals.orders}</p>
         </div>
         <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-          <p className="text-sm text-gray-500">Paid Orders</p>
-          <p className="mt-1 text-2xl font-black text-gray-900">{totals.paidOrders}</p>
-        </div>
-        <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-          <p className="text-sm text-gray-500">Revenue (paid)</p>
+          <p className="text-sm text-gray-500">{split ? "Collected" : "Revenue (paid)"}</p>
           <p className="mt-1 text-2xl font-black text-gray-900">{formatPrice(totals.revenue)}</p>
+          <p className="mt-1 text-xs text-gray-400">{totals.paidOrders} paid orders</p>
         </div>
+
+        {split ? (
+          <>
+            {/* Money still expected to land from this bucket. */}
+            <div className="rounded-2xl border border-amber-100 bg-amber-50/50 p-5 shadow-sm">
+              <p className="text-sm text-amber-700">Estimated incoming</p>
+              <p className="mt-1 text-2xl font-black text-amber-900">{formatPrice(split.pendingRevenue)}</p>
+              <p className="mt-1 text-xs text-amber-600">
+                {split.pendingOrders} order{split.pendingOrders === 1 ? "" : "s"} in transit
+              </p>
+            </div>
+            <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+              <p className="text-sm text-gray-500">Expected total</p>
+              <p className="mt-1 text-2xl font-black text-gray-900">
+                {formatPrice(split.revenue + split.pendingRevenue)}
+              </p>
+              <p className="mt-1 text-xs text-gray-400">collected + estimate</p>
+            </div>
+          </>
+        ) : (
+          <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+            <p className="text-sm text-gray-500">Paid Orders</p>
+            <p className="mt-1 text-2xl font-black text-gray-900">{totals.paidOrders}</p>
+          </div>
+        )}
       </div>
+
+      {/* What fell out of the estimate — cancelled/returned/refunded before collection. */}
+      {split && split.lostOrders > 0 && (
+        <div className="flex items-center gap-2 rounded-2xl border border-red-100 bg-red-50/50 px-4 py-3 text-sm">
+          <TrendingDown className="h-4 w-4 flex-shrink-0 text-red-500" />
+          <span className="text-gray-600">
+            <strong className="text-red-600">− {formatPrice(split.lostRevenue)}</strong> removed from the
+            estimate — {split.lostOrders} cancelled/returned order{split.lostOrders === 1 ? "" : "s"} that
+            never got collected.
+          </span>
+        </div>
+      )}
 
       {/* Payment method — prepaid vs COD */}
       <div className="flex flex-wrap items-center gap-2">

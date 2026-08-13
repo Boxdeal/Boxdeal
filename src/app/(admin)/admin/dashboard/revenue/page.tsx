@@ -44,6 +44,8 @@ export default async function RevenueDetailPage({ searchParams }: Props) {
     .limit(100);
 
   const revTrend = pctChange(p.revenue, p.prevRevenue);
+  const totalPending = p.byPayment.prepaid.pendingRevenue + p.byPayment.cod.pendingRevenue;
+  const totalLost = p.byPayment.prepaid.lostRevenue + p.byPayment.cod.lostRevenue;
 
   const cards = [
     { title: "Revenue (paid)", value: formatPrice(p.revenue), icon: IndianRupee, variant: "success" as const,
@@ -80,47 +82,48 @@ export default async function RevenueDetailPage({ searchParams }: Props) {
               <tr className="text-xs text-gray-400">
                 <th className="pb-2 text-left font-medium">Method</th>
                 <th className="pb-2 text-right font-medium">Orders</th>
-                <th className="pb-2 text-right font-medium">Paid</th>
-                <th className="pb-2 text-right font-medium">Revenue</th>
+                <th className="pb-2 text-right font-medium">Collected</th>
+                <th className="pb-2 text-right font-medium">Est. incoming</th>
+                <th className="pb-2 text-right font-medium">Expected</th>
               </tr>
             </thead>
             <tbody>
-              {PAY_BUCKETS.map((b) => (
-                <tr key={b} className="border-t border-gray-50">
-                  <td className="py-2">
-                    <Link href={`/admin/dashboard/orders${qs}&pay=${b}`} className="font-medium text-gray-700 hover:text-brand-600">
-                      {PAYMENT_BUCKET_LABELS[b]}
-                    </Link>
-                  </td>
-                  <td className="py-2 text-right text-gray-500">{p.byPayment[b].orders}</td>
-                  <td className="py-2 text-right text-gray-500">{p.byPayment[b].paidOrders}</td>
-                  <td className="py-2 text-right font-semibold text-gray-900">{formatPrice(p.byPayment[b].revenue)}</td>
-                </tr>
-              ))}
+              {PAY_BUCKETS.map((b) => {
+                const s = p.byPayment[b];
+                return (
+                  <tr key={b} className="border-t border-gray-50">
+                    <td className="py-2">
+                      <Link href={`/admin/dashboard/orders${qs}&pay=${b}`} className="font-medium text-gray-700 hover:text-brand-600">
+                        {PAYMENT_BUCKET_LABELS[b]}
+                      </Link>
+                    </td>
+                    <td className="py-2 text-right text-gray-500">{s.orders}</td>
+                    <td className="py-2 text-right font-semibold text-gray-900">{formatPrice(s.revenue)}</td>
+                    <td className="py-2 text-right text-amber-700">
+                      {s.pendingRevenue > 0 ? formatPrice(s.pendingRevenue) : "—"}
+                    </td>
+                    <td className="py-2 text-right font-semibold text-gray-900">
+                      {formatPrice(s.revenue + s.pendingRevenue)}
+                    </td>
+                  </tr>
+                );
+              })}
               <tr className="border-t border-gray-200">
                 <td className="pt-2 font-medium text-gray-700">Total</td>
                 <td className="pt-2 text-right text-gray-500">{p.orders}</td>
-                <td className="pt-2 text-right text-gray-500">{p.paidOrders}</td>
                 <td className="pt-2 text-right font-black">{formatPrice(p.revenue)}</td>
+                <td className="pt-2 text-right text-amber-700">{formatPrice(totalPending)}</td>
+                <td className="pt-2 text-right font-black">{formatPrice(p.revenue + totalPending)}</td>
               </tr>
             </tbody>
           </table>
 
-          {(p.byPayment.cod.pendingOrders > 0 || p.byPayment.prepaid.pendingOrders > 0) && (
-            <div className="mt-3 space-y-1 border-t border-gray-100 pt-3 text-xs text-gray-500">
-              {p.byPayment.cod.pendingOrders > 0 && (
-                <p>
-                  COD yet to collect: <strong className="text-gray-700">{formatPrice(p.byPayment.cod.pendingRevenue)}</strong>{" "}
-                  ({p.byPayment.cod.pendingOrders} orders in transit)
-                </p>
-              )}
-              {p.byPayment.prepaid.pendingOrders > 0 && (
-                <p>
-                  Prepaid unpaid: <strong className="text-gray-700">{formatPrice(p.byPayment.prepaid.pendingRevenue)}</strong>{" "}
-                  ({p.byPayment.prepaid.pendingOrders} orders)
-                </p>
-              )}
-            </div>
+          {totalLost > 0 && (
+            <p className="mt-3 border-t border-gray-100 pt-3 text-xs text-gray-500">
+              <strong className="text-red-600">− {formatPrice(totalLost)}</strong> excluded from the
+              estimate ({p.byPayment.prepaid.lostOrders + p.byPayment.cod.lostOrders} cancelled/returned
+              orders that were never collected).
+            </p>
           )}
         </div>
 

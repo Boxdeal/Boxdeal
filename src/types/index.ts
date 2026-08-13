@@ -392,16 +392,20 @@ export type DashboardPeriod =
 /** How the dashboard buckets a payment method. COD is the "postpaid" bucket. */
 export type PaymentBucket = "prepaid" | "cod";
 
-// One payment method's slice of a period. `revenue` is money actually realised
-// (prepaid = captured by Razorpay, COD = collected on delivery); `pending` is
-// money still in flight — COD parcels not yet delivered, or prepaid orders
-// where the customer never completed payment.
+// One payment method's slice of a period. Every order lands in exactly one of
+// three buckets so the numbers add up:
+//   revenue  — money already realised (prepaid captured, COD collected)
+//   pending  — the ESTIMATE still expected to land: live, uncollected orders
+//   lost     — was in the pipeline but died (cancelled / returned / refunded)
+//              before any money was collected, so it is NOT in the estimate
 export interface PaymentSplit {
   orders: number;
   paidOrders: number;
   revenue: number;
   pendingOrders: number;
   pendingRevenue: number;
+  lostOrders: number;
+  lostRevenue: number;
 }
 
 // Period-scoped analytics, all computed in IST. Revenue fields count PAID

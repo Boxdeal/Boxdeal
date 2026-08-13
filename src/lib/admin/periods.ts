@@ -174,7 +174,9 @@ export async function getPeriodStats(
   });
 
   const emptySplit = (): PaymentSplit => ({
-    orders: 0, paidOrders: 0, revenue: 0, pendingOrders: 0, pendingRevenue: 0,
+    orders: 0, paidOrders: 0, revenue: 0,
+    pendingOrders: 0, pendingRevenue: 0,
+    lostOrders: 0, lostRevenue: 0,
   });
 
   const byStatus = emptyStatus();
@@ -213,10 +215,14 @@ export async function getPeriodStats(
       pay.revenue += amount;
       if (o.payment_method === "cod") day.codRevenue += amount;
       else day.prepaidRevenue += amount;
-    } else if (o.status !== "cancelled" && o.status !== "returned" && o.payment_status !== "refunded") {
+    } else if (o.status === "cancelled" || o.status === "returned" || o.payment_status === "refunded") {
+      // Was in the pipeline but died before any money came in. Cancelling a COD
+      // order lands here, which is what pulls it back out of the estimate.
+      pay.lostOrders++;
+      pay.lostRevenue += amount;
+    } else {
       // Still in flight: COD yet to be collected, or a prepaid order the
-      // customer never paid for. Dead orders are excluded so the number
-      // reflects money that can still land.
+      // customer hasn't paid for yet. This is the estimate.
       pay.pendingOrders++;
       pay.pendingRevenue += amount;
     }

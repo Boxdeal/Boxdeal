@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import {
   ShoppingBag, IndianRupee, Package, AlertTriangle,
-  Users, Clock, Receipt, CreditCard, Banknote, Hourglass,
+  Users, Clock, Receipt, CreditCard, Banknote, Hourglass, TrendingDown,
 } from "lucide-react";
 import { StatsCard } from "@/components/admin/StatsCard";
 import { RevenueChart } from "@/components/admin/RevenueChart";
@@ -154,22 +154,36 @@ export default async function AdminDashboard({ searchParams }: Props) {
             <StatsCard key={stat.title} {...stat} />
           ))}
         </div>
-        {(cod.pendingOrders > 0 || prepaid.pendingOrders > 0) && (
-          <div className="mt-4 flex flex-wrap gap-4 rounded-2xl border border-gray-100 bg-white p-4 text-sm shadow-sm">
-            <Hourglass className="h-4 w-4 flex-shrink-0 text-gray-400" />
+        {(cod.pendingOrders > 0 || prepaid.pendingOrders > 0 || cod.lostOrders > 0) && (
+          <div className="mt-4 space-y-2 rounded-2xl border border-gray-100 bg-white p-4 text-sm shadow-sm">
             {cod.pendingOrders > 0 && (
-              <span className="text-gray-600">
-                COD yet to collect:{" "}
-                <strong className="text-gray-900">{formatPrice(cod.pendingRevenue)}</strong>{" "}
+              <p className="flex flex-wrap items-center gap-1.5 text-gray-600">
+                <Hourglass className="h-4 w-4 flex-shrink-0 text-amber-500" />
+                COD estimated incoming:{" "}
+                <strong className="text-gray-900">{formatPrice(cod.pendingRevenue)}</strong>
                 <span className="text-gray-400">({cod.pendingOrders} orders in transit)</span>
-              </span>
+                <span className="text-gray-400">
+                  · expected total {formatPrice(cod.revenue + cod.pendingRevenue)}
+                </span>
+              </p>
+            )}
+            {cod.lostOrders > 0 && (
+              <p className="flex flex-wrap items-center gap-1.5 text-gray-600">
+                <TrendingDown className="h-4 w-4 flex-shrink-0 text-red-500" />
+                <strong className="text-red-600">− {formatPrice(cod.lostRevenue)}</strong>
+                off the COD estimate
+                <span className="text-gray-400">
+                  ({cod.lostOrders} cancelled/returned, never collected)
+                </span>
+              </p>
             )}
             {prepaid.pendingOrders > 0 && (
-              <span className="text-gray-600">
+              <p className="flex flex-wrap items-center gap-1.5 text-gray-600">
+                <Hourglass className="h-4 w-4 flex-shrink-0 text-gray-400" />
                 Prepaid unpaid:{" "}
-                <strong className="text-gray-900">{formatPrice(prepaid.pendingRevenue)}</strong>{" "}
+                <strong className="text-gray-900">{formatPrice(prepaid.pendingRevenue)}</strong>
                 <span className="text-gray-400">({prepaid.pendingOrders} orders)</span>
-              </span>
+              </p>
             )}
           </div>
         )}
