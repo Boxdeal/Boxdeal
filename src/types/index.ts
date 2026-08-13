@@ -427,6 +427,36 @@ export interface PeriodStats {
   prevOrders: number;
 }
 
+// Per-product sales for a period. Money follows the same three-bucket rule as
+// PaymentSplit: `revenue` is collected, `pendingRevenue` is the estimate still
+// expected, and cancelled/returned units are tracked separately (never in the
+// estimate). Item value is quantity × selling_price, so order-level coupon and
+// admin discounts are NOT deducted here.
+export interface ProductSalesRow {
+  product_id: string;
+  product_name: string;
+  product_image: string | null;
+  product_sku: string;
+  orders: number;
+  units: number;
+  revenue: number;
+  pendingRevenue: number;
+  cancelledUnits: number;
+  prepaidUnits: number;
+  codUnits: number;
+}
+
+/** One IST day of sales for a single product. */
+export interface ProductDayRow {
+  date: string;
+  orders: number;
+  units: number;
+  revenue: number;
+  pendingRevenue: number;
+  prepaidRevenue: number;
+  codRevenue: number;
+}
+
 // ────────────────────────────────────────────────────────────
 // API response wrappers
 // ────────────────────────────────────────────────────────────

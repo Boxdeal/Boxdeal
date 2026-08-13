@@ -94,7 +94,15 @@ export default async function OrdersDetailPage({ searchParams }: Props) {
           <ArrowLeft className="h-4 w-4" /> Dashboard
         </Link>
         <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
-          <h1 className="text-2xl font-bold text-gray-900">{title} · {p.label}</h1>
+          <div className="flex flex-wrap items-baseline gap-3">
+            <h1 className="text-2xl font-bold text-gray-900">{title} · {p.label}</h1>
+            <Link
+              href={`/admin/dashboard/products?${base.toString()}`}
+              className="text-sm font-medium text-brand-600 hover:text-brand-700"
+            >
+              View product-wise →
+            </Link>
+          </div>
           <PeriodSelector defaultPeriod="today" />
         </div>
       </div>
