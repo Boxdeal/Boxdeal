@@ -2,7 +2,9 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { getSupabaseAdminClient } from "@/lib/supabase/server";
 import { OrdersTable } from "@/components/admin/OrdersTable";
+import { OrdersSearch } from "@/components/admin/OrdersSearch";
 import { getISTPeriodRange } from "@/lib/admin/periods";
+import { buildOrderSearchFilter } from "@/lib/admin/order-search";
 import type { DashboardPeriod, Order, OrderStatus } from "@/types";
 import { ORDER_STATUS_LABELS } from "@/constants";
 
@@ -13,13 +15,13 @@ export const dynamic = "force-dynamic";
 
 interface Props {
   searchParams: Promise<{
-    status?: OrderStatus; page?: string;
+    status?: OrderStatus; page?: string; q?: string;
     period?: DashboardPeriod; from?: string; to?: string;
   }>;
 }
 
 export default async function AdminOrdersPage({ searchParams }: Props) {
-  const { status, page: pageStr, period, from: fromDate, to: toDate } = await searchParams;
+  const { status, page: pageStr, q, period, from: fromDate, to: toDate } = await searchParams;
   const page = Math.max(1, Number(pageStr ?? 1));
   const per = 20;
   const from = (page - 1) * per;
@@ -42,11 +44,16 @@ export default async function AdminOrdersPage({ searchParams }: Props) {
       .lte("placed_at", range.end.toISOString());
   }
 
+  // Free-text search across order, customer, shipping and item fields.
+  const searchFilter = q ? await buildOrderSearchFilter(q) : null;
+  if (searchFilter) query = query.or(searchFilter);
+
   const { data: orders, count } = await query;
   const totalPages = Math.ceil((count ?? 0) / per);
 
-  // Carry date filters through the status tabs / pagination links.
+  // Carry search + date filters through the status tabs / pagination links.
   const carry = new URLSearchParams();
+  if (q) carry.set("q", q);
   if (period) carry.set("period", period);
   if (fromDate) carry.set("from", fromDate);
   if (toDate) carry.set("to", toDate);
@@ -57,6 +64,8 @@ export default async function AdminOrdersPage({ searchParams }: Props) {
   return (
     <div className="p-6 space-y-4">
       <h1 className="text-2xl font-bold text-gray-900">Orders</h1>
+
+      <OrdersSearch resultCount={count ?? 0} />
 
       {/* Status filter tabs */}
       <div className="flex gap-2 overflow-x-auto pb-1">

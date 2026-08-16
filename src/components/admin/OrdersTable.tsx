@@ -27,6 +27,13 @@ export function OrdersTable({ orders }: OrdersTableProps) {
           </tr>
         </thead>
         <tbody>
+          {orders.length === 0 && (
+            <tr>
+              <td colSpan={7} className="px-4 py-10 text-center text-gray-400">
+                No orders found
+              </td>
+            </tr>
+          )}
           {orders.map((order) => {
             const isOverdue =
               order.status === "placed" &&

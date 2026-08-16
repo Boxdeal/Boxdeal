@@ -3,6 +3,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { ArrowLeft, Package, TrendingDown } from "lucide-react";
 import { PeriodSelector } from "@/components/admin/PeriodSelector";
+import { ProductSalesTable } from "@/components/admin/ProductSalesTable";
 import { RevenueChart } from "@/components/admin/RevenueChart";
 import { OrdersTable } from "@/components/admin/OrdersTable";
 import { getSupabaseAdminClient } from "@/lib/supabase/server";
@@ -41,10 +42,6 @@ async function ProductList({
 }: { period: DashboardPeriod; from?: string; to?: string; label: string; qs: string }) {
   const rows = await getProductSales(period, { from, to });
 
-  const totalUnits = rows.reduce((a, r) => a + r.units, 0);
-  const totalRevenue = rows.reduce((a, r) => a + r.revenue, 0);
-  const totalPending = rows.reduce((a, r) => a + r.pendingRevenue, 0);
-
   return (
     <div className="space-y-5 p-6">
       <div>
@@ -57,83 +54,7 @@ async function ProductList({
         </div>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-4">
-        <Card title="Products sold" value={String(rows.length)} />
-        <Card title="Units" value={String(totalUnits)} />
-        <Card title="Collected" value={formatPrice(totalRevenue)} />
-        <Card title="Estimated incoming" value={formatPrice(totalPending)} amber />
-      </div>
-
-      {rows.length === 0 ? (
-        <div className="rounded-2xl border border-gray-100 bg-white p-10 text-center text-sm text-gray-400 shadow-sm">
-          No products sold in this period.
-        </div>
-      ) : (
-        <div className="overflow-x-auto rounded-2xl border border-gray-100 bg-white shadow-sm">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-gray-100 bg-gray-50">
-                <th className="px-4 py-3 text-left font-semibold text-gray-600">Product</th>
-                <th className="px-4 py-3 text-right font-semibold text-gray-600">Orders</th>
-                <th className="px-4 py-3 text-right font-semibold text-gray-600">Units</th>
-                <th className="px-4 py-3 text-right font-semibold text-gray-600">Prepaid / COD</th>
-                <th className="px-4 py-3 text-right font-semibold text-gray-600">Collected</th>
-                <th className="px-4 py-3 text-right font-semibold text-gray-600">Est. incoming</th>
-                <th className="px-4 py-3" />
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((r) => (
-                <tr key={r.product_id} className="border-b border-gray-50 transition-colors hover:bg-gray-50/50">
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-3">
-                      {r.product_image ? (
-                        <Image
-                          src={r.product_image}
-                          alt=""
-                          width={36}
-                          height={36}
-                          className="h-9 w-9 flex-shrink-0 rounded-lg object-cover"
-                        />
-                      ) : (
-                        <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-gray-100">
-                          <Package className="h-4 w-4 text-gray-400" />
-                        </div>
-                      )}
-                      <div className="min-w-0">
-                        <p className="truncate font-medium text-gray-800">{r.product_name}</p>
-                        <p className="font-mono text-xs text-gray-400">{r.product_sku}</p>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 text-right text-gray-600">{r.orders}</td>
-                  <td className="px-4 py-3 text-right font-semibold text-gray-900">{r.units}</td>
-                  <td className="px-4 py-3 text-right text-xs text-gray-500">
-                    {r.prepaidUnits} / {r.codUnits}
-                  </td>
-                  <td className="px-4 py-3 text-right font-semibold text-gray-900">{formatPrice(r.revenue)}</td>
-                  <td className="px-4 py-3 text-right text-amber-700">
-                    {r.pendingRevenue > 0 ? formatPrice(r.pendingRevenue) : "—"}
-                    {r.cancelledUnits > 0 && (
-                      <span className="ml-1 block text-[11px] text-red-500">
-                        −{r.cancelledUnits} cancelled
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    <Link
-                      href={`/admin/dashboard/products${qs}&product=${r.product_id}`}
-                      className="font-medium text-brand-600 hover:text-brand-700"
-                    >
-                      Day-wise
-                    </Link>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      <ProductSalesTable rows={rows} qs={qs} />
 
       <p className="text-xs text-gray-400">
         Units count every order placed in the period. Collected is money already in
