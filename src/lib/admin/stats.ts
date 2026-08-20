@@ -1,5 +1,6 @@
 import { getSupabaseAdminClient } from "@/lib/supabase/server";
 import { istDayKey, istDayStart, addDaysKey } from "@/lib/admin/periods";
+import { countsAsRevenue, REVENUE_STATUSES } from "@/lib/admin/order-buckets";
 import type { DashboardStats, RevenueChartPoint, Order } from "@/types";
 
 const CHART_DAYS = 30;
@@ -34,16 +35,21 @@ export async function getAdminDashboard(): Promise<{
   const fetchSince = chartStart < startOfMonth ? chartStart : startOfMonth;
 
   const [ordersRes, pendingRes, overdueRes, productsRes, customersRes, recentRes] = await Promise.all([
-    admin.from("orders").select("placed_at, total_amount, payment_status, payment_method").gte("placed_at", fetchSince.toISOString()),
-    admin.from("orders").select("id", { count: "exact", head: true }).in("status", ["placed", "confirmed"]),
-    admin.from("orders").select("id", { count: "exact", head: true }).eq("status", "placed").lt("pack_deadline", now.toISOString()),
+    admin.from("orders").select("placed_at, total_amount, payment_status, payment_method, status").gte("placed_at", fetchSince.toISOString()),
+    // "Pending" / "overdue" mean waiting to be PACKED, so they track confirmed
+    // orders only — an order still at "placed" was never paid for (see
+    // lib/admin/order-buckets) and belongs in the Failed tab, not on the
+    // packing queue.
+    admin.from("orders").select("id", { count: "exact", head: true }).eq("status", "confirmed"),
+    admin.from("orders").select("id", { count: "exact", head: true }).eq("status", "confirmed").lt("pack_deadline", now.toISOString()),
     admin.from("products").select("stock_quantity, low_stock_threshold, is_active"),
     admin.from("user_profiles").select("id", { count: "exact", head: true }).eq("is_admin", false),
     admin.from("orders").select("*").order("placed_at", { ascending: false }).limit(10),
   ]);
 
+  // Revenue = the estimate (confirmed → delivered). Orders still at "placed"
+  // and failed checkouts never count — see lib/admin/order-buckets.
   const orders = ordersRes.data ?? [];
-  const paid = (s: string) => s === "paid";
 
   // Pre-seed every chart day (as IST day keys) so gaps render as zero.
   const buckets = new Map<string, { revenue: number; orders: number; prepaidRevenue: number; codRevenue: number }>();
@@ -57,18 +63,20 @@ export async function getAdminDashboard(): Promise<{
     const k = dayKey(d);
     const amount = Number(o.total_amount) || 0;
 
+    const earns = countsAsRevenue(o);
+
     if (k === todayKey) {
       today_orders++;
-      if (paid(o.payment_status)) today_revenue += amount;
+      if (earns) today_revenue += amount;
     }
     if (d >= startOfMonth) {
       month_orders++;
-      if (paid(o.payment_status)) month_revenue += amount;
+      if (earns) month_revenue += amount;
     }
     const b = buckets.get(k);
     if (b) {
       b.orders++;
-      if (paid(o.payment_status)) {
+      if (earns) {
         b.revenue += amount;
         if (o.payment_method === "cod") b.codRevenue += amount;
         else b.prepaidRevenue += amount;
@@ -96,14 +104,16 @@ export async function getAdminDashboard(): Promise<{
   return { stats, chart, recentOrders: (recentRes.data ?? []) as Order[] };
 }
 
-// Best-selling products by units sold (from paid orders), computed in JS.
+// Best-selling products by units sold, computed in JS. Counts the same orders
+// as dashboard revenue (confirmed → delivered), not just the collected ones.
 export async function getTopProducts(limit = 10): Promise<TopProduct[]> {
   const admin = getSupabaseAdminClient();
 
   const { data: items } = await admin
     .from("order_items")
-    .select("product_id, product_name, quantity, selling_price, orders!inner(payment_status)")
-    .eq("orders.payment_status", "paid");
+    .select("product_id, product_name, quantity, selling_price, orders!inner(status, payment_status)")
+    .in("orders.status", REVENUE_STATUSES)
+    .neq("orders.payment_status", "failed");
 
   const map = new Map<string, TopProduct>();
   for (const it of (items ?? []) as Array<{ product_id: string; product_name: string; quantity: number; selling_price: number }>) {

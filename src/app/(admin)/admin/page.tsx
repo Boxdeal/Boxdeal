@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import {
   ShoppingBag, IndianRupee, Package, AlertTriangle,
-  Users, Clock, Receipt, CreditCard, Banknote, Hourglass, TrendingDown,
+  Users, Clock, Receipt, CreditCard, Banknote, Hourglass, XCircle, Ban, Wallet,
 } from "lucide-react";
 import { StatsCard } from "@/components/admin/StatsCard";
 import { RevenueChart } from "@/components/admin/RevenueChart";
@@ -47,7 +47,9 @@ export default async function AdminDashboard({ searchParams }: Props) {
       trend:   ordTrend !== null ? { value: ordTrend, label: "vs prev" } : undefined,
     },
     {
-      title:   `Revenue · ${p.label}`,
+      // Estimated revenue: confirmed → delivered. Click through for the
+      // prepaid vs COD split of exactly this number.
+      title:   `Est. Revenue · ${p.label}`,
       value:   formatPrice(p.revenue),
       icon:    IndianRupee,
       variant: "success" as const,
@@ -63,7 +65,27 @@ export default async function AdminDashboard({ searchParams }: Props) {
     },
   ];
 
-  // Prepaid vs COD — counts and revenue kept strictly apart.
+  // Orders that never became revenue — each gets its own tab.
+  const lostCards = [
+    {
+      title:   `Failed Orders · ${p.label}`,
+      value:   `${p.failed.orders}`,
+      subtitle: `${formatPrice(p.failed.amount)} never converted`,
+      icon:    XCircle,
+      variant: p.failed.orders > 0 ? "danger" as const : "default" as const,
+      href:    `/admin/dashboard/failed${qs}`,
+    },
+    {
+      title:   `Cancelled Orders · ${p.label}`,
+      value:   `${p.cancelled.orders}`,
+      subtitle: `${formatPrice(p.cancelled.amount)} cancelled · by customer & BoxDeal`,
+      icon:    Ban,
+      variant: p.cancelled.orders > 0 ? "warning" as const : "default" as const,
+      href:    `/admin/dashboard/cancelled${qs}`,
+    },
+  ];
+
+  // Prepaid vs COD — both sides of the same estimate.
   const { prepaid, cod } = p.byPayment;
   const paymentCards = [
     {
@@ -71,25 +93,25 @@ export default async function AdminDashboard({ searchParams }: Props) {
       value:   formatPrice(prepaid.revenue),
       icon:    CreditCard,
       variant: "success" as const,
-      href:    `/admin/dashboard/orders${qs}&pay=prepaid`,
+      href:    `/admin/dashboard/revenue${qs}&pay=prepaid`,
     },
     {
       title:   `COD Revenue · ${p.label}`,
       value:   formatPrice(cod.revenue),
       icon:    Banknote,
       variant: "default" as const,
-      href:    `/admin/dashboard/orders${qs}&pay=cod`,
+      href:    `/admin/dashboard/revenue${qs}&pay=cod`,
     },
     {
       title:   `Prepaid Orders · ${p.label}`,
-      value:   `${prepaid.orders}`,
+      value:   `${prepaid.revenueOrders}`,
       icon:    ShoppingBag,
       variant: "default" as const,
       href:    `/admin/dashboard/orders${qs}&pay=prepaid`,
     },
     {
       title:   `COD Orders · ${p.label}`,
-      value:   `${cod.orders}`,
+      value:   `${cod.revenueOrders}`,
       icon:    ShoppingBag,
       variant: "default" as const,
       href:    `/admin/dashboard/orders${qs}&pay=cod`,
@@ -143,10 +165,27 @@ export default async function AdminDashboard({ searchParams }: Props) {
       </section>
 
       <section>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {lostCards.map((stat) => (
+            <StatsCard key={stat.title} {...stat} />
+          ))}
+          <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+            <p className="text-sm text-gray-500">Revenue counts</p>
+            <p className="mt-1 text-sm font-medium text-gray-700">
+              Confirmed · Packed · Shipped · Out for Delivery · Delivered
+            </p>
+            <p className="mt-1 text-xs text-gray-400">
+              Order Placed, failed and cancelled orders are excluded.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section>
         <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
           <h2 className="text-lg font-semibold text-gray-700">Prepaid vs COD · {p.label}</h2>
           <p className="text-xs text-gray-400">
-            Revenue counts paid orders only — prepaid captured online, COD collected on delivery.
+            Estimated revenue split by payment method — click a card for the full breakdown.
           </p>
         </div>
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
@@ -154,39 +193,24 @@ export default async function AdminDashboard({ searchParams }: Props) {
             <StatsCard key={stat.title} {...stat} />
           ))}
         </div>
-        {(cod.pendingOrders > 0 || prepaid.pendingOrders > 0 || cod.lostOrders > 0) && (
-          <div className="mt-4 space-y-2 rounded-2xl border border-gray-100 bg-white p-4 text-sm shadow-sm">
-            {cod.pendingOrders > 0 && (
-              <p className="flex flex-wrap items-center gap-1.5 text-gray-600">
-                <Hourglass className="h-4 w-4 flex-shrink-0 text-amber-500" />
-                COD estimated incoming:{" "}
-                <strong className="text-gray-900">{formatPrice(cod.pendingRevenue)}</strong>
-                <span className="text-gray-400">({cod.pendingOrders} orders in transit)</span>
-                <span className="text-gray-400">
-                  · expected total {formatPrice(cod.revenue + cod.pendingRevenue)}
-                </span>
-              </p>
-            )}
-            {cod.lostOrders > 0 && (
-              <p className="flex flex-wrap items-center gap-1.5 text-gray-600">
-                <TrendingDown className="h-4 w-4 flex-shrink-0 text-red-500" />
-                <strong className="text-red-600">− {formatPrice(cod.lostRevenue)}</strong>
-                off the COD estimate
-                <span className="text-gray-400">
-                  ({cod.lostOrders} cancelled/returned, never collected)
-                </span>
-              </p>
-            )}
-            {prepaid.pendingOrders > 0 && (
-              <p className="flex flex-wrap items-center gap-1.5 text-gray-600">
-                <Hourglass className="h-4 w-4 flex-shrink-0 text-gray-400" />
-                Prepaid unpaid:{" "}
-                <strong className="text-gray-900">{formatPrice(prepaid.pendingRevenue)}</strong>
-                <span className="text-gray-400">({prepaid.pendingOrders} orders)</span>
-              </p>
-            )}
-          </div>
-        )}
+        <div className="mt-4 space-y-2 rounded-2xl border border-gray-100 bg-white p-4 text-sm shadow-sm">
+          <p className="flex flex-wrap items-center gap-1.5 text-gray-600">
+            <Wallet className="h-4 w-4 flex-shrink-0 text-green-500" />
+            Already collected:{" "}
+            <strong className="text-gray-900">{formatPrice(p.collectedRevenue)}</strong>
+            <span className="text-gray-400">({p.collectedOrders} orders paid)</span>
+          </p>
+          {p.pendingOrders > 0 && (
+            <p className="flex flex-wrap items-center gap-1.5 text-gray-600">
+              <Hourglass className="h-4 w-4 flex-shrink-0 text-amber-500" />
+              Yet to collect:{" "}
+              <strong className="text-gray-900">{formatPrice(p.pendingRevenue)}</strong>
+              <span className="text-gray-400">
+                ({p.pendingOrders} live order{p.pendingOrders === 1 ? "" : "s"}, mostly COD in transit)
+              </span>
+            </p>
+          )}
+        </div>
       </section>
 
       <section>

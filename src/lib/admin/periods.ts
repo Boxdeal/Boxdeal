@@ -1,7 +1,9 @@
 import { fromZonedTime, formatInTimeZone } from "date-fns-tz";
 import { getSupabaseAdminClient } from "@/lib/supabase/server";
+import { countsAsRevenue, orderBucket } from "@/lib/admin/order-buckets";
 import type {
-  DashboardPeriod, OrderStatus, PaymentBucket, PaymentSplit, PeriodStats, RevenueChartPoint,
+  DashboardPeriod, LostBucket, OrderStatus, PaymentBucket, PaymentSplit, PeriodStats,
+  RevenueChartPoint,
 } from "@/types";
 
 // All admin analytics are computed in IST so a "day" matches the business day
@@ -125,8 +127,6 @@ export function getISTPeriodRange(
   }
 }
 
-const isPaid = (s: string) => s === "paid";
-
 type OrderRow = {
   placed_at: string;
   total_amount: number | string;
@@ -136,9 +136,14 @@ type OrderRow = {
 };
 
 /**
- * Aggregate order stats for a period, in IST. Revenue counts PAID orders only
- * (online paid + COD delivered); order counts include every order in range
- * (cancelled surfaced separately via `byStatus`, never silently dropped).
+ * Aggregate order stats for a period, in IST.
+ *
+ * Revenue here is the ESTIMATED revenue: every order that is confirmed, packed,
+ * shipped, out for delivery or delivered — COD counts from the moment it is
+ * confirmed, not only once the cash lands. Orders still at "placed" (prepaid,
+ * never paid for) and failed checkouts are excluded entirely and surfaced in
+ * the Failed tab; cancellations go to the Cancelled tab. `orders` still counts
+ * every order in the window, so nothing is silently dropped.
  */
 export async function getPeriodStats(
   period: DashboardPeriod,
@@ -155,7 +160,7 @@ export async function getPeriodStats(
       .lte("placed_at", range.end.toISOString()),
     admin
       .from("orders")
-      .select("total_amount, payment_status")
+      .select("total_amount, payment_status, status")
       .gte("placed_at", range.prev.start.toISOString())
       .lte("placed_at", range.prev.end.toISOString()),
   ]);
@@ -174,9 +179,12 @@ export async function getPeriodStats(
   });
 
   const emptySplit = (): PaymentSplit => ({
-    orders: 0, paidOrders: 0, revenue: 0,
+    orders: 0,
+    revenueOrders: 0, revenue: 0,
+    collectedOrders: 0, collectedRevenue: 0,
     pendingOrders: 0, pendingRevenue: 0,
-    lostOrders: 0, lostRevenue: 0,
+    failedOrders: 0, failedRevenue: 0,
+    cancelledOrders: 0, cancelledRevenue: 0,
     byStatus: emptyStatus(),
   });
 
@@ -189,56 +197,81 @@ export async function getPeriodStats(
 
   let orders = 0;
   let revenue = 0;
-  let paidOrders = 0;
+  let revenueOrders = 0;
+  let collectedRevenue = 0;
+  let collectedOrders = 0;
+  let pendingRevenue = 0;
+  let pendingOrders = 0;
+  const failed: LostBucket = { orders: 0, amount: 0 };
+  const cancelled: LostBucket = { orders: 0, amount: 0 };
+  const returned: LostBucket = { orders: 0, amount: 0 };
 
   for (const o of rows) {
     const amount = Number(o.total_amount) || 0;
-    const paid = isPaid(o.payment_status);
+    const bucket = orderBucket(o);
     orders++;
 
-    const bucket = byStatus[o.status] ?? (byStatus[o.status] = { count: 0, revenue: 0 });
-    bucket.count++;
+    const statusRow = byStatus[o.status] ?? (byStatus[o.status] = { count: 0, revenue: 0 });
+    statusRow.count++;
+    statusRow.revenue += amount;
 
     const key = istDayKey(new Date(o.placed_at));
     const day = chartMap.get(key) ?? { revenue: 0, orders: 0, prepaidRevenue: 0, codRevenue: 0 };
     day.orders++;
 
     // COD is the "postpaid" bucket; anything else is money taken up front.
-    const pay = byPayment[o.payment_method === "cod" ? "cod" : "prepaid"];
+    const isCod = o.payment_method === "cod";
+    const pay = byPayment[isCod ? "cod" : "prepaid"];
     pay.orders++;
-    const payBucket = pay.byStatus[o.status] ?? (pay.byStatus[o.status] = { count: 0, revenue: 0 });
-    payBucket.count++;
+    const payStatusRow = pay.byStatus[o.status] ?? (pay.byStatus[o.status] = { count: 0, revenue: 0 });
+    payStatusRow.count++;
+    payStatusRow.revenue += amount;
 
-    if (paid) {
+    if (bucket === "revenue") {
       revenue += amount;
-      paidOrders++;
-      bucket.revenue += amount;
-      day.revenue += amount;
-      pay.paidOrders++;
+      revenueOrders++;
       pay.revenue += amount;
-      payBucket.revenue += amount;
-      if (o.payment_method === "cod") day.codRevenue += amount;
+      pay.revenueOrders++;
+      day.revenue += amount;
+      if (isCod) day.codRevenue += amount;
       else day.prepaidRevenue += amount;
-    } else if (o.status === "cancelled" || o.status === "returned" || o.payment_status === "refunded") {
-      // Was in the pipeline but died before any money came in. Cancelling a COD
-      // order lands here, which is what pulls it back out of the estimate.
-      pay.lostOrders++;
-      pay.lostRevenue += amount;
+
+      // Split the estimate into what's already in hand and what's still coming.
+      if (o.payment_status === "paid") {
+        collectedRevenue += amount;
+        collectedOrders++;
+        pay.collectedRevenue += amount;
+        pay.collectedOrders++;
+      } else {
+        pendingRevenue += amount;
+        pendingOrders++;
+        pay.pendingRevenue += amount;
+        pay.pendingOrders++;
+      }
+    } else if (bucket === "failed") {
+      failed.orders++;
+      failed.amount += amount;
+      pay.failedOrders++;
+      pay.failedRevenue += amount;
+    } else if (bucket === "cancelled") {
+      cancelled.orders++;
+      cancelled.amount += amount;
+      pay.cancelledOrders++;
+      pay.cancelledRevenue += amount;
     } else {
-      // Still in flight: COD yet to be collected, or a prepaid order the
-      // customer hasn't paid for yet. This is the estimate.
-      pay.pendingOrders++;
-      pay.pendingRevenue += amount;
+      returned.orders++;
+      returned.amount += amount;
     }
+
     chartMap.set(key, day);
   }
 
-  // Prev-window revenue for the comparison trend.
+  // Prev-window estimate for the comparison trend — same rule as above.
   let prevRevenue = 0;
   let prevOrders = 0;
-  for (const o of (prevRes.data ?? []) as Array<{ total_amount: number | string; payment_status: string }>) {
+  for (const o of (prevRes.data ?? []) as Array<{ total_amount: number | string; payment_status: string; status: OrderStatus }>) {
     prevOrders++;
-    if (isPaid(o.payment_status)) prevRevenue += Number(o.total_amount) || 0;
+    if (countsAsRevenue(o)) prevRevenue += Number(o.total_amount) || 0;
   }
 
   const chart: RevenueChartPoint[] = Array.from(chartMap.entries())
@@ -250,9 +283,16 @@ export async function getPeriodStats(
     start: range.start.toISOString(),
     end: range.end.toISOString(),
     orders,
-    paidOrders,
+    revenueOrders,
     revenue,
-    avgOrderValue: paidOrders > 0 ? Math.round(revenue / paidOrders) : 0,
+    collectedRevenue,
+    collectedOrders,
+    pendingRevenue,
+    pendingOrders,
+    failed,
+    cancelled,
+    returned,
+    avgOrderValue: revenueOrders > 0 ? Math.round(revenue / revenueOrders) : 0,
     byStatus,
     byPayment,
     chart,

@@ -1,14 +1,17 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowLeft, IndianRupee, Receipt, ShoppingBag, TrendingUp } from "lucide-react";
+import {
+  ArrowLeft, IndianRupee, Receipt, CreditCard, Banknote, Wallet, Hourglass,
+} from "lucide-react";
 import { getSupabaseAdminClient } from "@/lib/supabase/server";
 import { StatsCard } from "@/components/admin/StatsCard";
 import { RevenueChart } from "@/components/admin/RevenueChart";
 import { OrdersTable } from "@/components/admin/OrdersTable";
 import { PeriodSelector } from "@/components/admin/PeriodSelector";
 import { getPeriodStats, getISTPeriodRange, pctChange } from "@/lib/admin/periods";
-import { formatPrice, formatCompactNumber } from "@/lib/utils/format";
-import { ORDER_STATUS_LABELS, PAYMENT_BUCKET_LABELS } from "@/constants";
+import { REVENUE_STATUSES } from "@/lib/admin/order-buckets";
+import { formatPrice } from "@/lib/utils/format";
+import { ORDER_STATUS_LABELS, PAYMENT_BUCKET_LABELS, PAYMENT_BUCKET_METHODS } from "@/constants";
 import type { DashboardPeriod, Order, OrderStatus, PaymentBucket } from "@/types";
 
 const PAY_BUCKETS: PaymentBucket[] = ["prepaid", "cod"];
@@ -17,11 +20,14 @@ export const metadata: Metadata = { title: "Revenue — Admin" };
 export const dynamic = "force-dynamic";
 
 interface Props {
-  searchParams: Promise<{ period?: DashboardPeriod; from?: string; to?: string }>;
+  searchParams: Promise<{
+    period?: DashboardPeriod; from?: string; to?: string; pay?: PaymentBucket;
+  }>;
 }
 
 export default async function RevenueDetailPage({ searchParams }: Props) {
-  const { period = "month", from, to } = await searchParams;
+  const { period = "month", from, to, pay: payParam } = await searchParams;
+  const pay = payParam && PAY_BUCKETS.includes(payParam) ? payParam : undefined;
 
   const p = await getPeriodStats(period, { from, to });
   const range = getISTPeriodRange(period, { from, to });
@@ -31,28 +37,78 @@ export default async function RevenueDetailPage({ searchParams }: Props) {
   if (from) q.set("from", from);
   if (to) q.set("to", to);
   const qs = `?${q.toString()}`;
+  const payLink = (bucket: PaymentBucket | null) => {
+    const sp = new URLSearchParams(q.toString());
+    if (bucket) sp.set("pay", bucket);
+    return `?${sp.toString()}`;
+  };
 
-  // The paid orders that make up this revenue.
+  // The orders that MAKE UP this revenue — the same confirmed → delivered rule
+  // the numbers above use, not just the ones already paid for.
   const admin = getSupabaseAdminClient();
-  const { data: paidOrders } = await admin
+  let ordersQuery = admin
     .from("orders")
     .select("*")
-    .eq("payment_status", "paid")
+    .in("status", REVENUE_STATUSES)
+    .neq("payment_status", "failed")
     .gte("placed_at", range.start.toISOString())
     .lte("placed_at", range.end.toISOString())
     .order("placed_at", { ascending: false })
     .limit(100);
+  if (pay) ordersQuery = ordersQuery.in("payment_method", PAYMENT_BUCKET_METHODS[pay]);
+  const { data: revenueOrders } = await ordersQuery;
 
   const revTrend = pctChange(p.revenue, p.prevRevenue);
-  const totalPending = p.byPayment.prepaid.pendingRevenue + p.byPayment.cod.pendingRevenue;
-  const totalLost = p.byPayment.prepaid.lostRevenue + p.byPayment.cod.lostRevenue;
+  const { prepaid, cod } = p.byPayment;
+
+  // Cards follow the selected payment bucket, so the headline always matches
+  // the list underneath it.
+  const scope = pay ? p.byPayment[pay] : null;
+  const shown = scope
+    ? {
+        revenue: scope.revenue, orders: scope.revenueOrders,
+        collected: scope.collectedRevenue, pending: scope.pendingRevenue,
+      }
+    : {
+        revenue: p.revenue, orders: p.revenueOrders,
+        collected: p.collectedRevenue, pending: p.pendingRevenue,
+      };
+  const avg = shown.orders > 0 ? Math.round(shown.revenue / shown.orders) : 0;
 
   const cards = [
-    { title: "Revenue (paid)", value: formatPrice(p.revenue), icon: IndianRupee, variant: "success" as const,
-      trend: revTrend !== null ? { value: revTrend, label: "vs prev period" } : undefined },
-    { title: "Paid Orders",    value: formatCompactNumber(p.paidOrders), icon: ShoppingBag, variant: "default" as const },
-    { title: "Avg Order Value", value: formatPrice(p.avgOrderValue), icon: Receipt, variant: "default" as const },
-    { title: "Prev Period",    value: formatPrice(p.prevRevenue), icon: TrendingUp, variant: "default" as const },
+    {
+      title: pay ? `${PAYMENT_BUCKET_LABELS[pay]} Est. Revenue` : "Estimated Revenue",
+      value: formatPrice(shown.revenue),
+      subtitle: `${shown.orders} order${shown.orders === 1 ? "" : "s"} · confirmed → delivered`,
+      icon: IndianRupee, variant: "success" as const,
+      trend: !pay && revTrend !== null ? { value: revTrend, label: "vs prev period" } : undefined,
+    },
+    {
+      title: "Already Collected", value: formatPrice(shown.collected),
+      subtitle: "money in hand", icon: Wallet, variant: "default" as const,
+    },
+    {
+      title: "Yet to Collect", value: formatPrice(shown.pending),
+      subtitle: "live orders, mostly COD", icon: Hourglass, variant: "warning" as const,
+    },
+    {
+      title: "Avg Order Value", value: formatPrice(avg),
+      icon: Receipt, variant: "default" as const,
+    },
+  ];
+
+  // Big prepaid vs COD split — the whole point of clicking the revenue card.
+  const splitCards = [
+    {
+      title: "Prepaid Revenue", value: formatPrice(prepaid.revenue),
+      subtitle: `${prepaid.revenueOrders} order${prepaid.revenueOrders === 1 ? "" : "s"} · paid online`,
+      icon: CreditCard, variant: "success" as const, href: payLink("prepaid"),
+    },
+    {
+      title: "COD Revenue", value: formatPrice(cod.revenue),
+      subtitle: `${cod.revenueOrders} order${cod.revenueOrders === 1 ? "" : "s"} · cash on delivery`,
+      icon: Banknote, variant: "default" as const, href: payLink("cod"),
+    },
   ];
 
   const statusRows = (Object.entries(p.byStatus) as [OrderStatus, { count: number; revenue: number }][])
@@ -65,91 +121,148 @@ export default async function RevenueDetailPage({ searchParams }: Props) {
           <ArrowLeft className="h-4 w-4" /> Dashboard
         </Link>
         <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
-          <h1 className="text-2xl font-bold text-gray-900">Revenue · {p.label}</h1>
+          <h1 className="text-2xl font-bold text-gray-900">
+            Revenue{pay ? ` · ${PAYMENT_BUCKET_LABELS[pay]}` : ""} · {p.label}
+          </h1>
           <PeriodSelector defaultPeriod="month" />
         </div>
+        <p className="mt-1 text-sm text-gray-500">
+          Estimated revenue — confirmed, packed, shipped, out for delivery and delivered orders.
+          Order Placed, failed and cancelled orders are not counted.
+        </p>
+      </div>
+
+      {/* Payment method filter */}
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-sm font-medium text-gray-500">Payment:</span>
+        <Link
+          href={payLink(null)}
+          className={`rounded-full px-4 py-1.5 text-sm font-medium ${!pay ? "bg-gray-800 text-white" : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-50"}`}
+        >
+          All ({formatPrice(p.revenue)})
+        </Link>
+        {PAY_BUCKETS.map((b) => (
+          <Link
+            key={b}
+            href={payLink(b)}
+            className={`rounded-full px-4 py-1.5 text-sm font-medium ${pay === b ? "bg-gray-800 text-white" : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-50"}`}
+          >
+            {PAYMENT_BUCKET_LABELS[b]} ({formatPrice(p.byPayment[b].revenue)})
+          </Link>
+        ))}
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         {cards.map((c) => <StatsCard key={c.title} {...c} />)}
       </div>
 
+      <section>
+        <h2 className="mb-3 text-lg font-semibold text-gray-700">COD vs Prepaid · {p.label}</h2>
+        <div className="grid gap-4 md:grid-cols-2">
+          {splitCards.map((c) => <StatsCard key={c.title} {...c} />)}
+        </div>
+      </section>
+
       <div className="grid gap-4 md:grid-cols-2">
         <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-          <p className="mb-3 text-sm font-semibold text-gray-700">Prepaid vs COD</p>
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-xs text-gray-400">
-                <th className="pb-2 text-left font-medium">Method</th>
-                <th className="pb-2 text-right font-medium">Orders</th>
-                <th className="pb-2 text-right font-medium">Collected</th>
-                <th className="pb-2 text-right font-medium">Est. incoming</th>
-                <th className="pb-2 text-right font-medium">Expected</th>
-              </tr>
-            </thead>
-            <tbody>
-              {PAY_BUCKETS.map((b) => {
-                const s = p.byPayment[b];
-                return (
-                  <tr key={b} className="border-t border-gray-50">
-                    <td className="py-2">
-                      <Link href={`/admin/dashboard/orders${qs}&pay=${b}`} className="font-medium text-gray-700 hover:text-brand-600">
-                        {PAYMENT_BUCKET_LABELS[b]}
-                      </Link>
-                    </td>
-                    <td className="py-2 text-right text-gray-500">{s.orders}</td>
-                    <td className="py-2 text-right font-semibold text-gray-900">{formatPrice(s.revenue)}</td>
-                    <td className="py-2 text-right text-amber-700">
-                      {s.pendingRevenue > 0 ? formatPrice(s.pendingRevenue) : "—"}
-                    </td>
-                    <td className="py-2 text-right font-semibold text-gray-900">
-                      {formatPrice(s.revenue + s.pendingRevenue)}
-                    </td>
-                  </tr>
-                );
-              })}
-              <tr className="border-t border-gray-200">
-                <td className="pt-2 font-medium text-gray-700">Total</td>
-                <td className="pt-2 text-right text-gray-500">{p.orders}</td>
-                <td className="pt-2 text-right font-black">{formatPrice(p.revenue)}</td>
-                <td className="pt-2 text-right text-amber-700">{formatPrice(totalPending)}</td>
-                <td className="pt-2 text-right font-black">{formatPrice(p.revenue + totalPending)}</td>
-              </tr>
-            </tbody>
-          </table>
+          <p className="mb-3 text-sm font-semibold text-gray-700">Where the money stands</p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-xs text-gray-400">
+                  <th className="pb-2 text-left font-medium">Method</th>
+                  <th className="pb-2 text-right font-medium">Orders</th>
+                  <th className="pb-2 text-right font-medium">Collected</th>
+                  <th className="pb-2 text-right font-medium">Yet to collect</th>
+                  <th className="pb-2 text-right font-medium">Est. revenue</th>
+                </tr>
+              </thead>
+              <tbody>
+                {PAY_BUCKETS.map((b) => {
+                  const s = p.byPayment[b];
+                  return (
+                    <tr key={b} className="border-t border-gray-50">
+                      <td className="py-2">
+                        <Link href={payLink(b)} className="font-medium text-gray-700 hover:text-brand-600">
+                          {PAYMENT_BUCKET_LABELS[b]}
+                        </Link>
+                      </td>
+                      <td className="py-2 text-right text-gray-500">{s.revenueOrders}</td>
+                      <td className="py-2 text-right text-gray-700">{formatPrice(s.collectedRevenue)}</td>
+                      <td className="py-2 text-right text-amber-700">
+                        {s.pendingRevenue > 0 ? formatPrice(s.pendingRevenue) : "—"}
+                      </td>
+                      <td className="py-2 text-right font-semibold text-gray-900">{formatPrice(s.revenue)}</td>
+                    </tr>
+                  );
+                })}
+                <tr className="border-t border-gray-200">
+                  <td className="pt-2 font-medium text-gray-700">Total</td>
+                  <td className="pt-2 text-right text-gray-500">{p.revenueOrders}</td>
+                  <td className="pt-2 text-right text-gray-700">{formatPrice(p.collectedRevenue)}</td>
+                  <td className="pt-2 text-right text-amber-700">{formatPrice(p.pendingRevenue)}</td>
+                  <td className="pt-2 text-right font-black">{formatPrice(p.revenue)}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
 
-          {totalLost > 0 && (
-            <p className="mt-3 border-t border-gray-100 pt-3 text-xs text-gray-500">
-              <strong className="text-red-600">− {formatPrice(totalLost)}</strong> excluded from the
-              estimate ({p.byPayment.prepaid.lostOrders + p.byPayment.cod.lostOrders} cancelled/returned
-              orders that were never collected).
+          {(p.failed.orders > 0 || p.cancelled.orders > 0) && (
+            <p className="mt-3 flex flex-wrap gap-x-4 gap-y-1 border-t border-gray-100 pt-3 text-xs text-gray-500">
+              <Link href={`/admin/dashboard/failed${qs}`} className="hover:text-brand-600">
+                Excluded: <strong className="text-red-600">{formatPrice(p.failed.amount)}</strong>{" "}
+                failed ({p.failed.orders}) →
+              </Link>
+              <Link href={`/admin/dashboard/cancelled${qs}`} className="hover:text-brand-600">
+                <strong className="text-amber-600">{formatPrice(p.cancelled.amount)}</strong>{" "}
+                cancelled ({p.cancelled.orders}) →
+              </Link>
             </p>
           )}
         </div>
 
         <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-          <p className="mb-3 text-sm font-semibold text-gray-700">Revenue by status (paid)</p>
+          <p className="mb-3 text-sm font-semibold text-gray-700">Order value by status</p>
           <div className="space-y-2 text-sm">
             {statusRows.length === 0 && <p className="text-gray-400">No orders in this period.</p>}
-            {statusRows.map(([s, v]) => (
-              <div key={s} className="flex justify-between">
-                <span className="text-gray-500">{ORDER_STATUS_LABELS[s]} <span className="text-gray-400">({v.count})</span></span>
-                <span className="font-semibold">{formatPrice(v.revenue)}</span>
-              </div>
-            ))}
+            {statusRows.map(([s, v]) => {
+              const counted = REVENUE_STATUSES.includes(s);
+              return (
+                <div key={s} className="flex justify-between">
+                  <span className={counted ? "text-gray-600" : "text-gray-400"}>
+                    {ORDER_STATUS_LABELS[s]} <span className="text-gray-400">({v.count})</span>
+                    {!counted && <span className="ml-1 text-[11px] text-gray-400">· not counted</span>}
+                  </span>
+                  <span className={counted ? "font-semibold text-gray-900" : "text-gray-400 line-through"}>
+                    {formatPrice(v.revenue)}
+                  </span>
+                </div>
+              );
+            })}
           </div>
         </div>
       </div>
 
       <section>
-        <RevenueChart split data={p.chart} title="Daily revenue — prepaid vs COD" />
+        <RevenueChart split data={p.chart} title="Daily estimated revenue — prepaid vs COD" />
       </section>
 
       <section>
-        <h2 className="mb-3 text-lg font-semibold text-gray-700">
-          Contributing paid orders {(paidOrders?.length ?? 0) === 100 && <span className="text-xs font-normal text-gray-400">(latest 100)</span>}
-        </h2>
-        <OrdersTable orders={(paidOrders ?? []) as Order[]} />
+        <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+          <h2 className="text-lg font-semibold text-gray-700">
+            Orders behind this revenue{" "}
+            {(revenueOrders?.length ?? 0) === 100 && (
+              <span className="text-xs font-normal text-gray-400">(latest 100)</span>
+            )}
+          </h2>
+          <Link
+            href={`/admin/dashboard/orders${qs}${pay ? `&pay=${pay}` : ""}`}
+            className="text-sm font-medium text-brand-600 hover:text-brand-700"
+          >
+            All orders in this period →
+          </Link>
+        </div>
+        <OrdersTable orders={(revenueOrders ?? []) as Order[]} />
       </section>
     </div>
   );

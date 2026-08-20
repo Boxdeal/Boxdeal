@@ -7,6 +7,8 @@ interface StatsCardProps {
   value: string | number;
   icon: LucideIcon;
   trend?: { value: number; label: string };
+  /** Small line under the value, e.g. the order value behind a count. */
+  subtitle?: string;
   variant?: "default" | "warning" | "danger" | "success";
   /** When set, the whole card becomes a link to this route. */
   href?: string;
@@ -24,6 +26,7 @@ export function StatsCard({
   value,
   icon: Icon,
   trend,
+  subtitle,
   variant = "default",
   href,
 }: StatsCardProps) {
@@ -37,6 +40,7 @@ export function StatsCard({
           {href && <ArrowUpRight className="h-3.5 w-3.5 text-gray-300 transition-colors group-hover:text-brand-500" />}
         </p>
         <p className="mt-1 text-2xl font-black text-gray-900">{value}</p>
+        {subtitle && <p className="mt-0.5 text-xs text-gray-400">{subtitle}</p>}
         {trend && (
           <p className="mt-1 text-xs text-gray-400">
             <span

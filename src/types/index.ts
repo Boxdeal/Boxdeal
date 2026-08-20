@@ -393,33 +393,57 @@ export type DashboardPeriod =
 export type PaymentBucket = "prepaid" | "cod";
 
 // One payment method's slice of a period. Every order lands in exactly one of
-// three buckets so the numbers add up:
-//   revenue  — money already realised (prepaid captured, COD collected)
-//   pending  — the ESTIMATE still expected to land: live, uncollected orders
-//   lost     — was in the pipeline but died (cancelled / returned / refunded)
-//              before any money was collected, so it is NOT in the estimate
+// four buckets so the numbers add up:
+//   revenue    — the ESTIMATE: confirmed / packed / shipped / out for delivery /
+//                delivered. Money already realised plus money still to collect.
+//   collected  — the part of `revenue` that has actually been received
+//                (prepaid captured, COD collected on delivery)
+//   pending    — the rest of `revenue`: live orders whose cash is still coming
+//   failed     — checkout never completed (payment failed, or still "placed")
+//   cancelled  — a live order that was cancelled, by the customer or by us
+// revenue === collectedRevenue + pendingRevenue. failed and cancelled are NOT
+// part of revenue.
 export interface PaymentSplit {
   orders: number;
-  paidOrders: number;
+  revenueOrders: number;
   revenue: number;
+  collectedOrders: number;
+  collectedRevenue: number;
   pendingOrders: number;
   pendingRevenue: number;
-  lostOrders: number;
-  lostRevenue: number;
+  failedOrders: number;
+  failedRevenue: number;
+  cancelledOrders: number;
+  cancelledRevenue: number;
   /** Status breakdown for THIS method only, so drill-down pills stay in scope. */
   byStatus: Record<OrderStatus, { count: number; revenue: number }>;
 }
 
-// Period-scoped analytics, all computed in IST. Revenue fields count PAID
-// orders only; `orders` counts every order in the window.
+/** Orders that never became revenue — one line in the dashboard. */
+export interface LostBucket {
+  orders: number;
+  amount: number;
+}
+
+// Period-scoped analytics, all computed in IST. `revenue` is the ESTIMATED
+// revenue (confirmed → delivered); `orders` counts every order in the window,
+// including the failed and cancelled ones that revenue deliberately excludes.
 export interface PeriodStats {
   label: string;
   start: string;
   end: string;
   orders: number;
-  paidOrders: number;
+  revenueOrders: number;
   revenue: number;
+  collectedRevenue: number;
+  collectedOrders: number;
+  pendingRevenue: number;
+  pendingOrders: number;
+  failed: LostBucket;
+  cancelled: LostBucket;
+  returned: LostBucket;
   avgOrderValue: number;
+  /** Total order value per status (not only the paid part). */
   byStatus: Record<OrderStatus, { count: number; revenue: number }>;
   byPayment: Record<PaymentBucket, PaymentSplit>;
   chart: RevenueChartPoint[];

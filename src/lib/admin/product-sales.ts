@@ -1,5 +1,6 @@
 import { getSupabaseAdminClient } from "@/lib/supabase/server";
 import { getISTPeriodRange, istDayKey } from "@/lib/admin/periods";
+import { orderBucket } from "@/lib/admin/order-buckets";
 import type { DashboardPeriod, ProductDayRow, ProductSalesRow } from "@/types";
 
 // Product-wise sales, computed in JS off order_items joined to their order so
@@ -43,8 +44,13 @@ function lineValue(it: ItemRow): number {
   return (Number(it.selling_price) || 0) * it.quantity;
 }
 
+/**
+ * Anything that is not live revenue: cancelled, returned, refunded, a failed
+ * checkout, or an order still stuck at "placed". Same rule the dashboard uses,
+ * so these units never inflate the pending estimate.
+ */
 function isDead(o: JoinedOrder): boolean {
-  return o.status === "cancelled" || o.status === "returned" || o.payment_status === "refunded";
+  return o.payment_status === "refunded" || orderBucket(o) !== "revenue";
 }
 
 async function fetchItems(

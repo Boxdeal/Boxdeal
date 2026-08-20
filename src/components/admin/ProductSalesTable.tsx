@@ -120,7 +120,7 @@ export function ProductSalesTable({ rows, qs }: { rows: ProductSalesRow[]; qs: s
                     {r.pendingRevenue > 0 ? formatPrice(r.pendingRevenue) : "—"}
                     {r.cancelledUnits > 0 && (
                       <span className="ml-1 block text-[11px] text-red-500">
-                        −{r.cancelledUnits} cancelled
+                        −{r.cancelledUnits} not counted
                       </span>
                     )}
                   </td>

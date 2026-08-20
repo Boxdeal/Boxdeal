@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import Link from "next/link";
 import { AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils/helpers";
@@ -7,10 +8,16 @@ import type { Order } from "@/types";
 
 interface OrdersTableProps {
   orders: Order[];
+  /**
+   * An extra column appended before the View link — used by the Failed and
+   * Cancelled tabs to show the reason / who cancelled.
+   */
+  extraColumn?: { header: string; render: (order: Order) => ReactNode };
 }
 
-export function OrdersTable({ orders }: OrdersTableProps) {
+export function OrdersTable({ orders, extraColumn }: OrdersTableProps) {
   const now = new Date();
+  const colCount = extraColumn ? 8 : 7;
 
   return (
     <div className="overflow-x-auto rounded-2xl border border-gray-100 bg-white shadow-sm">
@@ -23,20 +30,25 @@ export function OrdersTable({ orders }: OrdersTableProps) {
             <th className="px-4 py-3 text-left font-semibold text-gray-600">Payment</th>
             <th className="px-4 py-3 text-left font-semibold text-gray-600">Status</th>
             <th className="px-4 py-3 text-left font-semibold text-gray-600">Date</th>
+            {extraColumn && (
+              <th className="px-4 py-3 text-left font-semibold text-gray-600">{extraColumn.header}</th>
+            )}
             <th className="px-4 py-3" />
           </tr>
         </thead>
         <tbody>
           {orders.length === 0 && (
             <tr>
-              <td colSpan={7} className="px-4 py-10 text-center text-gray-400">
+              <td colSpan={colCount} className="px-4 py-10 text-center text-gray-400">
                 No orders found
               </td>
             </tr>
           )}
           {orders.map((order) => {
+            // Only a confirmed order can be overdue for packing — one still at
+            // "placed" was never paid for.
             const isOverdue =
-              order.status === "placed" &&
+              order.status === "confirmed" &&
               new Date(order.pack_deadline) < now;
 
             return (
@@ -98,6 +110,7 @@ export function OrdersTable({ orders }: OrdersTableProps) {
                 <td className="px-4 py-3 text-gray-500">
                   {formatDateTime(order.placed_at)}
                 </td>
+                {extraColumn && <td className="px-4 py-3">{extraColumn.render(order)}</td>}
                 <td className="px-4 py-3">
                   <Link
                     href={`/admin/orders/${order.id}`}

@@ -141,7 +141,7 @@ async function ProductDetail({
           <TrendingDown className="h-4 w-4 flex-shrink-0 text-red-500" />
           <span className="text-gray-600">
             <strong className="text-red-600">{totals.cancelledUnits} unit
-            {totals.cancelledUnits === 1 ? "" : "s"}</strong> in cancelled/returned orders — not counted
+            {totals.cancelledUnits === 1 ? "" : "s"}</strong> in cancelled / returned / failed orders — not counted
             in collected or the estimate.
           </span>
         </div>
