@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import {
-  ArrowLeft, IndianRupee, Receipt, CreditCard, Banknote, Wallet, Hourglass,
+  ArrowLeft, IndianRupee, Receipt, CreditCard, Banknote, Wallet, Hourglass, Undo2,
 } from "lucide-react";
 import { getSupabaseAdminClient } from "@/lib/supabase/server";
 import { StatsCard } from "@/components/admin/StatsCard";
@@ -128,7 +128,7 @@ export default async function RevenueDetailPage({ searchParams }: Props) {
         </div>
         <p className="mt-1 text-sm text-gray-500">
           Estimated revenue — confirmed, packed, shipped, out for delivery and delivered orders.
-          Order Placed, failed and cancelled orders are not counted.
+          Order Placed, failed, cancelled and RTO / returned orders are not counted.
         </p>
       </div>
 
@@ -155,6 +155,44 @@ export default async function RevenueDetailPage({ searchParams }: Props) {
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         {cards.map((c) => <StatsCard key={c.title} {...c} />)}
       </div>
+
+      {p.returned.orders > 0 && (
+        <div className="rounded-2xl border border-orange-100 bg-orange-50/40 p-5 shadow-sm">
+          <div className="flex items-start gap-3">
+            <Undo2 className="mt-0.5 h-5 w-5 flex-shrink-0 text-orange-500" />
+            <div className="w-full">
+              <p className="text-sm font-semibold text-gray-700">RTO deducted from revenue</p>
+              <dl className="mt-2 max-w-sm space-y-1 text-sm">
+                <div className="flex justify-between">
+                  <dt className="text-gray-500">Shipped order value</dt>
+                  <dd className="text-gray-700">{formatPrice(p.revenue + p.returned.amount)}</dd>
+                </div>
+                <div className="flex justify-between">
+                  <dt className="text-gray-500">
+                    − RTO / returned ({p.returned.orders})
+                    {p.customerReturn.orders > 0 && (
+                      <span className="text-gray-400">
+                        {" "}· {p.rto.orders} RTO, {p.customerReturn.orders} customer
+                      </span>
+                    )}
+                  </dt>
+                  <dd className="font-semibold text-red-600">− {formatPrice(p.returned.amount)}</dd>
+                </div>
+                <div className="flex justify-between border-t border-orange-200 pt-1">
+                  <dt className="font-medium text-gray-700">Estimated revenue</dt>
+                  <dd className="font-black text-gray-900">{formatPrice(p.revenue)}</dd>
+                </div>
+              </dl>
+              <Link
+                href={`/admin/dashboard/rto${qs}`}
+                className="mt-2 inline-block text-xs font-medium text-brand-600 hover:text-brand-700"
+              >
+                See every RTO / returned order →
+              </Link>
+            </div>
+          </div>
+        </div>
+      )}
 
       <section>
         <h2 className="mb-3 text-lg font-semibold text-gray-700">COD vs Prepaid · {p.label}</h2>
@@ -207,7 +245,7 @@ export default async function RevenueDetailPage({ searchParams }: Props) {
             </table>
           </div>
 
-          {(p.failed.orders > 0 || p.cancelled.orders > 0) && (
+          {(p.failed.orders > 0 || p.cancelled.orders > 0 || p.returned.orders > 0) && (
             <p className="mt-3 flex flex-wrap gap-x-4 gap-y-1 border-t border-gray-100 pt-3 text-xs text-gray-500">
               <Link href={`/admin/dashboard/failed${qs}`} className="hover:text-brand-600">
                 Excluded: <strong className="text-red-600">{formatPrice(p.failed.amount)}</strong>{" "}
@@ -216,6 +254,10 @@ export default async function RevenueDetailPage({ searchParams }: Props) {
               <Link href={`/admin/dashboard/cancelled${qs}`} className="hover:text-brand-600">
                 <strong className="text-amber-600">{formatPrice(p.cancelled.amount)}</strong>{" "}
                 cancelled ({p.cancelled.orders}) →
+              </Link>
+              <Link href={`/admin/dashboard/rto${qs}`} className="hover:text-brand-600">
+                <strong className="text-orange-600">{formatPrice(p.returned.amount)}</strong>{" "}
+                RTO / returned ({p.returned.orders}) →
               </Link>
             </p>
           )}

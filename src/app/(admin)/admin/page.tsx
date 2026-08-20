@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import {
   ShoppingBag, IndianRupee, Package, AlertTriangle,
   Users, Clock, Receipt, CreditCard, Banknote, Hourglass, XCircle, Ban, Wallet,
+  Undo2,
 } from "lucide-react";
 import { StatsCard } from "@/components/admin/StatsCard";
 import { RevenueChart } from "@/components/admin/RevenueChart";
@@ -40,8 +41,8 @@ export default async function AdminDashboard({ searchParams }: Props) {
   const periodCards = [
     {
       title:   `Orders · ${p.label}`,
-      value:   formatCompactNumber(p.liveOrders),
-      subtitle: "confirmed onwards — failed & cancelled excluded",
+      value:   formatCompactNumber(p.revenueOrders),
+      subtitle: "confirmed → delivered — failed, cancelled & RTO excluded",
       icon:    ShoppingBag,
       variant: "default" as const,
       href:    `/admin/dashboard/orders${qs}`,
@@ -77,6 +78,16 @@ export default async function AdminDashboard({ searchParams }: Props) {
       href:    `/admin/dashboard/failed${qs}`,
     },
     {
+      title:   `RTO / Returned · ${p.label}`,
+      value:   `${p.returned.orders}`,
+      subtitle: `− ${formatPrice(p.returned.amount)} off revenue${
+        p.customerReturn.orders > 0 ? ` · ${p.rto.orders} RTO, ${p.customerReturn.orders} customer` : ""
+      }`,
+      icon:    Undo2,
+      variant: p.returned.orders > 0 ? "danger" as const : "default" as const,
+      href:    `/admin/dashboard/rto${qs}`,
+    },
+    {
       title:   `Cancelled Orders · ${p.label}`,
       value:   `${p.cancelled.orders}`,
       subtitle: `${formatPrice(p.cancelled.amount)} cancelled · by customer & BoxDeal`,
@@ -86,8 +97,10 @@ export default async function AdminDashboard({ searchParams }: Props) {
     },
   ];
 
-  // Prepaid vs COD — both sides of the same estimate.
+  // Prepaid vs COD — both sides of the same estimate. Both counts use the same
+  // set as the Orders card above, so prepaid + COD always adds up to it.
   const { prepaid, cod } = p.byPayment;
+
   const paymentCards = [
     {
       title:   `Prepaid Revenue · ${p.label}`,
@@ -166,7 +179,7 @@ export default async function AdminDashboard({ searchParams }: Props) {
       </section>
 
       <section>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {lostCards.map((stat) => (
             <StatsCard key={stat.title} {...stat} />
           ))}
@@ -176,7 +189,7 @@ export default async function AdminDashboard({ searchParams }: Props) {
               Confirmed · Packed · Shipped · Out for Delivery · Delivered
             </p>
             <p className="mt-1 text-xs text-gray-400">
-              Order Placed, failed and cancelled orders are excluded.
+              Order Placed, failed, cancelled and RTO / returned orders are excluded.
             </p>
           </div>
         </div>

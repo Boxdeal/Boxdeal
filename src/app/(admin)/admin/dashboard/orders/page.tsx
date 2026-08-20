@@ -13,10 +13,10 @@ import type { DashboardPeriod, Order, OrderStatus, PaymentBucket } from "@/types
 export const metadata: Metadata = { title: "Orders — Admin" };
 export const dynamic = "force-dynamic";
 
-// Placed / cancelled are deliberately absent — those live in the Failed and
-// Cancelled tabs, not in the orders list.
+// Placed / cancelled / returned are deliberately absent — those live in the
+// Failed, Cancelled and RTO tabs, not in the orders list.
 const STATUS_ORDER: OrderStatus[] = [
-  "confirmed", "packed", "shipped", "out_for_delivery", "delivered", "returned",
+  "confirmed", "packed", "shipped", "out_for_delivery", "delivered",
 ];
 
 const PAY_BUCKETS: PaymentBucket[] = ["prepaid", "cod"];
@@ -84,12 +84,12 @@ export default async function OrdersDetailPage({ searchParams }: Props) {
   // "Orders" here means real orders — the same set the list below shows.
   const totals = split
     ? {
-        orders: split.liveOrders, revenue: split.revenue, revenueOrders: split.revenueOrders,
+        orders: split.revenueOrders, revenue: split.revenue, revenueOrders: split.revenueOrders,
         collected: split.collectedRevenue, pending: split.pendingRevenue,
         pendingOrders: split.pendingOrders,
       }
     : {
-        orders: p.liveOrders, revenue: p.revenue, revenueOrders: p.revenueOrders,
+        orders: p.revenueOrders, revenue: p.revenue, revenueOrders: p.revenueOrders,
         collected: p.collectedRevenue, pending: p.pendingRevenue,
         pendingOrders: p.pendingOrders,
       };
@@ -127,7 +127,7 @@ export default async function OrdersDetailPage({ searchParams }: Props) {
         <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
           <p className="text-sm text-gray-500">Orders</p>
           <p className="mt-1 text-2xl font-black text-gray-900">{totals.orders}</p>
-          <p className="mt-1 text-xs text-gray-400">confirmed onwards — failed &amp; cancelled excluded</p>
+          <p className="mt-1 text-xs text-gray-400">confirmed → delivered — failed, cancelled &amp; RTO excluded</p>
         </div>
         <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
           <p className="text-sm text-gray-500">Est. Revenue</p>
@@ -151,7 +151,7 @@ export default async function OrdersDetailPage({ searchParams }: Props) {
       </div>
 
       {/* What never became revenue — each has its own tab. */}
-      {(p.failed.orders > 0 || p.cancelled.orders > 0) && (
+      {(p.failed.orders > 0 || p.cancelled.orders > 0 || p.returned.orders > 0) && (
         <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-gray-100 bg-white px-4 py-3 text-sm">
           <TrendingDown className="h-4 w-4 flex-shrink-0 text-red-500" />
           <span className="text-gray-600">Not in revenue:</span>
@@ -160,6 +160,9 @@ export default async function OrdersDetailPage({ searchParams }: Props) {
           </Link>
           <Link href={`/admin/dashboard/cancelled?${base.toString()}`} className="font-medium text-gray-700 hover:text-brand-600">
             {p.cancelled.orders} cancelled ({formatPrice(p.cancelled.amount)}) →
+          </Link>
+          <Link href={`/admin/dashboard/rto?${base.toString()}`} className="font-medium text-gray-700 hover:text-brand-600">
+            {p.returned.orders} RTO / returned ({formatPrice(p.returned.amount)}) →
           </Link>
         </div>
       )}
@@ -171,7 +174,7 @@ export default async function OrdersDetailPage({ searchParams }: Props) {
           href={payLink(null)}
           className={`rounded-full px-4 py-1.5 text-sm font-medium ${!pay ? "bg-gray-800 text-white" : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-50"}`}
         >
-          All ({p.liveOrders})
+          All ({p.revenueOrders})
         </Link>
         {PAY_BUCKETS.map((b) => (
           <Link
@@ -179,7 +182,7 @@ export default async function OrdersDetailPage({ searchParams }: Props) {
             href={payLink(b)}
             className={`rounded-full px-4 py-1.5 text-sm font-medium ${pay === b ? "bg-gray-800 text-white" : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-50"}`}
           >
-            {PAYMENT_BUCKET_LABELS[b]} ({p.byPayment[b].liveOrders}) ·{" "}
+            {PAYMENT_BUCKET_LABELS[b]} ({p.byPayment[b].revenueOrders}) ·{" "}
             <span className={pay === b ? "text-gray-200" : "text-gray-400"}>
               {formatPrice(p.byPayment[b].revenue)}
             </span>

@@ -66,7 +66,7 @@ export default async function AdminOrdersPage({ searchParams }: Props) {
   const carryStr = carry.toString();
 
   const statuses: OrderStatus[] = [
-    "confirmed", "packed", "shipped", "out_for_delivery", "delivered", "returned",
+    "confirmed", "packed", "shipped", "out_for_delivery", "delivered",
   ];
 
   return (
@@ -74,13 +74,16 @@ export default async function AdminOrdersPage({ searchParams }: Props) {
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Orders</h1>
         <p className="mt-1 text-sm text-gray-500">
-          Confirmed orders onwards.{" "}
+          Confirmed → delivered orders.{" "}
           <Link href="/admin/dashboard/failed?period=all" className="font-medium text-brand-600 hover:text-brand-700">
             Failed
-          </Link>{" "}
-          and{" "}
+          </Link>,{" "}
           <Link href="/admin/dashboard/cancelled?period=all" className="font-medium text-brand-600 hover:text-brand-700">
             cancelled
+          </Link>{" "}
+          and{" "}
+          <Link href="/admin/dashboard/rto?period=all" className="font-medium text-brand-600 hover:text-brand-700">
+            RTO
           </Link>{" "}
           orders have their own tabs — a search here still finds them.
         </p>
@@ -121,6 +124,12 @@ export default async function AdminOrdersPage({ searchParams }: Props) {
           className="whitespace-nowrap rounded-full border border-gray-200 bg-white px-4 py-1.5 text-sm font-medium text-gray-500 transition-colors hover:bg-gray-50"
         >
           Cancelled →
+        </Link>
+        <Link
+          href="/admin/dashboard/rto?period=all"
+          className="whitespace-nowrap rounded-full border border-gray-200 bg-white px-4 py-1.5 text-sm font-medium text-gray-500 transition-colors hover:bg-gray-50"
+        >
+          RTO →
         </Link>
       </div>
 

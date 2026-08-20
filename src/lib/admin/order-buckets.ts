@@ -10,7 +10,8 @@ import type { OrderStatus, PaymentStatus } from "@/types";
 //               dismissed Razorpay / bad signature) or still sitting at "placed"
 //               (prepaid order created but never paid for). Never revenue.
 //   cancelled — a real cancellation of a live order, by the customer or by us.
-//   returned  — came back after delivery.
+//   returned  — the goods came back: an RTO (courier never delivered it) or a
+//               customer return after delivery. Its value is OUT of revenue.
 
 /** Statuses whose money counts toward the revenue estimate. */
 export const REVENUE_STATUSES: OrderStatus[] = [
@@ -18,11 +19,11 @@ export const REVENUE_STATUSES: OrderStatus[] = [
 ];
 
 /**
- * What belongs in the working Orders list: real orders that were paid for or
- * confirmed. Failed checkouts, never-confirmed "placed" orders and cancellations
- * are excluded — they have their own tabs.
+ * What belongs in the working Orders list. Failed checkouts, never-confirmed
+ * "placed" orders, cancellations and RTO/returns are all excluded — each has its
+ * own tab — so this is exactly the set that makes up the revenue estimate.
  */
-export const LIVE_ORDER_STATUSES: OrderStatus[] = [...REVENUE_STATUSES, "returned"];
+export const LIVE_ORDER_STATUSES: OrderStatus[] = REVENUE_STATUSES;
 
 export type OrderBucket = "revenue" | "failed" | "cancelled" | "returned";
 
@@ -60,6 +61,32 @@ export function failureReason(o: BucketableOrder): string {
 
 /** `.or(...)` argument matching every failed / never-confirmed order. */
 export const FAILED_OR_FILTER = "payment_status.eq.failed,status.eq.placed";
+
+// ── RTO vs customer return ──────────────────────────────────────────────────
+// Both land on status "returned". Shiprocket's RTO statuses fire on a shipment
+// that was never handed over, so `delivered_at` is the reliable separator: an
+// RTO never has one, a genuine customer return always does.
+
+export type ReturnKind = "rto" | "customer";
+
+export const RETURN_KIND_LABELS: Record<ReturnKind, string> = {
+  rto:      "RTO",
+  customer: "Customer return",
+};
+
+export const RETURN_KIND_COLORS: Record<ReturnKind, string> = {
+  rto:      "bg-orange-100 text-orange-700",
+  customer: "bg-gray-100 text-gray-600",
+};
+
+export const RETURN_KIND_HINTS: Record<ReturnKind, string> = {
+  rto:      "Never delivered — came back to origin",
+  customer: "Delivered, then returned by the customer",
+};
+
+export function returnKind(o: { delivered_at?: string | null }): ReturnKind {
+  return o.delivered_at ? "customer" : "rto";
+}
 
 // ── Who cancelled ───────────────────────────────────────────────────────────
 

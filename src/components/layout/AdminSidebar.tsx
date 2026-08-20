@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard, ShoppingBag, Package, Users,
-  Tag, Ticket, BarChart3, LogOut, Sparkles, TrendingUp, XCircle, Ban,
+  Tag, Ticket, BarChart3, LogOut, Sparkles, TrendingUp, XCircle, Ban, Undo2,
 } from "lucide-react";
 import { cn } from "@/lib/utils/helpers";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
@@ -16,6 +16,7 @@ const navItems = [
   { label: "Orders",      href: "/admin/orders",     icon: Package },
   { label: "Failed Orders", href: "/admin/dashboard/failed", icon: XCircle },
   { label: "Cancelled Orders", href: "/admin/dashboard/cancelled", icon: Ban },
+  { label: "RTO & Returns", href: "/admin/dashboard/rto", icon: Undo2 },
   { label: "Product Sales", href: "/admin/dashboard/products", icon: TrendingUp },
   { label: "Products",    href: "/admin/products",   icon: ShoppingBag },
   { label: "Featured & Deals", href: "/admin/featured", icon: Sparkles },

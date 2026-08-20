@@ -1,6 +1,6 @@
 import { fromZonedTime, formatInTimeZone } from "date-fns-tz";
 import { getSupabaseAdminClient } from "@/lib/supabase/server";
-import { orderBucket } from "@/lib/admin/order-buckets";
+import { orderBucket, returnKind } from "@/lib/admin/order-buckets";
 import type {
   DashboardPeriod, LostBucket, OrderStatus, PaymentBucket, PaymentSplit, PeriodStats,
   RevenueChartPoint,
@@ -129,6 +129,7 @@ export function getISTPeriodRange(
 
 type OrderRow = {
   placed_at: string;
+  delivered_at: string | null;
   total_amount: number | string;
   payment_status: string;
   payment_method: string;
@@ -155,7 +156,7 @@ export async function getPeriodStats(
   const [curRes, prevRes] = await Promise.all([
     admin
       .from("orders")
-      .select("placed_at, total_amount, payment_status, payment_method, status")
+      .select("placed_at, delivered_at, total_amount, payment_status, payment_method, status")
       .gte("placed_at", range.start.toISOString())
       .lte("placed_at", range.end.toISOString()),
     admin
@@ -179,7 +180,7 @@ export async function getPeriodStats(
   });
 
   const emptySplit = (): PaymentSplit => ({
-    orders: 0, liveOrders: 0,
+    orders: 0,
     revenueOrders: 0, revenue: 0,
     collectedOrders: 0, collectedRevenue: 0,
     pendingOrders: 0, pendingRevenue: 0,
@@ -196,7 +197,6 @@ export async function getPeriodStats(
   const chartMap = new Map<string, { revenue: number; orders: number; prepaidRevenue: number; codRevenue: number }>();
 
   let orders = 0;
-  let liveOrders = 0;
   let revenue = 0;
   let revenueOrders = 0;
   let collectedRevenue = 0;
@@ -206,6 +206,8 @@ export async function getPeriodStats(
   const failed: LostBucket = { orders: 0, amount: 0 };
   const cancelled: LostBucket = { orders: 0, amount: 0 };
   const returned: LostBucket = { orders: 0, amount: 0 };
+  const rto: LostBucket = { orders: 0, amount: 0 };
+  const customerReturn: LostBucket = { orders: 0, amount: 0 };
 
   for (const o of rows) {
     const amount = Number(o.total_amount) || 0;
@@ -227,11 +229,6 @@ export async function getPeriodStats(
     const payStatusRow = pay.byStatus[o.status] ?? (pay.byStatus[o.status] = { count: 0, revenue: 0 });
     payStatusRow.count++;
     payStatusRow.revenue += amount;
-
-    if (bucket === "revenue" || bucket === "returned") {
-      liveOrders++;
-      pay.liveOrders++;
-    }
 
     if (bucket === "revenue") {
       revenue += amount;
@@ -265,8 +262,12 @@ export async function getPeriodStats(
       pay.cancelledOrders++;
       pay.cancelledRevenue += amount;
     } else {
+      // RTO or a customer return — either way the money leaves the estimate.
       returned.orders++;
       returned.amount += amount;
+      const kind = returnKind(o) === "rto" ? rto : customerReturn;
+      kind.orders++;
+      kind.amount += amount;
     }
 
     chartMap.set(key, day);
@@ -291,7 +292,6 @@ export async function getPeriodStats(
     start: range.start.toISOString(),
     end: range.end.toISOString(),
     orders,
-    liveOrders,
     revenueOrders,
     revenue,
     collectedRevenue,
@@ -301,6 +301,8 @@ export async function getPeriodStats(
     failed,
     cancelled,
     returned,
+    rto,
+    customerReturn,
     avgOrderValue: revenueOrders > 0 ? Math.round(revenue / revenueOrders) : 0,
     byStatus,
     byPayment,
