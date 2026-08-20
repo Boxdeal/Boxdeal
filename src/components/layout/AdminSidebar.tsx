@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard, ShoppingBag, Package, Users,
-  Tag, Ticket, BarChart3, LogOut, Sparkles, TrendingUp, XCircle, Ban, Undo2,
+  Tag, Ticket, BarChart3, LogOut, Sparkles, TrendingUp, XCircle, Ban, Undo2, Wallet,
 } from "lucide-react";
 import { cn } from "@/lib/utils/helpers";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
@@ -14,6 +14,7 @@ import { logout } from "@/store/slices/authSlice";
 const navItems = [
   { label: "Dashboard",   href: "/admin",            icon: LayoutDashboard },
   { label: "Orders",      href: "/admin/orders",     icon: Package },
+  { label: "Money Collected", href: "/admin/dashboard/collected", icon: Wallet },
   { label: "Failed Orders", href: "/admin/dashboard/failed", icon: XCircle },
   { label: "Cancelled Orders", href: "/admin/dashboard/cancelled", icon: Ban },
   { label: "RTO & Returns", href: "/admin/dashboard/rto", icon: Undo2 },

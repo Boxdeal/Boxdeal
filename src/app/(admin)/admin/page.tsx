@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import {
   ShoppingBag, IndianRupee, Package, AlertTriangle,
   Users, Clock, Receipt, CreditCard, Banknote, Hourglass, XCircle, Ban, Wallet,
@@ -208,12 +209,16 @@ export default async function AdminDashboard({ searchParams }: Props) {
           ))}
         </div>
         <div className="mt-4 space-y-2 rounded-2xl border border-gray-100 bg-white p-4 text-sm shadow-sm">
-          <p className="flex flex-wrap items-center gap-1.5 text-gray-600">
+          <Link
+            href={`/admin/dashboard/collected${qs}`}
+            className="flex flex-wrap items-center gap-1.5 text-gray-600 hover:text-brand-600"
+          >
             <Wallet className="h-4 w-4 flex-shrink-0 text-green-500" />
             Already collected:{" "}
             <strong className="text-gray-900">{formatPrice(p.collectedRevenue)}</strong>
             <span className="text-gray-400">({p.collectedOrders} orders paid)</span>
-          </p>
+            <span className="text-xs font-medium text-brand-600">where it came from →</span>
+          </Link>
           {p.pendingOrders > 0 && (
             <p className="flex flex-wrap items-center gap-1.5 text-gray-600">
               <Hourglass className="h-4 w-4 flex-shrink-0 text-amber-500" />

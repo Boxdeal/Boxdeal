@@ -85,7 +85,9 @@ export default async function RevenueDetailPage({ searchParams }: Props) {
     },
     {
       title: "Already Collected", value: formatPrice(shown.collected),
-      subtitle: "money in hand", icon: Wallet, variant: "default" as const,
+      subtitle: "money in hand — see where it came from",
+      icon: Wallet, variant: "default" as const,
+      href: `/admin/dashboard/collected${qs}${pay ? `&pay=${pay}` : ""}`,
     },
     {
       title: "Yet to Collect", value: formatPrice(shown.pending),
@@ -226,7 +228,14 @@ export default async function RevenueDetailPage({ searchParams }: Props) {
                         </Link>
                       </td>
                       <td className="py-2 text-right text-gray-500">{s.revenueOrders}</td>
-                      <td className="py-2 text-right text-gray-700">{formatPrice(s.collectedRevenue)}</td>
+                      <td className="py-2 text-right">
+                        <Link
+                          href={`/admin/dashboard/collected${qs}&pay=${b}`}
+                          className="text-gray-700 hover:text-brand-600"
+                        >
+                          {formatPrice(s.collectedRevenue)}
+                        </Link>
+                      </td>
                       <td className="py-2 text-right text-amber-700">
                         {s.pendingRevenue > 0 ? formatPrice(s.pendingRevenue) : "—"}
                       </td>
@@ -237,7 +246,14 @@ export default async function RevenueDetailPage({ searchParams }: Props) {
                 <tr className="border-t border-gray-200">
                   <td className="pt-2 font-medium text-gray-700">Total</td>
                   <td className="pt-2 text-right text-gray-500">{p.revenueOrders}</td>
-                  <td className="pt-2 text-right text-gray-700">{formatPrice(p.collectedRevenue)}</td>
+                  <td className="pt-2 text-right">
+                    <Link
+                      href={`/admin/dashboard/collected${qs}`}
+                      className="text-gray-700 hover:text-brand-600"
+                    >
+                      {formatPrice(p.collectedRevenue)}
+                    </Link>
+                  </td>
                   <td className="pt-2 text-right text-amber-700">{formatPrice(p.pendingRevenue)}</td>
                   <td className="pt-2 text-right font-black">{formatPrice(p.revenue)}</td>
                 </tr>
