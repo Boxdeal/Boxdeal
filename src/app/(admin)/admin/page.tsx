@@ -40,7 +40,8 @@ export default async function AdminDashboard({ searchParams }: Props) {
   const periodCards = [
     {
       title:   `Orders · ${p.label}`,
-      value:   formatCompactNumber(p.orders),
+      value:   formatCompactNumber(p.liveOrders),
+      subtitle: "confirmed onwards — failed & cancelled excluded",
       icon:    ShoppingBag,
       variant: "default" as const,
       href:    `/admin/dashboard/orders${qs}`,

@@ -17,6 +17,13 @@ export const REVENUE_STATUSES: OrderStatus[] = [
   "confirmed", "packed", "shipped", "out_for_delivery", "delivered",
 ];
 
+/**
+ * What belongs in the working Orders list: real orders that were paid for or
+ * confirmed. Failed checkouts, never-confirmed "placed" orders and cancellations
+ * are excluded — they have their own tabs.
+ */
+export const LIVE_ORDER_STATUSES: OrderStatus[] = [...REVENUE_STATUSES, "returned"];
+
 export type OrderBucket = "revenue" | "failed" | "cancelled" | "returned";
 
 /** The fields any bucket decision needs — works on a full Order or a slim row. */

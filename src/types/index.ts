@@ -405,6 +405,8 @@ export type PaymentBucket = "prepaid" | "cod";
 // part of revenue.
 export interface PaymentSplit {
   orders: number;
+  /** Real orders — revenue statuses plus returned. Excludes failed/cancelled. */
+  liveOrders: number;
   revenueOrders: number;
   revenue: number;
   collectedOrders: number;
@@ -433,6 +435,8 @@ export interface PeriodStats {
   start: string;
   end: string;
   orders: number;
+  /** Real orders — revenue statuses plus returned. Excludes failed/cancelled. */
+  liveOrders: number;
   revenueOrders: number;
   revenue: number;
   collectedRevenue: number;
@@ -448,6 +452,7 @@ export interface PeriodStats {
   byPayment: Record<PaymentBucket, PaymentSplit>;
   chart: RevenueChartPoint[];
   prevRevenue: number;
+  /** Live-order count in the previous window, for the trend comparison. */
   prevOrders: number;
 }
 

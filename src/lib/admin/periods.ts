@@ -1,6 +1,6 @@
 import { fromZonedTime, formatInTimeZone } from "date-fns-tz";
 import { getSupabaseAdminClient } from "@/lib/supabase/server";
-import { countsAsRevenue, orderBucket } from "@/lib/admin/order-buckets";
+import { orderBucket } from "@/lib/admin/order-buckets";
 import type {
   DashboardPeriod, LostBucket, OrderStatus, PaymentBucket, PaymentSplit, PeriodStats,
   RevenueChartPoint,
@@ -179,7 +179,7 @@ export async function getPeriodStats(
   });
 
   const emptySplit = (): PaymentSplit => ({
-    orders: 0,
+    orders: 0, liveOrders: 0,
     revenueOrders: 0, revenue: 0,
     collectedOrders: 0, collectedRevenue: 0,
     pendingOrders: 0, pendingRevenue: 0,
@@ -196,6 +196,7 @@ export async function getPeriodStats(
   const chartMap = new Map<string, { revenue: number; orders: number; prepaidRevenue: number; codRevenue: number }>();
 
   let orders = 0;
+  let liveOrders = 0;
   let revenue = 0;
   let revenueOrders = 0;
   let collectedRevenue = 0;
@@ -226,6 +227,11 @@ export async function getPeriodStats(
     const payStatusRow = pay.byStatus[o.status] ?? (pay.byStatus[o.status] = { count: 0, revenue: 0 });
     payStatusRow.count++;
     payStatusRow.revenue += amount;
+
+    if (bucket === "revenue" || bucket === "returned") {
+      liveOrders++;
+      pay.liveOrders++;
+    }
 
     if (bucket === "revenue") {
       revenue += amount;
@@ -270,8 +276,10 @@ export async function getPeriodStats(
   let prevRevenue = 0;
   let prevOrders = 0;
   for (const o of (prevRes.data ?? []) as Array<{ total_amount: number | string; payment_status: string; status: OrderStatus }>) {
+    const b = orderBucket(o);
+    if (b === "failed" || b === "cancelled") continue; // same set as liveOrders
     prevOrders++;
-    if (countsAsRevenue(o)) prevRevenue += Number(o.total_amount) || 0;
+    if (b === "revenue") prevRevenue += Number(o.total_amount) || 0;
   }
 
   const chart: RevenueChartPoint[] = Array.from(chartMap.entries())
@@ -283,6 +291,7 @@ export async function getPeriodStats(
     start: range.start.toISOString(),
     end: range.end.toISOString(),
     orders,
+    liveOrders,
     revenueOrders,
     revenue,
     collectedRevenue,

@@ -5,6 +5,7 @@ import { getSupabaseAdminClient } from "@/lib/supabase/server";
 import { OrdersTable } from "@/components/admin/OrdersTable";
 import { PeriodSelector } from "@/components/admin/PeriodSelector";
 import { getPeriodStats, getISTPeriodRange } from "@/lib/admin/periods";
+import { LIVE_ORDER_STATUSES } from "@/lib/admin/order-buckets";
 import { formatPrice } from "@/lib/utils/format";
 import { ORDER_STATUS_LABELS, PAYMENT_BUCKET_LABELS, PAYMENT_BUCKET_METHODS } from "@/constants";
 import type { DashboardPeriod, Order, OrderStatus, PaymentBucket } from "@/types";
@@ -12,8 +13,10 @@ import type { DashboardPeriod, Order, OrderStatus, PaymentBucket } from "@/types
 export const metadata: Metadata = { title: "Orders — Admin" };
 export const dynamic = "force-dynamic";
 
+// Placed / cancelled are deliberately absent — those live in the Failed and
+// Cancelled tabs, not in the orders list.
 const STATUS_ORDER: OrderStatus[] = [
-  "placed", "confirmed", "packed", "shipped", "out_for_delivery", "delivered", "cancelled", "returned",
+  "confirmed", "packed", "shipped", "out_for_delivery", "delivered", "returned",
 ];
 
 const PAY_BUCKETS: PaymentBucket[] = ["prepaid", "cod"];
@@ -45,6 +48,8 @@ export default async function OrdersDetailPage({ searchParams }: Props) {
   if (filter === "pending")      query = query.eq("status", "confirmed");
   else if (filter === "overdue") query = query.eq("status", "confirmed").lt("pack_deadline", new Date().toISOString());
   else if (status)               query = query.eq("status", status);
+  // Unfiltered = real orders only; failed and cancelled have their own tabs.
+  else query = query.in("status", LIVE_ORDER_STATUSES).neq("payment_status", "failed");
 
   if (pay) query = query.in("payment_method", PAYMENT_BUCKET_METHODS[pay]);
 
@@ -76,14 +81,15 @@ export default async function OrdersDetailPage({ searchParams }: Props) {
   // Totals follow the payment bucket when one is selected, so the headline
   // numbers always match the list below them.
   const split = pay ? p.byPayment[pay] : null;
+  // "Orders" here means real orders — the same set the list below shows.
   const totals = split
     ? {
-        orders: split.orders, revenue: split.revenue, revenueOrders: split.revenueOrders,
+        orders: split.liveOrders, revenue: split.revenue, revenueOrders: split.revenueOrders,
         collected: split.collectedRevenue, pending: split.pendingRevenue,
         pendingOrders: split.pendingOrders,
       }
     : {
-        orders: p.orders, revenue: p.revenue, revenueOrders: p.revenueOrders,
+        orders: p.liveOrders, revenue: p.revenue, revenueOrders: p.revenueOrders,
         collected: p.collectedRevenue, pending: p.pendingRevenue,
         pendingOrders: p.pendingOrders,
       };
@@ -119,9 +125,9 @@ export default async function OrdersDetailPage({ searchParams }: Props) {
       {/* Totals — scoped to the selected payment bucket when there is one */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-          <p className="text-sm text-gray-500">Total Orders</p>
+          <p className="text-sm text-gray-500">Orders</p>
           <p className="mt-1 text-2xl font-black text-gray-900">{totals.orders}</p>
-          <p className="mt-1 text-xs text-gray-400">every order placed in this period</p>
+          <p className="mt-1 text-xs text-gray-400">confirmed onwards — failed &amp; cancelled excluded</p>
         </div>
         <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
           <p className="text-sm text-gray-500">Est. Revenue</p>
@@ -165,7 +171,7 @@ export default async function OrdersDetailPage({ searchParams }: Props) {
           href={payLink(null)}
           className={`rounded-full px-4 py-1.5 text-sm font-medium ${!pay ? "bg-gray-800 text-white" : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-50"}`}
         >
-          All ({p.orders})
+          All ({p.liveOrders})
         </Link>
         {PAY_BUCKETS.map((b) => (
           <Link
@@ -173,7 +179,7 @@ export default async function OrdersDetailPage({ searchParams }: Props) {
             href={payLink(b)}
             className={`rounded-full px-4 py-1.5 text-sm font-medium ${pay === b ? "bg-gray-800 text-white" : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-50"}`}
           >
-            {PAYMENT_BUCKET_LABELS[b]} ({p.byPayment[b].orders}) ·{" "}
+            {PAYMENT_BUCKET_LABELS[b]} ({p.byPayment[b].liveOrders}) ·{" "}
             <span className={pay === b ? "text-gray-200" : "text-gray-400"}>
               {formatPrice(p.byPayment[b].revenue)}
             </span>

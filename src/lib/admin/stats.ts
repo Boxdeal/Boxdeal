@@ -1,6 +1,6 @@
 import { getSupabaseAdminClient } from "@/lib/supabase/server";
 import { istDayKey, istDayStart, addDaysKey } from "@/lib/admin/periods";
-import { countsAsRevenue, REVENUE_STATUSES } from "@/lib/admin/order-buckets";
+import { countsAsRevenue, LIVE_ORDER_STATUSES, REVENUE_STATUSES } from "@/lib/admin/order-buckets";
 import type { DashboardStats, RevenueChartPoint, Order } from "@/types";
 
 const CHART_DAYS = 30;
@@ -44,7 +44,10 @@ export async function getAdminDashboard(): Promise<{
     admin.from("orders").select("id", { count: "exact", head: true }).eq("status", "confirmed").lt("pack_deadline", now.toISOString()),
     admin.from("products").select("stock_quantity, low_stock_threshold, is_active"),
     admin.from("user_profiles").select("id", { count: "exact", head: true }).eq("is_admin", false),
-    admin.from("orders").select("*").order("placed_at", { ascending: false }).limit(10),
+    // Recent = real orders only; failed and cancelled have their own tabs.
+    admin.from("orders").select("*")
+      .in("status", LIVE_ORDER_STATUSES).neq("payment_status", "failed")
+      .order("placed_at", { ascending: false }).limit(10),
   ]);
 
   // Revenue = the estimate (confirmed → delivered). Orders still at "placed"

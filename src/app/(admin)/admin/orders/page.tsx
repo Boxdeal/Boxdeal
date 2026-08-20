@@ -5,6 +5,7 @@ import { OrdersTable } from "@/components/admin/OrdersTable";
 import { OrdersSearch } from "@/components/admin/OrdersSearch";
 import { getISTPeriodRange } from "@/lib/admin/periods";
 import { buildOrderSearchFilter } from "@/lib/admin/order-search";
+import { LIVE_ORDER_STATUSES } from "@/lib/admin/order-buckets";
 import type { DashboardPeriod, Order, OrderStatus } from "@/types";
 import { ORDER_STATUS_LABELS } from "@/constants";
 
@@ -34,7 +35,12 @@ export default async function AdminOrdersPage({ searchParams }: Props) {
     .order("placed_at", { ascending: false })
     .range(from, to);
 
-  if (status) query = query.eq("status", status);
+  // Real orders only. A never-confirmed "placed" order, a failed checkout and a
+  // cancellation are not part of the working list — each has its own tab. A
+  // search is the exception: support must be able to find ANY order by number,
+  // phone or AWB, whatever happened to it.
+  if (status)   query = query.eq("status", status);
+  else if (!q)  query = query.in("status", LIVE_ORDER_STATUSES).neq("payment_status", "failed");
 
   // Optional IST date-range filter (period preset or custom from/to).
   if (period || fromDate || toDate) {
@@ -59,11 +65,26 @@ export default async function AdminOrdersPage({ searchParams }: Props) {
   if (toDate) carry.set("to", toDate);
   const carryStr = carry.toString();
 
-  const statuses: OrderStatus[] = ["placed", "confirmed", "packed", "shipped", "delivered", "cancelled"];
+  const statuses: OrderStatus[] = [
+    "confirmed", "packed", "shipped", "out_for_delivery", "delivered", "returned",
+  ];
 
   return (
     <div className="p-6 space-y-4">
-      <h1 className="text-2xl font-bold text-gray-900">Orders</h1>
+      <div>
+        <h1 className="text-2xl font-bold text-gray-900">Orders</h1>
+        <p className="mt-1 text-sm text-gray-500">
+          Confirmed orders onwards.{" "}
+          <Link href="/admin/dashboard/failed?period=all" className="font-medium text-brand-600 hover:text-brand-700">
+            Failed
+          </Link>{" "}
+          and{" "}
+          <Link href="/admin/dashboard/cancelled?period=all" className="font-medium text-brand-600 hover:text-brand-700">
+            cancelled
+          </Link>{" "}
+          orders have their own tabs — a search here still finds them.
+        </p>
+      </div>
 
       <OrdersSearch resultCount={count ?? 0} />
 
@@ -88,6 +109,19 @@ export default async function AdminOrdersPage({ searchParams }: Props) {
             {ORDER_STATUS_LABELS[s]}
           </Link>
         ))}
+        <span className="mx-1 w-px flex-shrink-0 bg-gray-200" />
+        <Link
+          href="/admin/dashboard/failed?period=all"
+          className="whitespace-nowrap rounded-full border border-gray-200 bg-white px-4 py-1.5 text-sm font-medium text-gray-500 transition-colors hover:bg-gray-50"
+        >
+          Failed →
+        </Link>
+        <Link
+          href="/admin/dashboard/cancelled?period=all"
+          className="whitespace-nowrap rounded-full border border-gray-200 bg-white px-4 py-1.5 text-sm font-medium text-gray-500 transition-colors hover:bg-gray-50"
+        >
+          Cancelled →
+        </Link>
       </div>
 
       <OrdersTable orders={(orders ?? []) as Order[]} />
