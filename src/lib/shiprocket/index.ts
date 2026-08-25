@@ -244,3 +244,65 @@ export async function trackOrder(awb: string) {
   if (!res.ok) throw new Error(data.message ?? "Tracking failed");
   return data;
 }
+
+/**
+ * Cancel a shipment by its AWB. Required BEFORE cancelling the order itself once
+ * a courier has been assigned — otherwise the courier still attempts pickup and
+ * delivery even though the order shows cancelled on our side.
+ */
+export async function cancelShipmentAwb(awb: string) {
+  const res = await shiprocketFetch("/orders/cancel/shipment/awbs", {
+    method: "POST",
+    body: JSON.stringify({ awbs: [awb] }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message ?? "AWB cancellation failed");
+  return data;
+}
+
+/** Cancel an order on Shiprocket by their numeric order id. */
+export async function cancelShiprocketOrder(shiprocketOrderId: string | number) {
+  const res = await shiprocketFetch("/orders/cancel", {
+    method: "POST",
+    body: JSON.stringify({ ids: [Number(shiprocketOrderId)] }),
+  });
+  const data = await res.json();
+  // Already-cancelled orders come back as an error — treat that as success so a
+  // repeat cancel is idempotent rather than surfacing a scary message.
+  const msg = String(data?.message ?? "");
+  if (!res.ok && !/already|cancel/i.test(msg)) {
+    throw new Error(msg || "Shiprocket order cancellation failed");
+  }
+  return data;
+}
+
+/**
+ * Live snapshot of an order as Shiprocket currently sees it — used to reconcile
+ * when a webhook was missed (Shiprocket fires each event once and never replays)
+ * or when the courier/AWB was changed from the Shiprocket panel.
+ *
+ * Shiprocket returns `shipments` as either an object or an array depending on
+ * the order, so both shapes are normalised here.
+ */
+export async function getShiprocketOrder(shiprocketOrderId: string | number): Promise<{
+  awb: string | null;
+  courier_name: string | null;
+  status: string | null;
+  shipment_id: string | null;
+}> {
+  const res = await shiprocketFetch(`/orders/show/${shiprocketOrderId}`);
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message ?? "Shiprocket order lookup failed");
+
+  const d = data?.data ?? data ?? {};
+  const raw = d.shipments;
+  const shipment = (Array.isArray(raw) ? raw[0] : raw) ?? {};
+
+  const str = (v: unknown) => (v != null && v !== "" ? String(v) : null);
+  return {
+    awb:          str(shipment.awb ?? shipment.awb_code),
+    courier_name: str(shipment.courier ?? shipment.courier_name),
+    status:       str(shipment.status ?? d.status),
+    shipment_id:  str(shipment.id ?? d.shipment_id),
+  };
+}

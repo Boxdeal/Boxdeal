@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { getSupabaseAdminClient } from "@/lib/supabase/server";
 import { sendOrderShipped, sendOrderDelivered } from "@/lib/resend/index";
-import { refundRazorpayPayment } from "@/lib/razorpay/index";
-import { createShiprocketOrder, generateAWB, getDeliveryRate, getTrackingUrl, type ShipmentItem } from "@/lib/shiprocket/index";
+import { createShiprocketOrder, generateAWB, getDeliveryRate, getShiprocketOrder, getTrackingUrl, type ShipmentItem } from "@/lib/shiprocket/index";
+import { cancelOnShiprocket, settleEndedOrder } from "@/lib/orders/fulfillment";
+import { ENDED_STATUSES, mapShiprocketStatus, STATUS_TIMESTAMP_FIELD } from "@/lib/shiprocket/status";
 import type { Order, OrderStatus } from "@/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { ORDER_CANCEL_WINDOW_HOURS, USER_CANCELLABLE_STATUSES } from "@/constants";
@@ -142,76 +143,6 @@ async function fulfillShiprocket(
   }
 }
 
-// Statuses at which an order's stock has already been decremented (online at
-// payment verify, COD at creation). Cancelling from any of these must give the
-// stock back; cancelling a still-"placed" (unpaid online) order must not.
-const STOCK_TAKEN_STATUSES: OrderStatus[] = [
-  "confirmed", "packed", "shipped", "out_for_delivery", "delivered",
-];
-
-/**
- * Return an order's items to stock. Best-effort & idempotent-safe to call once
- * per cancellation: only call it when the order was in a stock-taken status.
- */
-async function restoreOrderStock(admin: SupabaseClient, id: string): Promise<void> {
-  const { data: items } = await admin
-    .from("order_items")
-    .select("product_id, quantity")
-    .eq("order_id", id);
-  if (!items?.length) return;
-
-  const results = await Promise.allSettled(
-    items.map((it) =>
-      admin.rpc("restore_stock", { p_product_id: it.product_id, p_quantity: it.quantity })
-    )
-  );
-  results.forEach((r, i) => {
-    if (r.status === "rejected") {
-      console.error(`Stock restore failed for ${items[i].product_id} on order ${id}:`, r.reason);
-    }
-  });
-}
-
-/**
- * Refund a cancelled order's payment back to the customer, if it was paid
- * online via Razorpay. Best-effort & safe to call for any order: COD or unpaid
- * orders are a no-op. A refund failure is returned (not thrown) so the caller
- * can still cancel the order and surface the error for a manual refund.
- */
-async function refundOrderPayment(
-  id: string,
-  order: {
-    payment_status: string | null;
-    payment_method: string | null;
-    razorpay_payment_id: string | null;
-    total_amount: number;
-  }
-): Promise<{ refunded: boolean; error: string | null }> {
-  const wasPaidOnline =
-    order.payment_status === "paid" &&
-    order.payment_method === "razorpay" &&
-    !!order.razorpay_payment_id;
-
-  if (!wasPaidOnline) return { refunded: false, error: null };
-
-  const refundAmount = order.total_amount;
-  if (refundAmount <= 0) return { refunded: false, error: null };
-
-  try {
-    await refundRazorpayPayment(
-      order.razorpay_payment_id as string,
-      Math.round(refundAmount * 100)
-    );
-    return { refunded: true, error: null };
-  } catch (e) {
-    console.error(`Razorpay refund failed for order ${id}:`, e);
-    return {
-      refunded: false,
-      error: e instanceof Error ? e.message : "Refund failed",
-    };
-  }
-}
-
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -231,7 +162,7 @@ export async function PATCH(
     const admin = getSupabaseAdminClient();
     const { data: order } = await admin
       .from("orders")
-      .select("id, user_id, status, placed_at, payment_method, payment_status, razorpay_payment_id, total_amount")
+      .select("id, user_id, status, placed_at, payment_method, payment_status, razorpay_payment_id, total_amount, tracking_number, shiprocket_order_id")
       .eq("id", id)
       .single();
 
@@ -255,10 +186,15 @@ export async function PATCH(
       );
     }
 
+    // Kill the shipment on Shiprocket first so the courier doesn't still pick up
+    // and deliver a parcel that shows as cancelled on our side. Best-effort — a
+    // Shiprocket failure must not block the customer's cancellation.
+    const { error: srCancelError } = await cancelOnShiprocket(order);
+
     // Auto-refund a paid online payment back to the original method. Best-effort:
     // a refund failure must NOT block the cancellation — we still cancel the order
     // and surface the error so the team can refund manually.
-    const { refunded, error: refundError } = await refundOrderPayment(id, order);
+    const { refunded, refundError } = await settleEndedOrder(admin, order);
 
     const { data: cancelled, error: cancelError } = await admin
       .from("orders")
@@ -273,12 +209,6 @@ export async function PATCH(
     if (cancelError)
       return NextResponse.json({ error: cancelError.message }, { status: 500 });
 
-    // Give the stock back if it had already been taken (i.e. not a still-unpaid
-    // "placed" online order).
-    if (STOCK_TAKEN_STATUSES.includes(order.status as OrderStatus)) {
-      await restoreOrderStock(admin, id);
-    }
-
     await admin.from("order_status_history").insert({
       order_id:   id,
       status:     "cancelled",
@@ -288,7 +218,12 @@ export async function PATCH(
       updated_by: user.id,
     });
 
-    return NextResponse.json({ data: cancelled, refunded, refund_error: refundError });
+    return NextResponse.json({
+      data: cancelled,
+      refunded,
+      refund_error: refundError,
+      shiprocket_error: srCancelError,
+    });
   }
 
   const { data: profile } = await supabase
@@ -356,6 +291,131 @@ export async function PATCH(
     return NextResponse.json({ data: updated });
   }
 
+  // Manually set / correct the AWB + courier at ANY status. Shiprocket can fail
+  // to auto-assign, or the courier can be reassigned in the Shiprocket panel —
+  // the admin must be able to type the real AWB in without having to be sitting
+  // on the exact "packed → shipped" transition (which is all the status form
+  // used to allow, and only when no AWB existed yet).
+  if (action === "set_tracking") {
+    const awb     = typeof body.tracking_number === "string" ? body.tracking_number.trim() : "";
+    const courier = typeof body.courier_name    === "string" ? body.courier_name.trim()    : "";
+
+    const { data: o } = await admin
+      .from("orders").select("status, tracking_number, courier_name").eq("id", id).single();
+    if (!o) return NextResponse.json({ error: "Order not found" }, { status: 404 });
+
+    // An empty AWB clears tracking entirely (used to undo a wrong entry).
+    const update: Record<string, unknown> = {
+      tracking_number: awb || null,
+      tracking_url:    awb ? getTrackingUrl(awb) : null,
+      courier_name:    courier || null,
+    };
+
+    const { data: updated, error } = await admin
+      .from("orders").update(update).eq("id", id).select().single();
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+    await admin.from("order_status_history").insert({
+      order_id:   id,
+      status:     o.status,
+      note:       awb
+        ? `AWB set manually to ${awb}${courier ? ` (${courier})` : ""}${o.tracking_number && o.tracking_number !== awb ? ` — replaced ${o.tracking_number}` : ""}`
+        : `AWB cleared${o.tracking_number ? ` (was ${o.tracking_number})` : ""}`,
+      updated_by: user.id,
+    });
+
+    return NextResponse.json({ data: updated });
+  }
+
+  // Pull the live shipment state from Shiprocket and reconcile it onto the order.
+  // Needed because Shiprocket fires each webhook event exactly once and never
+  // replays it — so a courier reassignment / new AWB / cancellation that happened
+  // while the webhook was misconfigured would otherwise never reach us.
+  if (action === "sync_shiprocket") {
+    const { data: o } = await admin
+      .from("orders")
+      .select("id, status, tracking_number, courier_name, payment_status, payment_method, razorpay_payment_id, total_amount, shiprocket_order_id")
+      .eq("id", id)
+      .single();
+    if (!o) return NextResponse.json({ error: "Order not found" }, { status: 404 });
+    if (!o.shiprocket_order_id) {
+      return NextResponse.json(
+        { error: "This order was never pushed to Shiprocket — nothing to sync." },
+        { status: 400 }
+      );
+    }
+
+    let live;
+    try {
+      live = await getShiprocketOrder(o.shiprocket_order_id);
+    } catch (e) {
+      return NextResponse.json(
+        { error: e instanceof Error ? e.message : "Shiprocket lookup failed" },
+        { status: 502 }
+      );
+    }
+
+    const update: Record<string, unknown> = {};
+    const changes: string[] = [];
+
+    // AWB / courier reassignment — overwrite, don't just fill in blanks.
+    if (live.awb && live.awb !== o.tracking_number) {
+      update.tracking_number = live.awb;
+      update.tracking_url    = getTrackingUrl(live.awb);
+      changes.push(`AWB ${o.tracking_number ?? "—"} → ${live.awb}`);
+    }
+    if (live.courier_name && live.courier_name !== o.courier_name) {
+      update.courier_name = live.courier_name;
+      changes.push(`courier ${o.courier_name ?? "—"} → ${live.courier_name}`);
+    }
+
+    // Status — reuse the same mapping the webhook uses so both paths agree.
+    const mapped = live.status ? mapShiprocketStatus(live.status) : null;
+    // Never regress an order that already ended (delivered/cancelled/returned).
+    const statusChanged =
+      !!mapped && mapped !== o.status && !ENDED_STATUSES.includes(o.status as OrderStatus);
+    if (statusChanged) {
+      update.status = mapped;
+      const tsField = STATUS_TIMESTAMP_FIELD[mapped];
+      if (tsField) update[tsField] = new Date().toISOString();
+      changes.push(`status ${o.status} → ${mapped}`);
+    }
+
+    let refunded = false;
+    let refundError: string | null = null;
+    if (statusChanged && (mapped === "cancelled" || mapped === "returned")) {
+      ({ refunded, refundError } = await settleEndedOrder(admin, o));
+      if (refunded) update.payment_status = "refunded";
+    }
+    if (statusChanged && mapped === "delivered" && o.payment_method === "cod" && o.payment_status !== "paid") {
+      update.payment_status = "paid";
+    }
+
+    if (changes.length === 0) {
+      return NextResponse.json({ ok: true, changed: false, message: "Already up to date with Shiprocket." });
+    }
+
+    const { data: updated, error } = await admin
+      .from("orders").update(update).eq("id", id).select().single();
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+    await admin.from("order_status_history").insert({
+      order_id:   id,
+      status:     (update.status as OrderStatus) ?? (o.status as OrderStatus),
+      note:       `Synced from Shiprocket: ${changes.join(", ")}`,
+      updated_by: user.id,
+    });
+
+    return NextResponse.json({
+      ok: true,
+      changed: true,
+      changes,
+      data: updated,
+      refunded,
+      refund_error: refundError,
+    });
+  }
+
   // Retry-only path: re-run Shiprocket fulfillment (create order if needed +
   // generate AWB) WITHOUT changing the order status. Used by the admin "Retry
   // tracking" button after fixing wallet balance / serviceability.
@@ -380,9 +440,14 @@ export async function PATCH(
   if (status === "packed")           updateData.packed_at    = new Date().toISOString();
   if (status === "shipped") {
     updateData.shipped_at = new Date().toISOString();
-    // Allow a manual override only when Shiprocket didn't already fill these in.
-    if (tracking_number) updateData.tracking_number = tracking_number;
-    if (courier_name)    updateData.courier_name    = courier_name;
+    // A manually-entered AWB always wins — it's the admin correcting Shiprocket,
+    // so it must overwrite whatever is stored (previously it was silently dropped
+    // whenever a tracking number already existed) and get its tracking URL too.
+    if (tracking_number) {
+      updateData.tracking_number = tracking_number.trim();
+      updateData.tracking_url    = getTrackingUrl(tracking_number.trim());
+    }
+    if (courier_name) updateData.courier_name = courier_name.trim();
   }
   if (status === "delivered")        updateData.delivered_at = new Date().toISOString();
 
@@ -390,20 +455,26 @@ export async function PATCH(
   // behaviour as a customer self-cancel). Best-effort — see refundOrderPayment.
   let refunded = false;
   let refundError: string | null = null;
-  if (status === "cancelled") {
-    updateData.cancelled_at = new Date().toISOString();
+  let srCancelError: string | null = null;
+  if (status === "cancelled" || status === "returned") {
+    if (status === "cancelled") updateData.cancelled_at = new Date().toISOString();
+
     const { data: payInfo } = await admin
       .from("orders")
-      .select("status, payment_status, payment_method, razorpay_payment_id, total_amount")
+      .select("id, status, payment_status, payment_method, razorpay_payment_id, total_amount, tracking_number, shiprocket_order_id")
       .eq("id", id)
       .single();
+
     if (payInfo) {
-      ({ refunded, error: refundError } = await refundOrderPayment(id, payInfo));
-      if (refunded) updateData.payment_status = "refunded";
-      // Give stock back if it had already been taken for this order.
-      if (STOCK_TAKEN_STATUSES.includes(payInfo.status as OrderStatus)) {
-        await restoreOrderStock(admin, id);
+      // Cancelling here must also cancel the live shipment on Shiprocket —
+      // otherwise the courier still picks up and delivers a "cancelled" order.
+      // A return is a physical movement that Shiprocket already owns, so it is
+      // recorded locally only.
+      if (status === "cancelled") {
+        ({ error: srCancelError } = await cancelOnShiprocket(payInfo));
       }
+      ({ refunded, refundError } = await settleEndedOrder(admin, payInfo));
+      if (refunded) updateData.payment_status = "refunded";
     }
   }
 
@@ -443,7 +514,7 @@ export async function PATCH(
 
   return NextResponse.json({
     data: order,
-    shiprocket_error: shiprocketError,
+    shiprocket_error: shiprocketError ?? srCancelError,
     refunded,
     refund_error: refundError,
   });

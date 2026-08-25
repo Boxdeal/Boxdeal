@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { getSupabaseAdminClient } from "@/lib/supabase/server";
 import { OrderStatusUpdater } from "./OrderStatusUpdater";
 import { AdminDiscount } from "./AdminDiscount";
+import { TrackingEditor } from "./TrackingEditor";
 import { ORDER_STATUS_LABELS, ORDER_STATUS_COLORS } from "@/constants";
 import { formatPrice, formatDateTime } from "@/lib/utils/format";
 import { cn } from "@/lib/utils/helpers";
@@ -91,6 +92,14 @@ export default async function AdminOrderDetailPage({
 
           {/* Update status */}
           <OrderStatusUpdater orderId={order.id} currentStatus={order.status} hasTracking={!!order.tracking_number} trackingNumber={order.tracking_number} courierName={order.courier_name} />
+
+          {/* Manual AWB entry / correction + pull-based Shiprocket reconcile */}
+          <TrackingEditor
+            orderId={order.id}
+            trackingNumber={order.tracking_number}
+            courierName={order.courier_name}
+            hasShiprocketOrder={!!order.shiprocket_order_id}
+          />
         </div>
 
         <div className="space-y-4">
@@ -150,12 +159,20 @@ export default async function AdminOrderDetailPage({
           <div className="rounded-2xl border border-gray-100 bg-white p-4">
             <h2 className="mb-3 font-semibold text-gray-900">Timeline</h2>
             <div className="space-y-2">
-              {(order.status_history ?? []).map((h: { id: string; status: string; created_at: string; note?: string }) => (
-                <div key={h.id} className="flex gap-2 text-xs">
-                  <span className={cn("rounded-full px-2 py-0.5 font-medium", ORDER_STATUS_COLORS[h.status as keyof typeof ORDER_STATUS_COLORS])}>
-                    {ORDER_STATUS_LABELS[h.status as keyof typeof ORDER_STATUS_LABELS]}
-                  </span>
-                  <span className="text-gray-400">{formatDateTime(h.created_at)}</span>
+              {[...(order.status_history ?? [])]
+                .sort((a: { created_at: string }, b: { created_at: string }) =>
+                  new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+                .map((h: { id: string; status: string; created_at: string; note?: string | null }) => (
+                <div key={h.id} className="space-y-0.5">
+                  <div className="flex gap-2 text-xs">
+                    <span className={cn("rounded-full px-2 py-0.5 font-medium", ORDER_STATUS_COLORS[h.status as keyof typeof ORDER_STATUS_COLORS])}>
+                      {ORDER_STATUS_LABELS[h.status as keyof typeof ORDER_STATUS_LABELS]}
+                    </span>
+                    <span className="text-gray-400">{formatDateTime(h.created_at)}</span>
+                  </div>
+                  {/* Where AWB / courier / sync changes surface — without this the
+                      timeline showed a repeating status chip and nothing else. */}
+                  {h.note && <p className="pl-1 text-xs text-gray-500">{h.note}</p>}
                 </div>
               ))}
             </div>

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { ORDER_STATUS_LABELS } from "@/constants";
+import { ENDED_STATUSES } from "@/lib/shiprocket/status";
 import type { OrderStatus } from "@/types";
 import { toast } from "sonner";
 
@@ -29,10 +30,16 @@ export function OrderStatusUpdater({
 }) {
   const [loading, setLoading] = useState(false);
   const [note, setNote] = useState("");
-  const [trackingNum, setTrackingNum] = useState("");
   const router = useRouter();
 
   const next = NEXT_STATUS[currentStatus];
+
+  // An order can be cancelled right up until it's delivered/returned — cancelling
+  // now also cancels the shipment on Shiprocket, so it's safe past "packed".
+  const canCancel = !ENDED_STATUSES.includes(currentStatus);
+  // A return / RTO is only meaningful once the parcel actually left the warehouse.
+  const RETURNABLE: OrderStatus[] = ["shipped", "out_for_delivery", "delivered"];
+  const canReturn = RETURNABLE.includes(currentStatus);
 
   // Order has reached/passed "packed" but no AWB was generated (e.g. Shiprocket
   // wallet was empty at pack time). Let the admin retry without re-packing.
@@ -62,9 +69,8 @@ export function OrderStatusUpdater({
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        status:          next,
-        note:            note || undefined,
-        tracking_number: trackingNum || undefined,
+        status: next,
+        note:   note || undefined,
       }),
     });
     const { error, shiprocket_error } = await res.json();
@@ -79,14 +85,14 @@ export function OrderStatusUpdater({
   }
 
   async function cancelOrder() {
-    if (!confirm("Cancel this order?")) return;
+    if (!confirm("Cancel this order? The Shiprocket shipment is cancelled too and any online payment is refunded.")) return;
     setLoading(true);
     const res = await fetch(`/api/orders/${orderId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status: "cancelled" }),
     });
-    const { error, refunded, refund_error } = await res.json();
+    const { error, refunded, refund_error, shiprocket_error } = await res.json();
     setLoading(false);
     if (error) { toast.error(error); return; }
     toast.success("Order cancelled");
@@ -95,10 +101,33 @@ export function OrderStatusUpdater({
     } else if (refund_error) {
       toast.warning(`Order cancelled, but refund failed: ${refund_error}. Refund manually from Razorpay.`);
     }
+    if (shiprocket_error) {
+      toast.warning(`Cancelled here, but Shiprocket said: ${shiprocket_error}. Cancel the shipment in Shiprocket manually.`);
+    }
     router.refresh();
   }
 
-  if (!next && !canRetryShiprocket && currentStatus !== "placed" && currentStatus !== "confirmed") return null;
+  async function markReturned() {
+    if (!confirm("Mark this order as returned? Stock goes back and any online payment is refunded.")) return;
+    setLoading(true);
+    const res = await fetch(`/api/orders/${orderId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "returned", note: "Return received" }),
+    });
+    const { error, refunded, refund_error } = await res.json();
+    setLoading(false);
+    if (error) { toast.error(error); return; }
+    toast.success("Order marked as returned");
+    if (refunded) {
+      toast.success("Refund initiated to the customer's original payment method.");
+    } else if (refund_error) {
+      toast.warning(`Marked returned, but refund failed: ${refund_error}. Refund manually from Razorpay.`);
+    }
+    router.refresh();
+  }
+
+  if (!next && !canRetryShiprocket && !canCancel && !canReturn) return null;
 
   return (
     <div className="rounded-2xl border border-gray-100 bg-white p-5 space-y-4">
@@ -127,16 +156,9 @@ export function OrderStatusUpdater({
             {courierName ? ` (${courierName})` : ""}. Just click “Mark as Shipped” — no need to enter anything.
           </div>
         ) : (
-          <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">
-              Tracking Number <span className="font-normal text-gray-400">(enter manually — Shiprocket did not auto-generate one)</span>
-            </label>
-            <input
-              value={trackingNum}
-              onChange={(e) => setTrackingNum(e.target.value)}
-              placeholder="AWB / Tracking number"
-              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-brand-400 focus:outline-none"
-            />
+          <div className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
+            No AWB yet. Enter it in the <span className="font-semibold">Tracking / AWB</span> box below —
+            it can be set or corrected at any status.
           </div>
         )
       )}
@@ -159,7 +181,16 @@ export function OrderStatusUpdater({
             {loading ? "Updating…" : `Mark as ${ORDER_STATUS_LABELS[next]}`}
           </button>
         )}
-        {["placed", "confirmed"].includes(currentStatus) && (
+        {canReturn && (
+          <button
+            onClick={markReturned}
+            disabled={loading}
+            className="rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+          >
+            Mark Returned
+          </button>
+        )}
+        {canCancel && (
           <button
             onClick={cancelOrder}
             disabled={loading}
