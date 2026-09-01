@@ -474,6 +474,13 @@ export interface ProductSalesRow {
   codUnits: number;
 }
 
+/** Units + distinct orders of one product sitting in a given order status. */
+export interface ProductStatusCount {
+  status: OrderStatus;
+  orders: number;
+  units: number;
+}
+
 /** One IST day of sales for a single product. */
 export interface ProductDayRow {
   date: string;

@@ -4,25 +4,33 @@ import Image from "next/image";
 import { ArrowLeft, Package, TrendingDown } from "lucide-react";
 import { PeriodSelector } from "@/components/admin/PeriodSelector";
 import { ProductSalesTable } from "@/components/admin/ProductSalesTable";
+import { ProductStatusFilter } from "@/components/admin/ProductStatusFilter";
 import { RevenueChart } from "@/components/admin/RevenueChart";
 import { OrdersTable } from "@/components/admin/OrdersTable";
 import { getSupabaseAdminClient } from "@/lib/supabase/server";
 import { getISTPeriodRange, prettyDay } from "@/lib/admin/periods";
 import { getProductSales, getProductDaily } from "@/lib/admin/product-sales";
 import { formatPrice } from "@/lib/utils/format";
-import type { DashboardPeriod, Order } from "@/types";
+import { ORDER_STATUS_LABELS } from "@/constants";
+import type { DashboardPeriod, Order, OrderStatus } from "@/types";
 
 export const metadata: Metadata = { title: "Product Sales — Admin" };
 export const dynamic = "force-dynamic";
 
 interface Props {
   searchParams: Promise<{
-    period?: DashboardPeriod; from?: string; to?: string; product?: string;
+    period?: DashboardPeriod; from?: string; to?: string; product?: string; status?: string;
   }>;
 }
 
 export default async function ProductSalesPage({ searchParams }: Props) {
-  const { period = "today", from, to, product } = await searchParams;
+  const { period = "today", from, to, product, status } = await searchParams;
+
+  // Only accept a status we actually know — a junk ?status= must not silently
+  // filter everything away.
+  const statusFilter = (status && status in ORDER_STATUS_LABELS ? status : undefined) as
+    | OrderStatus
+    | undefined;
 
   const range = getISTPeriodRange(period, { from, to });
   const q = new URLSearchParams({ period });
@@ -31,7 +39,7 @@ export default async function ProductSalesPage({ searchParams }: Props) {
   const qs = `?${q.toString()}`;
 
   return product
-    ? <ProductDetail productId={product} period={period} from={from} to={to} label={range.label} qs={qs} />
+    ? <ProductDetail productId={product} period={period} from={from} to={to} label={range.label} qs={qs} status={statusFilter} />
     : <ProductList period={period} from={from} to={to} label={range.label} qs={qs} />;
 }
 
@@ -68,14 +76,18 @@ async function ProductList({
 /* ── One product, day by day ────────────────────────────────────────────── */
 
 async function ProductDetail({
-  productId, period, from, to, label, qs,
-}: { productId: string; period: DashboardPeriod; from?: string; to?: string; label: string; qs: string }) {
-  const [{ days, totals }, orders] = await Promise.all([
-    getProductDaily(productId, period, { from, to }),
-    fetchProductOrders(productId, period, from, to),
+  productId, period, from, to, label, qs, status,
+}: {
+  productId: string; period: DashboardPeriod; from?: string; to?: string;
+  label: string; qs: string; status?: OrderStatus;
+}) {
+  const [{ days, totals, statusCounts }, orders] = await Promise.all([
+    getProductDaily(productId, period, { from, to, status }),
+    fetchProductOrders(productId, period, from, to, status),
   ]);
 
   const backHref = `/admin/dashboard/products${qs}`;
+  const statusLabel = status ? ORDER_STATUS_LABELS[status] : null;
 
   if (!totals) {
     return (
@@ -122,13 +134,20 @@ async function ProductDetail({
             )}
             <div>
               <h1 className="text-xl font-bold text-gray-900">{totals.product_name}</h1>
-              <p className="font-mono text-xs text-gray-400">{totals.product_sku} · {label}</p>
+              <p className="font-mono text-xs text-gray-400">
+                {totals.product_sku} · {label}
+                {statusLabel && <span className="ml-1 font-sans font-semibold text-brand-600">· {statusLabel} only</span>}
+              </p>
             </div>
           </div>
           <PeriodSelector defaultPeriod="today" />
         </div>
       </div>
 
+      <ProductStatusFilter counts={statusCounts} active={status} />
+
+      {/* Every number below — cards, chart, day table, orders — respects the
+          selected status, so the view reads as one consistent slice. */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Card title="Orders" value={String(totals.orders)} />
         <Card title="Units" value={String(totals.units)} sub={`${totals.prepaidUnits} prepaid · ${totals.codUnits} COD`} />
@@ -147,41 +166,55 @@ async function ProductDetail({
         </div>
       )}
 
-      <RevenueChart split data={chart} title="Daily revenue — prepaid vs COD" />
+      {days.length === 0 ? (
+        <div className="rounded-2xl border border-gray-100 bg-white p-10 text-center text-sm text-gray-400 shadow-sm">
+          No {statusLabel ? `${statusLabel.toLowerCase()} ` : ""}orders for this product in {label}.
+        </div>
+      ) : (
+        <>
+        <RevenueChart split data={chart} title="Daily revenue — prepaid vs COD" />
 
-      <div className="overflow-x-auto rounded-2xl border border-gray-100 bg-white shadow-sm">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-gray-100 bg-gray-50">
-              <th className="px-4 py-3 text-left font-semibold text-gray-600">Day</th>
-              <th className="px-4 py-3 text-right font-semibold text-gray-600">Orders</th>
-              <th className="px-4 py-3 text-right font-semibold text-gray-600">Units</th>
-              <th className="px-4 py-3 text-right font-semibold text-gray-600">Collected</th>
-              <th className="px-4 py-3 text-right font-semibold text-gray-600">Est. incoming</th>
-            </tr>
-          </thead>
-          <tbody>
-            {[...days].reverse().map((d) => (
-              <tr key={d.date} className="border-b border-gray-50">
-                <td className="px-4 py-3 font-medium text-gray-700">{prettyDay(d.date)}</td>
-                <td className="px-4 py-3 text-right text-gray-600">{d.orders}</td>
-                <td className="px-4 py-3 text-right font-semibold text-gray-900">{d.units}</td>
-                <td className="px-4 py-3 text-right text-gray-900">{formatPrice(d.revenue)}</td>
-                <td className="px-4 py-3 text-right text-amber-700">
-                  {d.pendingRevenue > 0 ? formatPrice(d.pendingRevenue) : "—"}
-                </td>
+        <div className="overflow-x-auto rounded-2xl border border-gray-100 bg-white shadow-sm">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-gray-100 bg-gray-50">
+                <th className="px-4 py-3 text-left font-semibold text-gray-600">Day</th>
+                <th className="px-4 py-3 text-right font-semibold text-gray-600">Orders</th>
+                <th className="px-4 py-3 text-right font-semibold text-gray-600">Units</th>
+                <th className="px-4 py-3 text-right font-semibold text-gray-600">Collected</th>
+                <th className="px-4 py-3 text-right font-semibold text-gray-600">Est. incoming</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody>
+              {[...days].reverse().map((d) => (
+                <tr key={d.date} className="border-b border-gray-50">
+                  <td className="px-4 py-3 font-medium text-gray-700">{prettyDay(d.date)}</td>
+                  <td className="px-4 py-3 text-right text-gray-600">{d.orders}</td>
+                  <td className="px-4 py-3 text-right font-semibold text-gray-900">{d.units}</td>
+                  <td className="px-4 py-3 text-right text-gray-900">{formatPrice(d.revenue)}</td>
+                  <td className="px-4 py-3 text-right text-amber-700">
+                    {d.pendingRevenue > 0 ? formatPrice(d.pendingRevenue) : "—"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        </>
+      )}
 
       <section>
         <h2 className="mb-3 text-lg font-semibold text-gray-700">
-          Orders containing this product
+          {statusLabel ? `${statusLabel} orders with this product` : "Orders containing this product"}
           {orders.length === 100 && <span className="ml-1 text-xs font-normal text-gray-400">(latest 100)</span>}
         </h2>
-        <OrdersTable orders={orders} />
+        {orders.length === 0 ? (
+          <div className="rounded-2xl border border-gray-100 bg-white p-8 text-center text-sm text-gray-400 shadow-sm">
+            No matching orders.
+          </div>
+        ) : (
+          <OrdersTable orders={orders} />
+        )}
       </section>
     </div>
   );
@@ -192,19 +225,22 @@ async function fetchProductOrders(
   productId: string,
   period: DashboardPeriod,
   from?: string,
-  to?: string
+  to?: string,
+  status?: OrderStatus
 ): Promise<Order[]> {
   const admin = getSupabaseAdminClient();
   const range = getISTPeriodRange(period, { from, to });
 
-  const { data } = await admin
+  let q = admin
     .from("orders")
     .select("*, order_items!inner(product_id)")
     .eq("order_items.product_id", productId)
     .gte("placed_at", range.start.toISOString())
-    .lte("placed_at", range.end.toISOString())
-    .order("placed_at", { ascending: false })
-    .limit(100);
+    .lte("placed_at", range.end.toISOString());
+
+  if (status) q = q.eq("status", status);
+
+  const { data } = await q.order("placed_at", { ascending: false }).limit(100);
 
   return (data ?? []) as Order[];
 }
