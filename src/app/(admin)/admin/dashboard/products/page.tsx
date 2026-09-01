@@ -1,10 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import Image from "next/image";
-import { ArrowLeft, Package, TrendingDown } from "lucide-react";
+import { ArrowLeft, Package } from "lucide-react";
 import { PeriodSelector } from "@/components/admin/PeriodSelector";
 import { ProductSalesTable } from "@/components/admin/ProductSalesTable";
 import { ProductStatusFilter } from "@/components/admin/ProductStatusFilter";
+import { ExcludedUnitsCell, ExcludedUnitsNote } from "@/components/admin/ExcludedUnits";
 import { RevenueChart } from "@/components/admin/RevenueChart";
 import { OrdersTable } from "@/components/admin/OrdersTable";
 import { getSupabaseAdminClient } from "@/lib/supabase/server";
@@ -65,7 +66,9 @@ async function ProductList({
       <ProductSalesTable rows={rows} qs={qs} />
 
       <p className="text-xs text-gray-400">
-        Units count every order placed in the period. Collected is money already in
+        Units sold counts only live orders — confirmed, packed, shipped, out for delivery
+        or delivered. Never-confirmed, cancelled and returned units are held out and listed
+        under “Not counted”, never mixed into the item count. Collected is money already in
         (COD counts on delivery); est. incoming is what is still expected. Line value is
         quantity × selling price — order-level coupon and admin discounts are not deducted.
       </p>
@@ -150,21 +153,12 @@ async function ProductDetail({
           selected status, so the view reads as one consistent slice. */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Card title="Orders" value={String(totals.orders)} />
-        <Card title="Units" value={String(totals.units)} sub={`${totals.prepaidUnits} prepaid · ${totals.codUnits} COD`} />
+        <Card title="Units sold" value={String(totals.units)} sub={`${totals.prepaidUnits} prepaid · ${totals.codUnits} COD`} />
         <Card title="Collected" value={formatPrice(totals.revenue)} />
         <Card title="Estimated incoming" value={formatPrice(totals.pendingRevenue)} amber />
       </div>
 
-      {totals.cancelledUnits > 0 && (
-        <div className="flex items-center gap-2 rounded-2xl border border-red-100 bg-red-50/50 px-4 py-3 text-sm">
-          <TrendingDown className="h-4 w-4 flex-shrink-0 text-red-500" />
-          <span className="text-gray-600">
-            <strong className="text-red-600">{totals.cancelledUnits} unit
-            {totals.cancelledUnits === 1 ? "" : "s"}</strong> in cancelled / returned / failed orders — not counted
-            in collected or the estimate.
-          </span>
-        </div>
-      )}
+      <ExcludedUnitsNote row={totals} label="units sold" />
 
       {days.length === 0 ? (
         <div className="rounded-2xl border border-gray-100 bg-white p-10 text-center text-sm text-gray-400 shadow-sm">
@@ -180,9 +174,10 @@ async function ProductDetail({
               <tr className="border-b border-gray-100 bg-gray-50">
                 <th className="px-4 py-3 text-left font-semibold text-gray-600">Day</th>
                 <th className="px-4 py-3 text-right font-semibold text-gray-600">Orders</th>
-                <th className="px-4 py-3 text-right font-semibold text-gray-600">Units</th>
+                <th className="px-4 py-3 text-right font-semibold text-gray-600">Units sold</th>
                 <th className="px-4 py-3 text-right font-semibold text-gray-600">Collected</th>
                 <th className="px-4 py-3 text-right font-semibold text-gray-600">Est. incoming</th>
+                <th className="px-4 py-3 text-right font-semibold text-gray-600">Not counted</th>
               </tr>
             </thead>
             <tbody>
@@ -194,6 +189,9 @@ async function ProductDetail({
                   <td className="px-4 py-3 text-right text-gray-900">{formatPrice(d.revenue)}</td>
                   <td className="px-4 py-3 text-right text-amber-700">
                     {d.pendingRevenue > 0 ? formatPrice(d.pendingRevenue) : "—"}
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    <ExcludedUnitsCell row={d} />
                   </td>
                 </tr>
               ))}

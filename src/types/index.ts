@@ -460,16 +460,29 @@ export interface PeriodStats {
 // expected, and cancelled/returned units are tracked separately (never in the
 // estimate). Item value is quantity × selling_price, so order-level coupon and
 // admin discounts are NOT deducted here.
-export interface ProductSalesRow {
+/**
+ * Units of one product that are NOT live sales, split by why. These are held
+ * out of `units` / `orders` entirely rather than netted off, so the headline
+ * item count only ever means "actually sold".
+ */
+export interface ExcludedUnits {
+  /** Never confirmed — still at "placed", or the checkout/payment failed. */
+  placedUnits: number;
+  cancelledUnits: number;
+  returnedUnits: number;
+}
+
+export interface ProductSalesRow extends ExcludedUnits {
   product_id: string;
   product_name: string;
   product_image: string | null;
   product_sku: string;
+  /** Live orders only — cancelled / never-confirmed / returned are excluded. */
   orders: number;
+  /** Live units only — see ExcludedUnits for what was held out. */
   units: number;
   revenue: number;
   pendingRevenue: number;
-  cancelledUnits: number;
   prepaidUnits: number;
   codUnits: number;
 }
@@ -482,8 +495,9 @@ export interface ProductStatusCount {
 }
 
 /** One IST day of sales for a single product. */
-export interface ProductDayRow {
+export interface ProductDayRow extends ExcludedUnits {
   date: string;
+  /** Live orders / units only, same rule as ProductSalesRow. */
   orders: number;
   units: number;
   revenue: number;

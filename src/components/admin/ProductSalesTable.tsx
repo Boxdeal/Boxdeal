@@ -5,6 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { Package, Search, X } from "lucide-react";
 import { formatPrice } from "@/lib/utils/format";
+import { ExcludedUnitsCell, ExcludedUnitsNote } from "@/components/admin/ExcludedUnits";
 import type { ProductSalesRow } from "@/types";
 
 /**
@@ -12,6 +13,10 @@ import type { ProductSalesRow } from "@/types";
  * already loaded, so filtering happens in the browser — instantly, and the
  * summary cards follow the filter so a search like "zebronics" reads out that
  * brand's units and revenue rather than the whole period's.
+ *
+ * "Units" counts only live orders (confirmed → delivered). Never-confirmed,
+ * cancelled and returned units are held out and reported in their own column /
+ * summary note rather than being mixed into the item count.
  */
 export function ProductSalesTable({ rows, qs }: { rows: ProductSalesRow[]; qs: string }) {
   const [query, setQuery] = useState("");
@@ -30,6 +35,15 @@ export function ProductSalesTable({ rows, qs }: { rows: ProductSalesRow[]; qs: s
   const totalRevenue = filtered.reduce((a, r) => a + r.revenue, 0);
   const totalPending = filtered.reduce((a, r) => a + r.pendingRevenue, 0);
   const isFiltered = filtered.length !== rows.length;
+
+  const excluded = filtered.reduce(
+    (a, r) => ({
+      placedUnits:    a.placedUnits    + r.placedUnits,
+      cancelledUnits: a.cancelledUnits + r.cancelledUnits,
+      returnedUnits:  a.returnedUnits  + r.returnedUnits,
+    }),
+    { placedUnits: 0, cancelledUnits: 0, returnedUnits: 0 }
+  );
 
   return (
     <div className="space-y-5">
@@ -56,10 +70,12 @@ export function ProductSalesTable({ rows, qs }: { rows: ProductSalesRow[]; qs: s
 
       <div className="grid gap-4 sm:grid-cols-4">
         <Card title={isFiltered ? "Products matched" : "Products sold"} value={String(filtered.length)} />
-        <Card title="Units" value={String(totalUnits)} />
+        <Card title="Units sold" value={String(totalUnits)} />
         <Card title="Collected" value={formatPrice(totalRevenue)} />
         <Card title="Estimated incoming" value={formatPrice(totalPending)} amber />
       </div>
+
+      <ExcludedUnitsNote row={excluded} label="units sold" />
 
       {isFiltered && (
         <p className="-mt-2 text-xs text-gray-400">
@@ -79,10 +95,11 @@ export function ProductSalesTable({ rows, qs }: { rows: ProductSalesRow[]; qs: s
               <tr className="border-b border-gray-100 bg-gray-50">
                 <th className="px-4 py-3 text-left font-semibold text-gray-600">Product</th>
                 <th className="px-4 py-3 text-right font-semibold text-gray-600">Orders</th>
-                <th className="px-4 py-3 text-right font-semibold text-gray-600">Units</th>
+                <th className="px-4 py-3 text-right font-semibold text-gray-600">Units sold</th>
                 <th className="px-4 py-3 text-right font-semibold text-gray-600">Prepaid / COD</th>
                 <th className="px-4 py-3 text-right font-semibold text-gray-600">Collected</th>
                 <th className="px-4 py-3 text-right font-semibold text-gray-600">Est. incoming</th>
+                <th className="px-4 py-3 text-right font-semibold text-gray-600">Not counted</th>
                 <th className="px-4 py-3" />
               </tr>
             </thead>
@@ -118,11 +135,9 @@ export function ProductSalesTable({ rows, qs }: { rows: ProductSalesRow[]; qs: s
                   <td className="px-4 py-3 text-right font-semibold text-gray-900">{formatPrice(r.revenue)}</td>
                   <td className="px-4 py-3 text-right text-amber-700">
                     {r.pendingRevenue > 0 ? formatPrice(r.pendingRevenue) : "—"}
-                    {r.cancelledUnits > 0 && (
-                      <span className="ml-1 block text-[11px] text-red-500">
-                        −{r.cancelledUnits} not counted
-                      </span>
-                    )}
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    <ExcludedUnitsCell row={r} />
                   </td>
                   <td className="px-4 py-3 text-right">
                     <Link

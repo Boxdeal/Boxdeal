@@ -47,13 +47,29 @@ function lineValue(it: ItemRow): number {
   return (Number(it.selling_price) || 0) * it.quantity;
 }
 
+type UnitBucket = "live" | "placed" | "cancelled" | "returned";
+
+/** The ExcludedUnits field each non-live bucket accumulates into. */
+const EXCLUDED_FIELD = {
+  placed:    "placedUnits",
+  cancelled: "cancelledUnits",
+  returned:  "returnedUnits",
+} as const;
+
 /**
- * Anything that is not live revenue: cancelled, returned, refunded, a failed
- * checkout, or an order still stuck at "placed". Same rule the dashboard uses,
- * so these units never inflate the pending estimate.
+ * Which bucket a line's units belong to. Uses the dashboard's own orderBucket so
+ * the Product Sales tab can never disagree with the Failed / Cancelled / RTO
+ * tabs about what counts as a sale.
+ *
+ * Only "live" units are counted as sold; the other three are reported
+ * separately and never folded back into the item count. A delivered order that
+ * was refunded is treated as a return — the money and the goods both came back.
  */
-function isDead(o: JoinedOrder): boolean {
-  return o.payment_status === "refunded" || orderBucket(o) !== "revenue";
+function unitBucket(o: JoinedOrder): UnitBucket {
+  const b = orderBucket(o);
+  if (b === "failed") return "placed";
+  if (b !== "revenue") return b;
+  return o.payment_status === "refunded" ? "returned" : "live";
 }
 
 async function fetchItems(
@@ -86,21 +102,35 @@ function emptyTotals(it: Pick<ItemRow, "product_id" | "product_name" | "product_
     units:          0,
     revenue:        0,
     pendingRevenue: 0,
-    cancelledUnits: 0,
     prepaidUnits:   0,
     codUnits:       0,
+    placedUnits:    0,
+    cancelledUnits: 0,
+    returnedUnits:  0,
   };
 }
 
-/** Fold one order line into a product totals row. */
+/**
+ * Fold one order line into a product totals row.
+ *
+ * Non-live units are booked to their own bucket and contribute nothing else —
+ * not to units, not to the prepaid/COD split, and not to revenue. Previously a
+ * cancelled order whose refund had not gone through (still payment_status
+ * "paid") leaked into collected revenue; routing on the bucket first closes that.
+ */
 function accumulate(row: ProductSalesRow, it: ItemRow, o: JoinedOrder): void {
+  const bucket = unitBucket(o);
+  if (bucket !== "live") {
+    row[EXCLUDED_FIELD[bucket]] += it.quantity;
+    return;
+  }
+
   const value = lineValue(it);
   row.units += it.quantity;
   if (o.payment_method === "cod") row.codUnits += it.quantity;
   else row.prepaidUnits += it.quantity;
 
   if (o.payment_status === "paid") row.revenue += value;
-  else if (isDead(o)) row.cancelledUnits += it.quantity;
   else row.pendingRevenue += value;
 }
 
@@ -150,9 +180,13 @@ export async function getProductSales(
     accumulate(row, it, o);
     byProduct.set(it.product_id, row);
 
-    const set = orderIds.get(it.product_id) ?? new Set<string>();
-    set.add(it.order_id);
-    orderIds.set(it.product_id, set);
+    // Order count follows the unit count: a cancelled / never-confirmed /
+    // returned order is not a sale, so it must not inflate this either.
+    if (unitBucket(o) === "live") {
+      const set = orderIds.get(it.product_id) ?? new Set<string>();
+      set.add(it.order_id);
+      orderIds.set(it.product_id, set);
+    }
   }
 
   for (const [id, row] of byProduct) row.orders = orderIds.get(id)?.size ?? 0;
@@ -203,14 +237,24 @@ export async function getProductDaily(
     if (!o) continue;
 
     accumulate(totals, it, o);
-    allOrders.add(it.order_id);
 
     const key = istDayKey(new Date(o.placed_at));
     const day = dayMap.get(key) ?? {
       date: key, orders: 0, units: 0, revenue: 0,
       pendingRevenue: 0, prepaidRevenue: 0, codRevenue: 0,
+      placedUnits: 0, cancelledUnits: 0, returnedUnits: 0,
     };
+    dayMap.set(key, day);
 
+    // Same live/excluded rule as the totals, so a day's units always add up to
+    // the period's units.
+    const bucket = unitBucket(o);
+    if (bucket !== "live") {
+      day[EXCLUDED_FIELD[bucket]] += it.quantity;
+      continue;
+    }
+
+    allOrders.add(it.order_id);
     const value = lineValue(it);
     day.units += it.quantity;
 
@@ -218,11 +262,9 @@ export async function getProductDaily(
       day.revenue += value;
       if (o.payment_method === "cod") day.codRevenue += value;
       else day.prepaidRevenue += value;
-    } else if (!isDead(o)) {
+    } else {
       day.pendingRevenue += value;
     }
-
-    dayMap.set(key, day);
 
     const set = dayOrders.get(key) ?? new Set<string>();
     set.add(it.order_id);
