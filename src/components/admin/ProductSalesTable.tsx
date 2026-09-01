@@ -3,9 +3,9 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { Package, Search, X } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { ChevronRight, Package, Search, X } from "lucide-react";
 import { formatPrice } from "@/lib/utils/format";
-import { ExcludedUnitsCell, ExcludedUnitsNote } from "@/components/admin/ExcludedUnits";
 import type { ProductSalesRow } from "@/types";
 
 /**
@@ -14,12 +14,19 @@ import type { ProductSalesRow } from "@/types";
  * summary cards follow the filter so a search like "zebronics" reads out that
  * brand's units and revenue rather than the whole period's.
  *
- * "Units" counts only live orders (confirmed → delivered). Never-confirmed,
- * cancelled and returned units are held out and reported in their own column /
- * summary note rather than being mixed into the item count.
+ * "Units sold" counts only live orders (confirmed → delivered). Never-confirmed,
+ * cancelled and returned units are held out of it — this list stays a clean
+ * overview and the full breakdown lives one click deeper, in the day-wise view.
+ *
+ * Whole rows are clickable through to that view; the product name is also a real
+ * link so it can be keyboard-focused or opened in a new tab.
  */
 export function ProductSalesTable({ rows, qs }: { rows: ProductSalesRow[]; qs: string }) {
   const [query, setQuery] = useState("");
+  const router = useRouter();
+
+  const hrefFor = (productId: string) =>
+    `/admin/dashboard/products${qs}&product=${productId}`;
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -35,15 +42,6 @@ export function ProductSalesTable({ rows, qs }: { rows: ProductSalesRow[]; qs: s
   const totalRevenue = filtered.reduce((a, r) => a + r.revenue, 0);
   const totalPending = filtered.reduce((a, r) => a + r.pendingRevenue, 0);
   const isFiltered = filtered.length !== rows.length;
-
-  const excluded = filtered.reduce(
-    (a, r) => ({
-      placedUnits:    a.placedUnits    + r.placedUnits,
-      cancelledUnits: a.cancelledUnits + r.cancelledUnits,
-      returnedUnits:  a.returnedUnits  + r.returnedUnits,
-    }),
-    { placedUnits: 0, cancelledUnits: 0, returnedUnits: 0 }
-  );
 
   return (
     <div className="space-y-5">
@@ -75,8 +73,6 @@ export function ProductSalesTable({ rows, qs }: { rows: ProductSalesRow[]; qs: s
         <Card title="Estimated incoming" value={formatPrice(totalPending)} amber />
       </div>
 
-      <ExcludedUnitsNote row={excluded} label="units sold" />
-
       {isFiltered && (
         <p className="-mt-2 text-xs text-gray-400">
           Totals above cover the {filtered.length} matching product
@@ -99,13 +95,16 @@ export function ProductSalesTable({ rows, qs }: { rows: ProductSalesRow[]; qs: s
                 <th className="px-4 py-3 text-right font-semibold text-gray-600">Prepaid / COD</th>
                 <th className="px-4 py-3 text-right font-semibold text-gray-600">Collected</th>
                 <th className="px-4 py-3 text-right font-semibold text-gray-600">Est. incoming</th>
-                <th className="px-4 py-3 text-right font-semibold text-gray-600">Not counted</th>
                 <th className="px-4 py-3" />
               </tr>
             </thead>
             <tbody>
               {filtered.map((r) => (
-                <tr key={r.product_id} className="border-b border-gray-50 transition-colors hover:bg-gray-50/50">
+                <tr
+                  key={r.product_id}
+                  onClick={() => router.push(hrefFor(r.product_id))}
+                  className="cursor-pointer border-b border-gray-50 transition-colors hover:bg-brand-50/40"
+                >
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-3">
                       {r.product_image ? (
@@ -122,7 +121,13 @@ export function ProductSalesTable({ rows, qs }: { rows: ProductSalesRow[]; qs: s
                         </div>
                       )}
                       <div className="min-w-0">
-                        <p className="truncate font-medium text-gray-800">{r.product_name}</p>
+                        <Link
+                          href={hrefFor(r.product_id)}
+                          onClick={(e) => e.stopPropagation()}
+                          className="block truncate font-medium text-gray-800 hover:text-brand-600"
+                        >
+                          {r.product_name}
+                        </Link>
                         <p className="font-mono text-xs text-gray-400">{r.product_sku}</p>
                       </div>
                     </div>
@@ -136,16 +141,8 @@ export function ProductSalesTable({ rows, qs }: { rows: ProductSalesRow[]; qs: s
                   <td className="px-4 py-3 text-right text-amber-700">
                     {r.pendingRevenue > 0 ? formatPrice(r.pendingRevenue) : "—"}
                   </td>
-                  <td className="px-4 py-3 text-right">
-                    <ExcludedUnitsCell row={r} />
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    <Link
-                      href={`/admin/dashboard/products${qs}&product=${r.product_id}`}
-                      className="font-medium text-brand-600 hover:text-brand-700"
-                    >
-                      Day-wise
-                    </Link>
+                  <td className="w-8 px-2 py-3 text-right">
+                    <ChevronRight className="ml-auto h-4 w-4 text-gray-300" />
                   </td>
                 </tr>
               ))}
