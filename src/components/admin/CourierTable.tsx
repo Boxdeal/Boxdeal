@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ChevronDown, ChevronRight, Truck } from "lucide-react";
 import { cn } from "@/lib/utils/helpers";
 import { formatPrice } from "@/lib/utils/format";
+import type { ParcelState } from "@/lib/admin/order-buckets";
 import type { CourierRow } from "@/types";
 
 type SortKey = "parcels" | "delivered" | "deliveryRate" | "rto" | "value" | "avgDeliveryDays";
@@ -29,6 +30,21 @@ function compare(a: CourierRow, b: CourierRow, key: SortKey): number {
   const av = a[key] ?? -1;
   const bv = b[key] ?? -1;
   return (bv as number) - (av as number);
+}
+
+/**
+ * A count that drills into exactly the parcels behind it. Zero stays plain text
+ * — a link to an empty list is just a dead end.
+ */
+function Count({
+  n, href, className,
+}: { n: number; href: string; className?: string }) {
+  if (n === 0) return <span className="text-gray-300">—</span>;
+  return (
+    <Link href={href} className={cn("font-semibold hover:underline", className)}>
+      {n}
+    </Link>
+  );
 }
 
 function Rate({ value, good }: { value: number | null; good: boolean }) {
@@ -79,6 +95,11 @@ export function CourierTable({
   const [open, setOpen] = useState<Set<string>>(new Set());
 
   const sorted = useMemo(() => [...rows].sort((a, b) => compare(a, b, sort)), [rows, sort]);
+
+  /** Drill-down for one courier, optionally narrowed to a single parcel state. */
+  const link = (name: string, state?: ParcelState) =>
+    `/admin/dashboard/delivery${qs}&courier=${encodeURIComponent(name)}` +
+    (state ? `&state=${state}` : "");
 
   function toggle(name: string) {
     setOpen((prev) => {
@@ -172,11 +193,11 @@ export function CourierTable({
                       </span>
                     </td>
                     <td className="px-4 py-3"><ShareBar parcels={r.parcels} of={totalParcels} /></td>
-                    <td className="px-4 py-3 text-blue-600">{r.inTransit || "—"}</td>
-                    <td className="px-4 py-3 font-semibold text-green-600">{r.delivered || "—"}</td>
-                    <td className="px-4 py-3 font-semibold text-red-600">{r.rto || "—"}</td>
-                    <td className="px-4 py-3 text-gray-500">{r.customerReturn || "—"}</td>
-                    <td className="px-4 py-3 text-gray-500">{r.cancelled || "—"}</td>
+                    <td className="px-4 py-3"><Count n={r.inTransit} href={link(r.name, "transit")} className="text-blue-600" /></td>
+                    <td className="px-4 py-3"><Count n={r.delivered} href={link(r.name, "delivered")} className="text-green-600" /></td>
+                    <td className="px-4 py-3"><Count n={r.rto} href={link(r.name, "rto")} className="text-red-600" /></td>
+                    <td className="px-4 py-3"><Count n={r.customerReturn} href={link(r.name, "returned")} className="text-gray-500" /></td>
+                    <td className="px-4 py-3"><Count n={r.cancelled} href={link(r.name, "cancelled")} className="text-amber-600" /></td>
                     <td className="px-4 py-3"><Rate value={r.deliveryRate} good /></td>
                     <td className="px-4 py-3"><Rate value={r.rtoRate} good={false} /></td>
                     <td className="px-4 py-3 text-gray-600">
@@ -198,7 +219,7 @@ export function CourierTable({
                     </td>
                     <td className="px-4 py-3">
                       <Link
-                        href={`/admin/dashboard/delivery${qs}&courier=${encodeURIComponent(r.name)}`}
+                        href={link(r.name)}
                         className="font-medium text-brand-600 hover:text-brand-700"
                       >
                         Parcels
@@ -211,11 +232,11 @@ export function CourierTable({
                       <tr key={`${r.name}::${s.name}`} className="border-b border-gray-50 bg-gray-50/40 text-[13px]">
                         <td className="py-2 pl-12 pr-4 text-gray-600">{s.name}</td>
                         <td className="px-4 py-2"><ShareBar parcels={s.parcels} of={r.parcels} /></td>
-                        <td className="px-4 py-2 text-blue-600">{s.inTransit || "—"}</td>
-                        <td className="px-4 py-2 text-green-600">{s.delivered || "—"}</td>
-                        <td className="px-4 py-2 text-red-600">{s.rto || "—"}</td>
-                        <td className="px-4 py-2 text-gray-500">{s.customerReturn || "—"}</td>
-                        <td className="px-4 py-2 text-gray-500">{s.cancelled || "—"}</td>
+                        <td className="px-4 py-2"><Count n={s.inTransit} href={link(s.name, "transit")} className="text-blue-600" /></td>
+                        <td className="px-4 py-2"><Count n={s.delivered} href={link(s.name, "delivered")} className="text-green-600" /></td>
+                        <td className="px-4 py-2"><Count n={s.rto} href={link(s.name, "rto")} className="text-red-600" /></td>
+                        <td className="px-4 py-2"><Count n={s.customerReturn} href={link(s.name, "returned")} className="text-gray-500" /></td>
+                        <td className="px-4 py-2"><Count n={s.cancelled} href={link(s.name, "cancelled")} className="text-amber-600" /></td>
                         <td className="px-4 py-2"><Rate value={s.deliveryRate} good /></td>
                         <td className="px-4 py-2"><Rate value={s.rtoRate} good={false} /></td>
                         <td className="px-4 py-2 text-gray-600">
@@ -225,7 +246,7 @@ export function CourierTable({
                         <td className="px-4 py-2 text-gray-700">{formatPrice(s.value)}</td>
                         <td className="px-4 py-2">
                           <Link
-                            href={`/admin/dashboard/delivery${qs}&courier=${encodeURIComponent(s.name)}`}
+                            href={link(s.name)}
                             className="text-xs font-medium text-brand-600 hover:text-brand-700"
                           >
                             Parcels

@@ -9,8 +9,11 @@ import { OrdersTable } from "@/components/admin/OrdersTable";
 import { PeriodSelector } from "@/components/admin/PeriodSelector";
 import { CourierTable } from "@/components/admin/CourierTable";
 import { getISTPeriodRange } from "@/lib/admin/periods";
-import { getCourierStats, courierPartner } from "@/lib/admin/courier-stats";
-import { returnKind, RETURN_KIND_LABELS } from "@/lib/admin/order-buckets";
+import { getCourierStats, courierPartner, PARCEL_STATE_FIELD } from "@/lib/admin/courier-stats";
+import {
+  parcelState, PARCEL_STATES, PARCEL_STATE_LABELS, PARCEL_STATE_COLORS, PARCEL_STATE_HINTS,
+  SETTLED_STATUSES, type ParcelState,
+} from "@/lib/admin/order-buckets";
 import { formatPrice } from "@/lib/utils/format";
 import type { CourierRow, DashboardPeriod, Order } from "@/types";
 
@@ -21,12 +24,16 @@ const ROW_LIMIT = 500;
 
 interface Props {
   searchParams: Promise<{
-    period?: DashboardPeriod; from?: string; to?: string; courier?: string;
+    period?: DashboardPeriod; from?: string; to?: string; courier?: string; state?: string;
   }>;
 }
 
 export default async function DeliveryPage({ searchParams }: Props) {
-  const { period = "all", from, to, courier } = await searchParams;
+  const { period = "all", from, to, courier, state: stateParam } = await searchParams;
+  // Ignore a junk ?state= rather than silently filtering everything away.
+  const state = PARCEL_STATES.includes(stateParam as ParcelState)
+    ? (stateParam as ParcelState)
+    : undefined;
   const range = getISTPeriodRange(period, { from, to });
   const stats = await getCourierStats(period, { from, to });
 
@@ -36,7 +43,7 @@ export default async function DeliveryPage({ searchParams }: Props) {
   const qs = `?${q.toString()}`;
 
   return courier
-    ? <CourierDetail stats={stats} courier={courier} range={range} qs={qs} />
+    ? <CourierDetail stats={stats} courier={courier} state={state} range={range} qs={qs} />
     : <CourierOverview stats={stats} range={range} qs={qs} />;
 }
 
@@ -185,11 +192,46 @@ function Note({ tone, title, body }: { tone: "green" | "red" | "gray"; title: st
 
 /* ── One courier, parcel by parcel ──────────────────────────────────────── */
 
+/**
+ * Base query for one courier's parcels in a window. Also the source of the
+ * builder type below — spelling that type out by hand goes stale the moment
+ * supabase-js changes its generics.
+ */
+function courierOrdersQuery(couriers: string[], start: Date, end: Date) {
+  return getSupabaseAdminClient()
+    .from("orders")
+    .select("*")
+    .in("courier_name", couriers)
+    .gte("placed_at", start.toISOString())
+    .lte("placed_at", end.toISOString())
+    .order("placed_at", { ascending: false })
+    .limit(ROW_LIMIT);
+}
+
+type OrderQuery = ReturnType<typeof courierOrdersQuery>;
+
+/**
+ * The PostgREST mirror of `parcelState` — the same five states, expressed as a
+ * filter so the narrowing happens in SQL. If a state is ever added to the union
+ * this record stops compiling until its filter is written too, which is the
+ * point: a pill must never count parcels its list can't return.
+ */
+const STATE_FILTER: Record<ParcelState, (q: OrderQuery) => OrderQuery> = {
+  delivered: (q) => q.eq("status", "delivered"),
+  cancelled: (q) => q.eq("status", "cancelled"),
+  // An RTO never reached the customer, so it has no delivered_at; a customer
+  // return does. Same separator the RTO tab uses.
+  rto:       (q) => q.eq("status", "returned").is("delivered_at", null),
+  returned:  (q) => q.eq("status", "returned").not("delivered_at", "is", null),
+  transit:   (q) => q.not("status", "in", `(${SETTLED_STATUSES.join(",")})`),
+};
+
 async function CourierDetail({
-  stats, courier, range, qs,
+  stats, courier, state, range, qs,
 }: {
   stats: Awaited<ReturnType<typeof getCourierStats>>;
   courier: string;
+  state?: ParcelState;
   range: ReturnType<typeof getISTPeriodRange>;
   qs: string;
 }) {
@@ -201,24 +243,27 @@ async function CourierDetail({
   const row: CourierRow | undefined = service ?? partner;
   const isPartner = !service && !!partner;
 
-  const admin = getSupabaseAdminClient();
-  let query = admin
-    .from("orders")
-    .select("*")
-    .not("courier_name", "is", null)
-    .gte("placed_at", range.start.toISOString())
-    .lte("placed_at", range.end.toISOString())
-    .order("placed_at", { ascending: false })
-    .limit(ROW_LIMIT);
+  // A service is one exact stored value; a partner is every service under it, so
+  // match the stored names we already grouped rather than a LIKE guess.
+  const couriers = isPartner ? partner!.services.map((s) => s.name) : [courier];
 
-  // A service is one exact stored value; a partner is every service under it,
-  // so match the stored names we already grouped rather than a LIKE guess.
-  query = isPartner
-    ? query.in("courier_name", partner!.services.map((s) => s.name))
-    : query.eq("courier_name", courier);
-
-  const { data } = await query;
+  // Filter in SQL, not after the fetch — otherwise ROW_LIMIT would apply to the
+  // unfiltered set and a busy courier's "RTO" list could come back short.
+  const base = courierOrdersQuery(couriers, range.start, range.end);
+  const { data } = await (state ? STATE_FILTER[state](base) : base);
   const orders = (data ?? []) as Order[];
+
+  // Switching courier keeps the state filter, and vice versa — so drilling from
+  // "Delhivery RTO" into one of its services stays on RTO.
+  const stateLink = (name: string, st: ParcelState | undefined) => {
+    const base = `/admin/dashboard/delivery${qs}&courier=${encodeURIComponent(name)}`;
+    return st ? `${base}&state=${st}` : base;
+  };
+
+  const pill = (active: boolean) =>
+    `rounded-full px-4 py-1.5 text-sm font-medium ${
+      active ? "bg-brand-500 text-white" : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-50"
+    }`;
 
   const cards = row
     ? [
@@ -282,13 +327,40 @@ async function CourierDetail({
           {partner!.services.map((s) => (
             <Link
               key={s.name}
-              href={`/admin/dashboard/delivery${qs}&courier=${encodeURIComponent(s.name)}`}
+              href={stateLink(s.name, state)}
               className="rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50"
             >
               {s.name} ({s.parcels})
             </Link>
           ))}
         </div>
+      )}
+
+      {row && (
+        <div className="flex flex-wrap gap-2">
+          <Link href={stateLink(courier, undefined)} className={pill(!state)}>
+            All ({row.parcels})
+          </Link>
+          {PARCEL_STATES.map((st) => {
+            const count = row[PARCEL_STATE_FIELD[st]];
+            return (
+              <Link
+                key={st}
+                href={stateLink(courier, st)}
+                title={PARCEL_STATE_HINTS[st]}
+                className={pill(state === st)}
+              >
+                {PARCEL_STATE_LABELS[st]} ({count})
+              </Link>
+            );
+          })}
+        </div>
+      )}
+
+      {state && (
+        <p className="-mt-2 text-xs text-gray-400">
+          {PARCEL_STATE_HINTS[state]} — showing {orders.length} of {row?.parcels ?? 0} parcels.
+        </p>
       )}
 
       <OrdersTable
@@ -312,11 +384,13 @@ async function CourierDetail({
                   <span className="font-mono text-[11px] text-gray-400">{o.tracking_number}</span>
                 )
               )}
-              {o.status === "returned" && (
-                <span className="text-[11px] text-red-500">
-                  {RETURN_KIND_LABELS[returnKind(o)]}
-                </span>
-              )}
+              <span
+                className={`w-fit rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                  PARCEL_STATE_COLORS[parcelState(o)]
+                }`}
+              >
+                {PARCEL_STATE_LABELS[parcelState(o)]}
+              </span>
             </div>
           ),
         }}

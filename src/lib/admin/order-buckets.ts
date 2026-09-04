@@ -155,3 +155,59 @@ export async function getCancelInfo(
 
   return out;
 }
+
+// ── Parcel state (delivery tab) ─────────────────────────────────────────────
+// Once an order is handed to a courier it is in exactly one of five states.
+// This is the single source of truth for the Delivery tab: the per-courier
+// counters, the filter pills and the PostgREST filter behind each pill all
+// derive from it, so a pill can never show a count its list doesn't produce.
+//
+// Note "returned" here means a CUSTOMER return — the courier delivered it and
+// the buyer sent it back. An RTO is its own state, because only an RTO is a
+// courier failure. Same split as ReturnKind above, just named from the parcel's
+// point of view.
+
+export type ParcelState = "transit" | "delivered" | "rto" | "returned" | "cancelled";
+
+/** Display order for the filter pills — the parcel's journey, best to worst. */
+export const PARCEL_STATES: ParcelState[] = [
+  "transit", "delivered", "rto", "returned", "cancelled",
+];
+
+export const PARCEL_STATE_LABELS: Record<ParcelState, string> = {
+  transit:   "In transit",
+  delivered: "Delivered",
+  rto:       "RTO",
+  returned:  "Customer return",
+  cancelled: "Cancelled",
+};
+
+export const PARCEL_STATE_COLORS: Record<ParcelState, string> = {
+  transit:   "bg-blue-100 text-blue-700",
+  delivered: "bg-green-100 text-green-700",
+  rto:       "bg-red-100 text-red-700",
+  returned:  "bg-gray-100 text-gray-600",
+  cancelled: "bg-amber-100 text-amber-700",
+};
+
+export const PARCEL_STATE_HINTS: Record<ParcelState, string> = {
+  transit:   "Still moving — packed, shipped or out for delivery",
+  delivered: "Reached the customer",
+  rto:       "Never delivered — came back to origin",
+  returned:  "Delivered, then returned by the customer",
+  cancelled: "Cancelled after the courier was assigned",
+};
+
+/** Statuses that mean the parcel has NOT settled yet — the "transit" state. */
+export const SETTLED_STATUSES: OrderStatus[] = ["delivered", "returned", "cancelled"];
+
+export function parcelState(
+  o: { status: OrderStatus | string; delivered_at?: string | null }
+): ParcelState {
+  if (o.status === "delivered") return "delivered";
+  // An RTO never reached the customer, so it has no delivered_at — the same
+  // separator the RTO tab uses.
+  if (o.status === "returned")  return returnKind(o) === "rto" ? "rto" : "returned";
+  if (o.status === "cancelled") return "cancelled";
+  return "transit";
+}

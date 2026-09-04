@@ -1,6 +1,6 @@
 import { getSupabaseAdminClient } from "@/lib/supabase/server";
 import { getISTPeriodRange } from "@/lib/admin/periods";
-import { returnKind } from "@/lib/admin/order-buckets";
+import { parcelState, type ParcelState } from "@/lib/admin/order-buckets";
 import type { CourierRow, CourierStats, DashboardPeriod, OrderStatus } from "@/types";
 
 // Courier-wise delivery performance, computed off the `courier_name` Shiprocket
@@ -125,6 +125,22 @@ function deliveryDays(o: CourierOrderRow): number | null {
   return days >= 0 ? days : null;
 }
 
+/**
+ * The CourierRow counter each parcel state increments. Derived from the shared
+ * `parcelState`, so the Delivery tab's filter pills count exactly the parcels
+ * their filtered list returns.
+ */
+export const PARCEL_STATE_FIELD: Record<
+  ParcelState,
+  "inTransit" | "delivered" | "rto" | "customerReturn" | "cancelled"
+> = {
+  transit:   "inTransit",
+  delivered: "delivered",
+  rto:       "rto",
+  returned:  "customerReturn",
+  cancelled: "cancelled",
+};
+
 /** Fold one order into a row. `transit` sums are shared by service + partner. */
 function accumulate(row: CourierRow, o: CourierOrderRow, days: number[]) {
   const amount = Number(o.total_amount) || 0;
@@ -134,23 +150,15 @@ function accumulate(row: CourierRow, o: CourierOrderRow, days: number[]) {
   else row.prepaidParcels++;
   if (!row.lastUsedAt || o.placed_at > row.lastUsedAt) row.lastUsedAt = o.placed_at;
 
-  if (o.status === "delivered") {
-    row.delivered++;
+  const state = parcelState(o);
+  row[PARCEL_STATE_FIELD[state]]++;
+
+  if (state === "delivered") {
     row.deliveredValue += amount;
     // Cash the courier collected at the door and has to remit to us.
     if (o.payment_method === "cod" && o.payment_status === "paid") row.codCollected += amount;
-  } else if (o.status === "returned") {
-    if (returnKind(o) === "rto") {
-      row.rto++;
-      row.rtoValue += amount;
-    } else {
-      row.customerReturn++;
-    }
-  } else if (o.status === "cancelled") {
-    row.cancelled++;
-  } else {
-    // confirmed / packed / shipped / out for delivery — still moving.
-    row.inTransit++;
+  } else if (state === "rto") {
+    row.rtoValue += amount;
   }
 
   const d = deliveryDays(o);
