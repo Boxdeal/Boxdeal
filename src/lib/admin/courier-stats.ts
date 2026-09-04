@@ -1,6 +1,6 @@
 import { getSupabaseAdminClient } from "@/lib/supabase/server";
 import { getISTPeriodRange } from "@/lib/admin/periods";
-import { parcelState, type ParcelState } from "@/lib/admin/order-buckets";
+import { orderBucket, parcelState, type ParcelState } from "@/lib/admin/order-buckets";
 import type { CourierRow, CourierStats, DashboardPeriod, OrderStatus } from "@/types";
 
 // Courier-wise delivery performance, computed off the `courier_name` Shiprocket
@@ -8,8 +8,12 @@ import type { CourierRow, CourierStats, DashboardPeriod, OrderStatus } from "@/t
 // webhook when a courier is reassigned).
 //
 // A "parcel" here is one order that was actually handed to a courier — i.e. it
-// has a courier_name. Orders still waiting to be packed have none, and are
-// reported separately as `awaiting` rather than blamed on any partner.
+// has a courier_name. Orders with none are NOT one number: a live order still
+// waiting to be packed is a real backlog, an order that reached the customer
+// without an AWB was fulfilled off Shiprocket, and a failed checkout or an
+// order cancelled before packing was never going to ship at all. Lumping those
+// together reads as a backlog many times its real size, so `unshipped` splits
+// them and only `awaiting` is the backlog.
 //
 // Shiprocket reports the SERVICE, not the company: "Delhivery Surface 10 Kg",
 // "Xpressbees Air 1kg", "Ecom Express 5 kg" are three services from three
@@ -75,6 +79,8 @@ const emptyRow = (name: string): CourierRow => ({
   codParcels: 0,
   prepaidParcels: 0,
   codCollected: 0,
+  codPending: 0,
+  codPendingParcels: 0,
   deliveryRate: null,
   rtoRate: null,
   avgDeliveryDays: null,
@@ -83,6 +89,7 @@ const emptyRow = (name: string): CourierRow => ({
 
 interface CourierOrderRow {
   courier_name: string | null;
+  tracking_number: string | null;
   status: OrderStatus;
   payment_method: string;
   payment_status: string;
@@ -93,7 +100,7 @@ interface CourierOrderRow {
 }
 
 const SELECT =
-  "courier_name, status, payment_method, payment_status, total_amount, placed_at, shipped_at, delivered_at";
+  "courier_name, tracking_number, status, payment_method, payment_status, total_amount, placed_at, shipped_at, delivered_at";
 
 const PAGE = 1000;
 
@@ -155,8 +162,16 @@ function accumulate(row: CourierRow, o: CourierOrderRow, days: number[]) {
 
   if (state === "delivered") {
     row.deliveredValue += amount;
-    // Cash the courier collected at the door and has to remit to us.
-    if (o.payment_method === "cod" && o.payment_status === "paid") row.codCollected += amount;
+    if (o.payment_method === "cod") {
+      // Cash the courier collected at the door and has to remit to us. A
+      // delivered COD parcel that was never marked paid means the webhook never
+      // confirmed the collection — real money, so it is tracked, not dropped.
+      if (o.payment_status === "paid") row.codCollected += amount;
+      else {
+        row.codPending += amount;
+        row.codPendingParcels++;
+      }
+    }
   } else if (state === "rto") {
     row.rtoValue += amount;
   }
@@ -197,17 +212,38 @@ export async function getCourierStats(
 
   const partners = new Map<string, { row: CourierRow; days: number[] }>();
   const services = new Map<string, { row: CourierRow; days: number[] }>();
-  const awaiting = { parcels: 0, value: 0 };
+  const unshipped: CourierStats["unshipped"] = {
+    awaiting:     { parcels: 0, value: 0 },
+    offline:      { parcels: 0, value: 0, withAwb: 0, returned: 0 },
+    neverShipped: { parcels: 0, value: 0 },
+  };
   const totals = emptyRow("All couriers");
   const totalDays: number[] = [];
 
   for (const o of orders) {
     const service = o.courier_name?.trim();
     if (!service) {
-      // Never handed over — sitting with us, or a checkout that never became an
-      // order. Not any partner's number.
-      awaiting.parcels++;
-      awaiting.value += Number(o.total_amount) || 0;
+      // No AWB was ever stamped on this order. Which of the three that means
+      // comes from the dashboard's own bucket rule, so this tab agrees with the
+      // Failed / Cancelled tabs about what was never a shippable order.
+      const bucket = orderBucket(o);
+      const slot =
+        bucket === "failed" || bucket === "cancelled" ? "neverShipped"
+        : o.status === "delivered" || o.status === "returned" ? "offline"
+        : "awaiting";
+      unshipped[slot].parcels++;
+      unshipped[slot].value += Number(o.total_amount) || 0;
+      if (slot === "offline") {
+        // An AWB with no courier name is NOT an off-Shiprocket shipment — a
+        // courier did carry it and Shiprocket just never gave us the name, so
+        // "Sync from Shiprocket" can still pull it in. Counted apart so the tab
+        // can say which of the two it is.
+        if (o.tracking_number) unshipped.offline.withAwb++;
+        // The reason this tab's RTO count can sit one below the RTO & Returns
+        // tab: that tab counts every returned order, this one only the parcels
+        // it can attribute to a partner.
+        if (o.status === "returned") unshipped.offline.returned++;
+      }
       continue;
     }
 
@@ -250,6 +286,6 @@ export async function getCourierStats(
       .map((s) => s.row)
       .sort((a, b) => b.parcels - a.parcels),
     totals,
-    awaiting,
+    unshipped,
   };
 }

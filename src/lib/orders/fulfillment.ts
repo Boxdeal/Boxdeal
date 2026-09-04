@@ -131,3 +131,27 @@ export async function settleEndedOrder(
   }
   return { refunded, refundError };
 }
+
+/**
+ * What must happen when an order ends as DELIVERED — the counterpart to
+ * settleEndedOrder above.
+ *
+ * A COD order is paid in cash at the doorstep, so it only becomes "paid" the
+ * moment the courier delivers it. Returns the payment patch to merge into the
+ * status update; an empty object for prepaid orders (already paid at checkout)
+ * and for anything already marked paid, so it is safe to spread every time.
+ *
+ * Three separate paths mark an order delivered — the Shiprocket webhook, the
+ * "Sync from Shiprocket" action, and an admin setting the status by hand — and
+ * for a long time only the first two knew this rule. Orders delivered by hand
+ * therefore kept payment_status "pending" forever, so their cash never showed
+ * up in Money Collected or in a courier's COD total. Keeping the rule here is
+ * what stops a fourth path from getting it wrong again.
+ */
+export function collectCodOnDelivery(
+  order: Pick<SettleableOrder, "payment_method" | "payment_status">
+): { payment_status?: "paid" } {
+  return order.payment_method === "cod" && order.payment_status !== "paid"
+    ? { payment_status: "paid" }
+    : {};
+}

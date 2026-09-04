@@ -3,7 +3,7 @@ import { getSupabaseAdminClient } from "@/lib/supabase/server";
 import { sendOrderShipped, sendOrderDelivered } from "@/lib/resend/index";
 import { getTrackingUrl } from "@/lib/shiprocket/index";
 import { ENDED_STATUSES, mapShiprocketStatus, STATUS_TIMESTAMP_FIELD } from "@/lib/shiprocket/status";
-import { settleEndedOrder } from "@/lib/orders/fulfillment";
+import { collectCodOnDelivery, settleEndedOrder } from "@/lib/orders/fulfillment";
 import type { Order } from "@/types";
 
 // Shiprocket pushes shipment status changes here. Configure this URL under
@@ -141,14 +141,10 @@ export async function POST(req: NextRequest) {
   if (tsField) updateData[tsField] = new Date().toISOString();
 
   // A COD order is collected in cash at the doorstep, so it's only actually
-  // "paid" once the courier delivers it. Online (Razorpay) orders are already
-  // paid at checkout, so this never touches them.
-  if (
-    newStatus === "delivered" &&
-    order.payment_method === "cod" &&
-    order.payment_status !== "paid"
-  ) {
-    updateData.payment_status = "paid";
+  // "paid" once the courier delivers it. Shared with the admin panel's manual
+  // and "Sync from Shiprocket" paths so all three agree.
+  if (newStatus === "delivered") {
+    Object.assign(updateData, collectCodOnDelivery(order));
   }
 
   // An order cancelled or returned (RTO) on Shiprocket's side must be settled

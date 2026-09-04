@@ -541,12 +541,24 @@ export interface CourierRow {
   prepaidParcels: number;
   /** COD cash the courier collected at the door and owes us. */
   codCollected: number;
+  /**
+   * Delivered COD parcels still not marked paid — the courier took the cash but
+   * no webhook confirmed it. Money that is missing from `codCollected`, so it is
+   * surfaced rather than silently dropped.
+   */
+  codPending: number;
+  codPendingParcels: number;
   /** (delivered + customer returns) / attempted, as a percentage. */
   deliveryRate: number | null;
   rtoRate: number | null;
   /** Mean days from handover to delivery, over delivered parcels only. */
   avgDeliveryDays: number | null;
   lastUsedAt: string | null;
+}
+
+export interface UnshippedBucket {
+  parcels: number;
+  value: number;
 }
 
 export interface CourierStats {
@@ -557,8 +569,24 @@ export interface CourierStats {
   services: CourierRow[];
   /** Every courier combined — the denominator for share-of-volume. */
   totals: CourierRow;
-  /** Orders with no courier yet: not packed, or never shipped at all. */
-  awaiting: { parcels: number; value: number };
+  /**
+   * Orders that never got an AWB, split by why — see the note in courier-stats.
+   * Only `awaiting` is a real fulfilment backlog.
+   */
+  unshipped: {
+    /** Live and still waiting to be handed to a courier. */
+    awaiting: UnshippedBucket;
+    /**
+     * Reached its end state with no courier name stored. `withAwb` counts the
+     * ones that DO have an AWB — those did ship through Shiprocket and only
+     * lost the name, so "Sync from Shiprocket" recovers them; the rest were
+     * genuinely fulfilled outside Shiprocket. `returned` is why this tab's RTO
+     * count can trail the RTO & Returns tab's.
+     */
+    offline: UnshippedBucket & { withAwb: number; returned: number };
+    /** Failed checkout, or cancelled before packing — was never going to ship. */
+    neverShipped: UnshippedBucket;
+  };
 }
 
 // ────────────────────────────────────────────────────────────

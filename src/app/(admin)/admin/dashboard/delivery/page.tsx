@@ -57,6 +57,7 @@ async function CourierOverview({
   qs: string;
 }) {
   const t = stats.totals;
+  const u = stats.unshipped;
   const best = [...stats.partners]
     .filter((p) => p.deliveryRate !== null && p.delivered + p.rto >= 3)
     .sort((a, b) => (b.deliveryRate ?? 0) - (a.deliveryRate ?? 0))[0];
@@ -79,28 +80,35 @@ async function CourierOverview({
     },
     {
       title: "RTO — came back", value: `${t.rto}`,
-      subtitle: t.rtoRate === null
-        ? "nothing settled yet"
-        : `${t.rtoRate.toFixed(1)}% RTO rate · ${formatPrice(t.rtoValue)} lost`,
+      // If a returned order has no courier name it can't be blamed on a partner,
+      // so this count sits below the RTO & Returns tab's. Say so on the card
+      // instead of leaving the mismatch to be discovered.
+      subtitle: u.offline.returned > 0
+        ? `+${u.offline.returned} returned with no courier — ${t.rto + u.offline.returned} in RTO & Returns`
+        : t.rtoRate === null
+          ? "nothing settled yet"
+          : `${t.rtoRate.toFixed(1)}% RTO rate · ${formatPrice(t.rtoValue)} lost`,
       icon: PackageX, variant: "danger" as const,
     },
     {
       title: "In transit", value: `${t.inTransit}`,
       subtitle: t.avgDeliveryDays === null
-        ? `${stats.awaiting.parcels} still awaiting a courier`
-        : `avg ${t.avgDeliveryDays.toFixed(1)} days to deliver`,
+        ? `${u.awaiting.parcels} live order${u.awaiting.parcels === 1 ? "" : "s"} awaiting a courier`
+        : `avg ${t.avgDeliveryDays.toFixed(1)} days to deliver · ${u.awaiting.parcels} awaiting a courier`,
       icon: Timer, variant: "warning" as const,
     },
   ];
 
   return (
-    <div className="space-y-5 p-6">
+    <div className="space-y-5 p-4 sm:p-6">
       <div>
         <Link href="/admin" className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-brand-600">
           <ArrowLeft className="h-4 w-4" /> Dashboard
         </Link>
-        <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
-          <h1 className="text-2xl font-bold text-gray-900">Delivery &amp; Couriers · {range.label}</h1>
+        <div className="mt-2 flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-center lg:justify-between">
+          <h1 className="text-xl font-bold text-gray-900 sm:text-2xl">
+            Delivery &amp; Couriers <span className="text-gray-400">·</span> {range.label}
+          </h1>
           <PeriodSelector defaultPeriod="all" />
         </div>
         <p className="mt-1 text-sm text-gray-500">
@@ -110,12 +118,12 @@ async function CourierOverview({
         </p>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
         {cards.map((c) => <StatsCard key={c.title} {...c} />)}
       </div>
 
-      {(best || worst || stats.awaiting.parcels > 0) && (
-        <div className="grid gap-4 sm:grid-cols-3">
+      {(best || worst || u.awaiting.parcels > 0 || u.offline.parcels > 0) && (
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {best && (
             <Note
               tone="green"
@@ -130,11 +138,33 @@ async function CourierOverview({
               body={`${worst.name} — ${worst.rtoRate!.toFixed(1)}% came back (${worst.rto} parcel${worst.rto === 1 ? "" : "s"}, ${formatPrice(worst.rtoValue)}).`}
             />
           )}
-          {stats.awaiting.parcels > 0 && (
+          {u.awaiting.parcels > 0 && (
             <Note
-              tone="gray"
-              title="Not handed over yet"
-              body={`${stats.awaiting.parcels} order${stats.awaiting.parcels === 1 ? "" : "s"} worth ${formatPrice(stats.awaiting.value)} have no courier — not packed, or never shipped.`}
+              tone="amber"
+              title="Waiting for a courier"
+              body={`${u.awaiting.parcels} live order${u.awaiting.parcels === 1 ? "" : "s"} worth ${formatPrice(u.awaiting.value)} still have no AWB. Failed and cancelled checkouts are not in this number${u.neverShipped.parcels > 0 ? ` — ${u.neverShipped.parcels} of those were never going to ship` : ""}.`}
+            />
+          )}
+          {u.offline.parcels > 0 && (
+            <Note
+              tone="amber"
+              title="No courier name stored"
+              body={
+                `${u.offline.parcels} order${u.offline.parcels === 1 ? "" : "s"} worth ${formatPrice(u.offline.value)} ended with no courier name, so no partner gets the credit or the blame` +
+                (u.offline.returned > 0
+                  ? ` — including ${u.offline.returned} returned, which is why RTO here reads ${t.rto} and RTO & Returns reads ${t.rto + u.offline.returned}`
+                  : "") +
+                (u.offline.withAwb > 0
+                  ? `. ${u.offline.withAwb} of them DO have an AWB, so a courier did carry them: open the order and hit “Sync from Shiprocket” to pull the name in.`
+                  : ". None of them has an AWB — they were fulfilled outside Shiprocket.")
+              }
+            />
+          )}
+          {t.codPending > 0 && (
+            <Note
+              tone="amber"
+              title="COD cash unconfirmed"
+              body={`${t.codPendingParcels} delivered COD parcel${t.codPendingParcels === 1 ? "" : "s"} worth ${formatPrice(t.codPending)} were never marked paid, so that cash is missing from COD collected.`}
             />
           )}
         </div>
@@ -151,12 +181,12 @@ async function CourierOverview({
             The exact courier name Shiprocket printed on the AWB. One partner usually runs several —
             air vs surface, and a service per weight slab.
           </p>
-          <div className="flex flex-wrap gap-2">
+          <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 sm:mx-0 sm:flex-wrap sm:px-0">
             {stats.services.map((s) => (
               <Link
                 key={s.name}
                 href={`/admin/dashboard/delivery${qs}&courier=${encodeURIComponent(s.name)}`}
-                className="rounded-full border border-gray-200 px-3 py-1 text-xs font-medium text-gray-700 hover:border-brand-300 hover:bg-brand-50"
+                className="flex-shrink-0 whitespace-nowrap rounded-full border border-gray-200 px-3 py-1 text-xs font-medium text-gray-700 hover:border-brand-300 hover:bg-brand-50"
               >
                 {s.name}
                 <span className="ml-1.5 text-gray-400">{s.parcels}</span>
@@ -176,10 +206,13 @@ async function CourierOverview({
   );
 }
 
-function Note({ tone, title, body }: { tone: "green" | "red" | "gray"; title: string; body: string }) {
+function Note({ tone, title, body }: {
+  tone: "green" | "red" | "amber" | "gray"; title: string; body: string;
+}) {
   const map = {
     green: "border-green-100 bg-green-50 text-green-900",
     red:   "border-red-100 bg-red-50 text-red-900",
+    amber: "border-amber-100 bg-amber-50 text-amber-900",
     gray:  "border-gray-100 bg-gray-50 text-gray-700",
   };
   return (
@@ -261,7 +294,7 @@ async function CourierDetail({
   };
 
   const pill = (active: boolean) =>
-    `rounded-full px-4 py-1.5 text-sm font-medium ${
+    `flex-shrink-0 whitespace-nowrap rounded-full px-3.5 py-1.5 text-xs font-medium sm:px-4 sm:text-sm ${
       active ? "bg-brand-500 text-white" : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-50"
     }`;
 
@@ -293,7 +326,7 @@ async function CourierDetail({
     : [];
 
   return (
-    <div className="space-y-5 p-6">
+    <div className="space-y-5 p-4 sm:p-6">
       <div>
         <Link
           href={`/admin/dashboard/delivery${qs}`}
@@ -301,8 +334,10 @@ async function CourierDetail({
         >
           <ArrowLeft className="h-4 w-4" /> All couriers
         </Link>
-        <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
-          <h1 className="text-2xl font-bold text-gray-900">{courier} · {range.label}</h1>
+        <div className="mt-2 flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-center lg:justify-between">
+          <h1 className="min-w-0 break-words text-xl font-bold text-gray-900 sm:text-2xl">
+            {courier} <span className="text-gray-400">·</span> {range.label}
+          </h1>
           <PeriodSelector defaultPeriod="all" />
         </div>
         <p className="mt-1 text-sm text-gray-500">
@@ -313,7 +348,7 @@ async function CourierDetail({
       </div>
 
       {row ? (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
           {cards.map((c) => <StatsCard key={c.title} {...c} />)}
         </div>
       ) : (
@@ -323,12 +358,12 @@ async function CourierDetail({
       )}
 
       {isPartner && partner!.services.length > 1 && (
-        <div className="flex flex-wrap gap-2">
+        <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:px-0">
           {partner!.services.map((s) => (
             <Link
               key={s.name}
               href={stateLink(s.name, state)}
-              className="rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50"
+              className="flex-shrink-0 whitespace-nowrap rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50"
             >
               {s.name} ({s.parcels})
             </Link>
@@ -337,7 +372,7 @@ async function CourierDetail({
       )}
 
       {row && (
-        <div className="flex flex-wrap gap-2">
+        <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:px-0">
           <Link href={stateLink(courier, undefined)} className={pill(!state)}>
             All ({row.parcels})
           </Link>

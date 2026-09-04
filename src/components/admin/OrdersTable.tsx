@@ -20,7 +20,92 @@ export function OrdersTable({ orders, extraColumn }: OrdersTableProps) {
   const colCount = extraColumn ? 8 : 7;
 
   return (
-    <div className="overflow-x-auto rounded-2xl border border-gray-100 bg-white shadow-sm">
+    <>
+      {/* Phone / tablet: one card per order. Eight columns can't shrink to a
+          phone, and the horizontal scroller hid the amount and status behind
+          the fold. Desktop keeps the table below, unchanged. */}
+      <div className="space-y-3 lg:hidden">
+        {orders.length === 0 && (
+          <div className="rounded-2xl border border-gray-100 bg-white px-4 py-10 text-center text-gray-400 shadow-sm">
+            No orders found
+          </div>
+        )}
+        {orders.map((order) => {
+          const isOverdue =
+            order.status === "confirmed" && new Date(order.pack_deadline) < now;
+          return (
+            <Link
+              key={order.id}
+              href={`/admin/orders/${order.id}`}
+              className={cn(
+                "block rounded-2xl border border-gray-100 bg-white p-4 shadow-sm active:bg-gray-50",
+                isOverdue && "border-red-100 bg-red-50/30"
+              )}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    {isOverdue && <AlertCircle className="h-3.5 w-3.5 flex-shrink-0 text-red-500" />}
+                    <span className="truncate font-mono text-sm font-semibold text-gray-800">
+                      {order.order_number}
+                    </span>
+                  </div>
+                  <p className="mt-0.5 truncate text-sm text-gray-600">
+                    {order.shipping_full_name}
+                  </p>
+                </div>
+                <span className="flex-shrink-0 text-base font-bold text-gray-900">
+                  {formatPrice(order.total_amount)}
+                </span>
+              </div>
+
+              <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+                <span
+                  className={cn(
+                    "rounded-full px-2 py-0.5 text-[11px] font-semibold",
+                    ORDER_STATUS_COLORS[order.status]
+                  )}
+                >
+                  {ORDER_STATUS_LABELS[order.status]}
+                </span>
+                <span
+                  className={cn(
+                    "rounded-full px-2 py-0.5 text-[11px] font-semibold",
+                    order.payment_method === "cod"
+                      ? "bg-indigo-100 text-indigo-700"
+                      : "bg-brand-100 text-brand-700"
+                  )}
+                >
+                  {order.payment_method === "cod" ? "COD" : "Prepaid"}
+                </span>
+                <span
+                  className={cn(
+                    "text-[11px] font-medium",
+                    order.payment_status === "paid" ? "text-green-600" : "text-gray-400"
+                  )}
+                >
+                  {PAYMENT_STATUS_LABELS[order.payment_status] ?? order.payment_status}
+                </span>
+              </div>
+
+              {extraColumn && (
+                <div className="mt-2.5 border-t border-gray-50 pt-2.5">
+                  <p className="mb-1 text-[10px] uppercase tracking-wide text-gray-400">
+                    {extraColumn.header}
+                  </p>
+                  {extraColumn.render(order)}
+                </div>
+              )}
+
+              <p className="mt-2.5 text-[11px] text-gray-400">
+                {formatDateTime(order.placed_at)}
+              </p>
+            </Link>
+          );
+        })}
+      </div>
+
+      <div className="hidden overflow-x-auto rounded-2xl border border-gray-100 bg-white shadow-sm lg:block">
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-gray-100 bg-gray-50">
@@ -124,6 +209,7 @@ export function OrdersTable({ orders, extraColumn }: OrdersTableProps) {
           })}
         </tbody>
       </table>
-    </div>
+      </div>
+    </>
   );
 }

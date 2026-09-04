@@ -3,7 +3,7 @@ import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { getSupabaseAdminClient } from "@/lib/supabase/server";
 import { sendOrderShipped, sendOrderDelivered } from "@/lib/resend/index";
 import { createShiprocketOrder, generateAWB, getDeliveryRate, getShiprocketOrder, getTrackingUrl, type ShipmentItem } from "@/lib/shiprocket/index";
-import { cancelOnShiprocket, settleEndedOrder } from "@/lib/orders/fulfillment";
+import { cancelOnShiprocket, collectCodOnDelivery, settleEndedOrder } from "@/lib/orders/fulfillment";
 import { ENDED_STATUSES, mapShiprocketStatus, STATUS_TIMESTAMP_FIELD } from "@/lib/shiprocket/status";
 import type { Order, OrderStatus } from "@/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -131,6 +131,24 @@ async function fulfillShiprocket(
       update.tracking_number = awb.awb_code;
       update.courier_name    = awb.courier_name;
       update.tracking_url    = getTrackingUrl(awb.awb_code);
+
+      // Shiprocket's AWB response sometimes omits courier_name even though it
+      // did assign a courier. generateAWB only throws on a missing awb_code, so
+      // without this fallback the parcel is stored with a live AWB and no
+      // courier — it then ships, delivers and even RTOs while belonging to no
+      // partner in the Delivery tab. Ask the order endpoint for the name.
+      const srId = (update.shiprocket_order_id ?? srOrder.shiprocket_order_id) as string | undefined;
+      if (!update.courier_name && srId) {
+        try {
+          const live = await getShiprocketOrder(srId);
+          if (live.courier_name) update.courier_name = live.courier_name;
+        } catch (e) {
+          console.error(`Courier-name lookup failed for order ${id} (AWB ${awb.awb_code}):`, e);
+        }
+      }
+      if (!update.courier_name) {
+        console.error(`Order ${id} got AWB ${awb.awb_code} with NO courier name — Delivery tab cannot attribute it.`);
+      }
     }
 
     return { update, error: null };
@@ -387,8 +405,8 @@ export async function PATCH(
       ({ refunded, refundError } = await settleEndedOrder(admin, o));
       if (refunded) update.payment_status = "refunded";
     }
-    if (statusChanged && mapped === "delivered" && o.payment_method === "cod" && o.payment_status !== "paid") {
-      update.payment_status = "paid";
+    if (statusChanged && mapped === "delivered") {
+      Object.assign(update, collectCodOnDelivery(o));
     }
 
     if (changes.length === 0) {
@@ -449,7 +467,18 @@ export async function PATCH(
     }
     if (courier_name) updateData.courier_name = courier_name.trim();
   }
-  if (status === "delivered")        updateData.delivered_at = new Date().toISOString();
+  if (status === "delivered") {
+    updateData.delivered_at = new Date().toISOString();
+    // Marking an order delivered by hand must collect its COD exactly like the
+    // Shiprocket webhook does — otherwise the cash never lands in Money
+    // Collected and the courier's COD total silently under-reports.
+    const { data: payInfo } = await admin
+      .from("orders")
+      .select("payment_method, payment_status")
+      .eq("id", id)
+      .single();
+    if (payInfo) Object.assign(updateData, collectCodOnDelivery(payInfo));
+  }
 
   // When an admin cancels an order, auto-refund any online payment too (same
   // behaviour as a customer self-cancel). Best-effort — see refundOrderPayment.
