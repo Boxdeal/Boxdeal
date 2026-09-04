@@ -507,6 +507,61 @@ export interface ProductDayRow extends ExcludedUnits {
 }
 
 // ────────────────────────────────────────────────────────────
+// Delivery / courier performance
+// ────────────────────────────────────────────────────────────
+
+// One courier's slice of a period. The same shape describes a partner
+// (Delhivery) and a single service of that partner (Delhivery Surface 10 Kg) —
+// a partner row simply has its services nested under `services`.
+//
+// Counts are mutually exclusive and add up: parcels === inTransit + delivered +
+// rto + customerReturn + cancelled.
+export interface CourierRow {
+  /** Service name exactly as Shiprocket reports it, or the partner name. */
+  name: string;
+  /** The company behind the service. Equal to `name` on a partner row. */
+  partner: string;
+  /** Per-service breakdown. Populated on partner rows only. */
+  services: CourierRow[];
+  /** Orders handed to this courier — one order is one parcel. */
+  parcels: number;
+  /** Still moving: confirmed, packed, shipped or out for delivery. */
+  inTransit: number;
+  delivered: number;
+  /** Never delivered — came back to origin. */
+  rto: number;
+  /** Delivered, then returned by the customer. Still a successful delivery. */
+  customerReturn: number;
+  cancelled: number;
+  /** Total order value handed to this courier. */
+  value: number;
+  deliveredValue: number;
+  rtoValue: number;
+  codParcels: number;
+  prepaidParcels: number;
+  /** COD cash the courier collected at the door and owes us. */
+  codCollected: number;
+  /** (delivered + customer returns) / attempted, as a percentage. */
+  deliveryRate: number | null;
+  rtoRate: number | null;
+  /** Mean days from handover to delivery, over delivered parcels only. */
+  avgDeliveryDays: number | null;
+  lastUsedAt: string | null;
+}
+
+export interface CourierStats {
+  label: string;
+  /** Partners, busiest first. */
+  partners: CourierRow[];
+  /** Every distinct Shiprocket service name used, busiest first. */
+  services: CourierRow[];
+  /** Every courier combined — the denominator for share-of-volume. */
+  totals: CourierRow;
+  /** Orders with no courier yet: not packed, or never shipped at all. */
+  awaiting: { parcels: number; value: number };
+}
+
+// ────────────────────────────────────────────────────────────
 // API response wrappers
 // ────────────────────────────────────────────────────────────
 
