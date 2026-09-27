@@ -112,6 +112,8 @@ export interface Product {
   discount_percent: number;
   stock_quantity: number;
   low_stock_threshold: number;
+  // HSN code for GST. Printed on the tax invoice line for this product.
+  hsn_code: string | null;
   weight_grams: number;
   // Parcel dimensions (cm) → volumetric weight = L×B×H / 5000.
   length_cm: number;
@@ -219,6 +221,10 @@ export interface Order {
   shiprocket_order_id: string | null;
   shiprocket_shipment_id: string | null;
   shiprocket_attempt: number;
+  // Issued once, on the first invoice download, and never changed afterwards.
+  // Null until then — the PDF itself is generated on demand, never stored.
+  invoice_number: string | null;
+  invoice_date: string | null;
   notes: string | null;
   placed_at: string;
   confirmed_at: string | null;
@@ -242,6 +248,9 @@ export interface OrderItem {
   product_name: string;
   product_image: string | null;
   product_sku: string;
+  // HSN snapshotted at order time, so editing the catalog later can't rewrite
+  // an invoice that was already issued.
+  hsn_code: string | null;
   quantity: number;
   mrp: number;
   selling_price: number;

@@ -40,7 +40,7 @@ export async function PATCH(
   // Build the update payload only from fields that were sent.
   const fields: Record<string, unknown> = {};
   const passthrough = [
-    "name", "sku", "description", "short_description", "category_id",
+    "name", "sku", "hsn_code", "description", "short_description", "category_id",
     "subcategory_id", "brand_id", "stock_quantity", "low_stock_threshold",
     "weight_grams", "length_cm", "breadth_cm", "height_cm",
     "is_active", "is_featured", "is_deal_of_day",

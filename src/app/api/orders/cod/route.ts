@@ -105,6 +105,7 @@ export async function POST(req: NextRequest) {
     product_name:  item.product_name,
     product_image: item.product_image,
     product_sku:   item.product_sku,
+    hsn_code:      item.hsn_code,
     quantity:      item.quantity,
     mrp:           item.mrp,
     selling_price: item.selling_price,

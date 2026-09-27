@@ -3,7 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import {
-  CheckCircle, ChevronLeft, MapPin, CreditCard,
+  CheckCircle, ChevronLeft, MapPin, CreditCard, FileText,
   ShoppingBag, BadgeCheck, Package, Truck, MapPinned, PartyPopper, X,
 } from "lucide-react";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
@@ -13,6 +13,8 @@ import {
   USER_CANCELLABLE_STATUSES,
 } from "@/constants";
 import { CancelOrderButton } from "./CancelOrderButton";
+import { InvoiceDownloadButton } from "@/components/shared/InvoiceDownloadButton";
+import { canCustomerInvoice } from "@/lib/invoice/availability";
 import { formatPrice, formatDate, formatDateTime } from "@/lib/utils/format";
 import { cn } from "@/lib/utils/helpers";
 import type { Order, OrderItem, OrderStatusHistory } from "@/types";
@@ -110,6 +112,24 @@ export default async function OrderDetailPage({
           </span>
         </div>
       </div>
+
+      {/* Tax invoice — available once the order has actually been delivered */}
+      {canCustomerInvoice(typedOrder.status) && (
+        <div className="rounded-2xl border border-gray-100 bg-white p-5">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-start gap-2">
+              <FileText className="mt-0.5 h-4 w-4 flex-shrink-0 text-gray-400" />
+              <div>
+                <h2 className="font-semibold text-gray-900">Tax Invoice</h2>
+                <p className="text-sm text-gray-500">
+                  GST invoice for this order, as a PDF.
+                </p>
+              </div>
+            </div>
+            <InvoiceDownloadButton orderId={typedOrder.id} />
+          </div>
+        </div>
+      )}
 
       {/* Cancel order (within policy window, before shipping) */}
       {showCancel && (

@@ -4,6 +4,8 @@ import { getSupabaseAdminClient } from "@/lib/supabase/server";
 import { OrderStatusUpdater } from "./OrderStatusUpdater";
 import { AdminDiscount } from "./AdminDiscount";
 import { TrackingEditor } from "./TrackingEditor";
+import { InvoiceDownloadButton } from "@/components/shared/InvoiceDownloadButton";
+import { canAdminInvoice } from "@/lib/invoice/availability";
 import { ORDER_STATUS_LABELS, ORDER_STATUS_COLORS } from "@/constants";
 import { formatPrice, formatDateTime } from "@/lib/utils/format";
 import { cn } from "@/lib/utils/helpers";
@@ -48,6 +50,21 @@ export default async function AdminOrderDetailPage({
         <span className={cn("rounded-full px-3 py-1 text-sm font-semibold", ORDER_STATUS_COLORS[order.status as keyof typeof ORDER_STATUS_COLORS])}>
           {ORDER_STATUS_LABELS[order.status as keyof typeof ORDER_STATUS_LABELS]}
         </span>
+        {/* The invoice is downloadable from pack time — that's when the printed
+            copy goes into the parcel. The number is minted on first download. */}
+        {canAdminInvoice(order.status) && (
+          <div className="ml-auto flex items-center gap-3">
+            {order.invoice_number && (
+              <span className="font-mono text-xs text-gray-500">{order.invoice_number}</span>
+            )}
+            <InvoiceDownloadButton
+              orderId={order.id}
+              label="Invoice"
+              variant="outline"
+              className="px-3 py-1.5 text-xs"
+            />
+          </div>
+        )}
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">

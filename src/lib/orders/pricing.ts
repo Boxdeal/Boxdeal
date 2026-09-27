@@ -8,6 +8,8 @@ export interface PricedLineItem {
   product_name:  string;
   product_sku:   string;
   product_image: string | null;
+  /** HSN snapshotted onto the order item, for the GST invoice. */
+  hsn_code:      string | null;
   quantity:      number;
   mrp:           number;
   selling_price: number;
@@ -42,7 +44,7 @@ export async function computeOrderPricing(
   const ids = items.map((i) => i.product_id);
   const { data: products } = await admin
     .from("products")
-    .select("id, name, sku, mrp, selling_price, stock_quantity, product_images(image_url, is_primary)")
+    .select("id, name, sku, hsn_code, mrp, selling_price, stock_quantity, product_images(image_url, is_primary)")
     .in("id", ids);
 
   const productMap = new Map(products?.map((p) => [p.id, p]) ?? []);
@@ -73,6 +75,7 @@ export async function computeOrderPricing(
       product_name:  product.name,
       product_sku:   product.sku ?? "",
       product_image: img?.image_url ?? null,
+      hsn_code:      (product.hsn_code as string | null) ?? null,
       quantity,
       mrp:           Number(product.mrp),
       selling_price: sellingPrice,

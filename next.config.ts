@@ -89,6 +89,14 @@ const nextConfig: NextConfig = {
       ],
     },
     {
+      // Invoice PDFs are per-customer tax documents and the invoice number is
+      // minted on the first request — they must never sit in a shared/CDN
+      // cache. This entry comes after /api/(.*) on purpose: the later match
+      // wins, so it overrides the blanket s-maxage above.
+      source: "/api/orders/:id/invoice",
+      headers: [{ key: "Cache-Control", value: "no-store, max-age=0" }],
+    },
+    {
       source: "/images/(.*)",
       headers: [
         {

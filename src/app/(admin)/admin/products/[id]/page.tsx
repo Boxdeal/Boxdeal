@@ -19,7 +19,7 @@ export default async function EditProductPage({
     supabase
       .from("products")
       .select(`
-        id, name, sku, description, short_description, category_id, subcategory_id, brand_id,
+        id, name, sku, hsn_code, description, short_description, category_id, subcategory_id, brand_id,
         mrp, selling_price, stock_quantity, low_stock_threshold, weight_grams,
         length_cm, breadth_cm, height_cm,
         is_active, is_featured, is_deal_of_day, meta_title, meta_description,
@@ -47,6 +47,7 @@ export default async function EditProductPage({
     id:                  product.id,
     name:                product.name,
     sku:                 product.sku,
+    hsn_code:            product.hsn_code,
     description:         product.description,
     short_description:   product.short_description,
     category_id:         product.category_id,

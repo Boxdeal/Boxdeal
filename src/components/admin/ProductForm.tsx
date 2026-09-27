@@ -16,6 +16,7 @@ export interface ProductInitial {
   id: string;
   name: string;
   sku: string;
+  hsn_code: string | null;
   description: string | null;
   short_description: string | null;
   category_id: string;
@@ -52,6 +53,7 @@ export function ProductForm({ categories, subcategories, brands, product }: Prod
   const [form, setForm] = useState({
     name:                product?.name ?? "",
     sku:                 product?.sku ?? "",
+    hsn_code:            product?.hsn_code ?? "",
     description:         product?.description ?? "",
     short_description:   product?.short_description ?? "",
     category_id:         product?.category_id ?? "",
@@ -215,6 +217,16 @@ export function ProductForm({ categories, subcategories, brands, product }: Prod
               <option value="">No brand</option>
               {brands.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
             </select>
+          </div>
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div>
+            <label className={labelCls}>HSN Code</label>
+            <input className={inputCls} value={form.hsn_code} onChange={(e) => set("hsn_code", e.target.value)} placeholder="e.g. 85183000" />
+            <p className="mt-1 text-xs text-gray-500">
+              Printed on the customer&apos;s GST tax invoice. Leave blank only if you don&apos;t
+              have it yet &mdash; the invoice will show a dash in its place.
+            </p>
           </div>
         </div>
         <div className="grid gap-4 sm:grid-cols-2">

@@ -7,6 +7,8 @@ import { EmptyState } from "@/components/shared/EmptyState";
 import { ORDER_STATUS_LABELS, ORDER_STATUS_COLORS } from "@/constants";
 import { formatPrice, formatDate } from "@/lib/utils/format";
 import { cn } from "@/lib/utils/helpers";
+import { InvoiceDownloadButton } from "@/components/shared/InvoiceDownloadButton";
+import { canCustomerInvoice } from "@/lib/invoice/availability";
 
 export const metadata: Metadata = { title: "My Orders", robots: { index: false, follow: false } };
 
@@ -39,32 +41,46 @@ export default async function OrdersPage() {
     <div className="mx-auto max-w-3xl px-4 py-8 space-y-4">
       <h1 className="text-2xl font-bold text-gray-900">My Orders</h1>
       {orders.map((order) => (
-        <Link
+        <div
           key={order.id}
-          href={`/orders/${order.id}`}
-          className="block rounded-2xl border border-gray-100 bg-white p-5 hover:border-brand-200 hover:shadow-sm transition-all"
+          className="rounded-2xl border border-gray-100 bg-white hover:border-brand-200 hover:shadow-sm transition-all"
         >
-          <div className="flex flex-wrap items-start justify-between gap-2 mb-3">
-            <div>
-              <p className="font-mono font-semibold text-gray-900">{order.order_number}</p>
-              <p className="text-xs text-gray-400 mt-0.5">{formatDate(order.placed_at)}</p>
+          {/* The card body is the link; the invoice button sits outside it so a
+              click on "Invoice" downloads instead of opening the order. */}
+          <Link href={`/orders/${order.id}`} className="block p-5">
+            <div className="flex flex-wrap items-start justify-between gap-2 mb-3">
+              <div>
+                <p className="font-mono font-semibold text-gray-900">{order.order_number}</p>
+                <p className="text-xs text-gray-400 mt-0.5">{formatDate(order.placed_at)}</p>
+              </div>
+              <div className="text-right">
+                <span className={cn("rounded-full px-3 py-1 text-xs font-semibold", ORDER_STATUS_COLORS[order.status as keyof typeof ORDER_STATUS_COLORS])}>
+                  {ORDER_STATUS_LABELS[order.status as keyof typeof ORDER_STATUS_LABELS]}
+                </span>
+                <p className="mt-1 font-bold text-gray-900">{formatPrice(order.total_amount)}</p>
+              </div>
             </div>
-            <div className="text-right">
-              <span className={cn("rounded-full px-3 py-1 text-xs font-semibold", ORDER_STATUS_COLORS[order.status as keyof typeof ORDER_STATUS_COLORS])}>
-                {ORDER_STATUS_LABELS[order.status as keyof typeof ORDER_STATUS_LABELS]}
-              </span>
-              <p className="mt-1 font-bold text-gray-900">{formatPrice(order.total_amount)}</p>
+            <div className="text-sm text-gray-500">
+              {(order.items ?? []).slice(0, 2).map((item: { product_name: string; quantity: number }) => (
+                <span key={item.product_name}>{item.product_name} ×{item.quantity} · </span>
+              ))}
+              {(order.items ?? []).length > 2 && (
+                <span>+{(order.items ?? []).length - 2} more</span>
+              )}
             </div>
-          </div>
-          <div className="text-sm text-gray-500">
-            {(order.items ?? []).slice(0, 2).map((item: { product_name: string; quantity: number }) => (
-              <span key={item.product_name}>{item.product_name} ×{item.quantity} · </span>
-            ))}
-            {(order.items ?? []).length > 2 && (
-              <span>+{(order.items ?? []).length - 2} more</span>
-            )}
-          </div>
-        </Link>
+          </Link>
+
+          {canCustomerInvoice(order.status) && (
+            <div className="border-t border-gray-100 px-5 py-3">
+              <InvoiceDownloadButton
+                orderId={order.id}
+                label="Invoice"
+                variant="outline"
+                className="px-3 py-1.5 text-xs"
+              />
+            </div>
+          )}
+        </div>
       ))}
     </div>
   );

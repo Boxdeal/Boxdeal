@@ -72,6 +72,7 @@ export async function POST(req: NextRequest) {
   const payload = {
     name:                b.name,
     sku:                 b.sku,
+    hsn_code:            b.hsn_code || null,
     description:         b.description || null,
     short_description:   b.short_description || null,
     category_id:         b.category_id,
