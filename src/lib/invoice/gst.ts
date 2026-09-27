@@ -153,22 +153,28 @@ export interface InvoiceComputation {
 
 /**
  * Split one tax-inclusive amount into its taxable value and GST components.
- * `inclusive` is the source of truth, so tax is derived as the remainder and
- * the two always add back to it exactly.
+ * `inclusive` is the source of truth throughout — whatever else moves, the
+ * parts always add back to it exactly.
+ *
+ * On an intra-state sale CGST and SGST must print as the SAME figure down to
+ * the paisa; a bill showing 7.63 against 7.62 looks wrong even though it adds
+ * up. So the rounded half is taken first and used for both halves, and the
+ * taxable value absorbs whatever paisa that shifts. Rounding has to land
+ * somewhere, and the taxable value is the one number on the line that can
+ * carry it without the invoice reading as an error.
  */
 function splitInclusive(inclusive: number, rate: number, intraState: boolean) {
-  const taxable = round2(inclusive / (1 + rate / 100));
-  const tax = round2(inclusive - taxable);
+  const rawTax = inclusive - inclusive / (1 + rate / 100);
 
   if (!intraState) {
-    return { taxable, cgst: 0, sgst: 0, igst: tax, tax };
+    const taxable = round2(inclusive / (1 + rate / 100));
+    const igst = round2(inclusive - taxable);
+    return { taxable, cgst: 0, sgst: 0, igst, tax: igst };
   }
-  // CGST and SGST are each half the tax. On an odd number of paise the halves
-  // can't be equal — give the extra paisa to CGST so the pair still sums to
-  // the total tax rather than leaving the invoice a paisa short.
-  const sgst = round2(tax / 2);
-  const cgst = round2(tax - sgst);
-  return { taxable, cgst, sgst, igst: 0, tax };
+
+  const half = round2(rawTax / 2);
+  const tax = round2(half * 2);
+  return { taxable: round2(inclusive - tax), cgst: half, sgst: half, igst: 0, tax };
 }
 
 /**
