@@ -32,6 +32,33 @@ CREATE UNIQUE INDEX IF NOT EXISTS orders_invoice_number_key
 -- different prefix keeps the two from ever being confused in the books.
 CREATE SEQUENCE IF NOT EXISTS invoice_seq START 1;
 
+-- ── Re-run safety ───────────────────────────────────────────
+-- An earlier draft of this file issued "Retail…" numbers from a sequence that
+-- started at 647. If that version was already applied, the three statements
+-- below bring the database onto the final scheme; on a first run they are all
+-- harmless no-ops.
+--
+-- 1. The old function returned columns named invoice_number/invoice_date.
+--    CREATE OR REPLACE cannot change a function's return type, so the old one
+--    has to go before the new one can be created.
+DROP FUNCTION IF EXISTS issue_invoice_number(UUID);
+
+-- 2. CREATE SEQUENCE above is a no-op if the sequence already exists, so an
+--    already-advanced counter would carry on from 648 instead of restarting.
+--    Wind it back so the first invoice really is INV00001.
+SELECT setval('invoice_seq', 1, false);
+
+-- 3. Clear the "Retail…" numbers minted while testing. Every value in this
+--    column was created by that earlier draft — the column itself is new, and
+--    the genuine historical Shiprocket invoices never lived here — so these
+--    are test rows only, and clearing them lets those orders take a proper INV
+--    number the next time someone downloads them. Rows whose number already
+--    starts with INV are left untouched.
+UPDATE orders
+SET invoice_number = NULL,
+    invoice_date   = NULL
+WHERE invoice_number LIKE 'Retail%';
+
 -- Issue (or return the already-issued) invoice number for an order.
 --
 -- Atomic and idempotent: the UPDATE only matches while invoice_number IS NULL,

@@ -29,6 +29,15 @@ const nextConfig: NextConfig = {
       "@radix-ui/react-accordion",
     ],
   },
+  // pdfkit loads its built-in PDF fonts through a package-internal subpath
+  // (`#standard-fonts/Helvetica`) that is only required at render time, so
+  // Next's file tracer never sees it and the font files are left out of the
+  // serverless bundle. Locally that goes unnoticed — node_modules is on disk —
+  // but on Vercel the invoice route throws MODULE_NOT_FOUND the moment it
+  // renders. Ship the whole (192 KB) font directory with that one route.
+  outputFileTracingIncludes: {
+    "/api/orders/[id]/invoice": ["./node_modules/pdfkit/js/standard-fonts/**"],
+  },
   compress: true,
   poweredByHeader: false,
   // OPTIMIZATION: Enable SWR cache for data fetches
