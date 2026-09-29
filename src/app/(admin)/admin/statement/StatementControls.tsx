@@ -24,9 +24,9 @@ export function StatementControls({
 }) {
   const router = useRouter();
   const pathname = usePathname();
-  const [busy, setBusy] = useState<"csv" | "pdf" | null>(null);
+  const [busy, setBusy] = useState<"xlsx" | "pdf" | null>(null);
 
-  async function download(format: "csv" | "pdf") {
+  async function download(format: "xlsx" | "pdf") {
     setBusy(format);
     try {
       const res = await fetch(`/api/admin/statement?month=${month}&format=${format}`);
@@ -74,16 +74,16 @@ export function StatementControls({
 
       <button
         type="button"
-        onClick={() => download("csv")}
+        onClick={() => download("xlsx")}
         disabled={busy !== null}
         className={cn(btn, "bg-brand-500 text-white hover:bg-brand-600")}
       >
-        {busy === "csv" ? (
+        {busy === "xlsx" ? (
           <Loader2 className="h-4 w-4 animate-spin" />
         ) : (
           <FileSpreadsheet className="h-4 w-4" />
         )}
-        {busy === "csv" ? "Preparing…" : "Download Excel / CSV"}
+        {busy === "xlsx" ? "Preparing…" : "Download Excel"}
       </button>
 
       <button

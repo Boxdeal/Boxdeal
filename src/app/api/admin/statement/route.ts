@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { getMonthlyStatement } from "@/lib/statement/monthly";
 import { statementToCsv } from "@/lib/statement/csv";
+import { statementToXlsx } from "@/lib/statement/xlsx";
 import { renderStatementPdf } from "@/lib/statement/pdf";
 
 // The PDF renderer needs the Node runtime, and a statement must always be
@@ -43,6 +44,18 @@ export async function GET(req: NextRequest) {
       headers: {
         "Content-Type": "text/csv; charset=utf-8",
         "Content-Disposition": `attachment; filename="${base}.csv"`,
+        "Cache-Control": "no-store",
+      },
+    });
+  }
+
+  if (format === "xlsx") {
+    const xlsx = await statementToXlsx(statement);
+    return new NextResponse(new Uint8Array(xlsx), {
+      headers: {
+        "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "Content-Disposition": `attachment; filename="${base}.xlsx"`,
+        "Content-Length": String(xlsx.length),
         "Cache-Control": "no-store",
       },
     });
