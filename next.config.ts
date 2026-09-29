@@ -37,6 +37,7 @@ const nextConfig: NextConfig = {
   // renders. Ship the whole (192 KB) font directory with that one route.
   outputFileTracingIncludes: {
     "/api/orders/[id]/invoice": ["./node_modules/pdfkit/js/standard-fonts/**"],
+    "/api/admin/statement": ["./node_modules/pdfkit/js/standard-fonts/**"],
   },
   compress: true,
   poweredByHeader: false,

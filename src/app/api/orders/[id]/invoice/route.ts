@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServerClient, getSupabaseAdminClient } from "@/lib/supabase/server";
-import { computeInvoice } from "@/lib/invoice/gst";
 import { renderInvoicePdf, type InvoiceBuyer, type InvoiceMeta } from "@/lib/invoice/pdf";
+import {
+  computeOrderInvoice,
+  INVOICE_ITEM_SELECT,
+  type InvoiceItemRow,
+} from "@/lib/invoice/order";
 import {
   canAdminInvoice,
   canCustomerInvoice,
@@ -15,24 +19,6 @@ import type { OrderStatus } from "@/types";
 // first successful request.
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-interface InvoiceItemRow {
-  product_name: string;
-  product_sku: string | null;
-  quantity: number;
-  selling_price: number;
-  hsn_code: string | null;
-  product: { hsn_code: string | null } | { hsn_code: string | null }[] | null;
-}
-
-/** HSN snapshotted on the order item, falling back to the product's current one. */
-function itemHsn(item: InvoiceItemRow): string | null {
-  if (item.hsn_code?.trim()) return item.hsn_code.trim();
-  // PostgREST returns an embedded to-one relation as an object, but older
-  // generated types can widen it to an array — handle both shapes.
-  const product = Array.isArray(item.product) ? item.product[0] : item.product;
-  return product?.hsn_code?.trim() || null;
-}
 
 export async function GET(
   _req: NextRequest,
@@ -54,10 +40,7 @@ export async function GET(
       shipping_city, shipping_state, shipping_pincode,
       discount_amount, admin_discount, shipping_charge,
       payment_method, courier_name, tracking_number, notes,
-      items:order_items(
-        product_name, product_sku, quantity, selling_price, hsn_code,
-        product:products(hsn_code)
-      )
+      items:order_items(${INVOICE_ITEM_SELECT})
     `)
     .eq("id", id)
     .single();
@@ -108,19 +91,7 @@ export async function GET(
     return NextResponse.json({ error: "This order has no items to invoice" }, { status: 409 });
   }
 
-  const calc = computeInvoice({
-    items: items.map((i) => ({
-      product_name: i.product_name,
-      product_sku: i.product_sku ?? "",
-      hsn_code: itemHsn(i),
-      quantity: i.quantity,
-      selling_price: Number(i.selling_price),
-    })),
-    discountAmount: Number(order.discount_amount ?? 0),
-    adminDiscount: Number(order.admin_discount ?? 0),
-    shippingCharge: Number(order.shipping_charge ?? 0),
-    buyerState: order.shipping_state ?? "",
-  });
+  const calc = computeOrderInvoice({ ...order, items });
 
   const buyer: InvoiceBuyer = {
     name: order.shipping_full_name,
