@@ -38,19 +38,20 @@ export function statementToCsv(s: MonthlyStatement): string {
   out.push(row("All amounts in INR. Prices are GST-inclusive."));
 
   blank();
-  out.push(row("ORDER ACTIVITY", "(orders placed this month, and how they ended)"));
+  out.push(row("ORDER ACTIVITY", "(orders PLACED this month, and where each one ended up)"));
   out.push(row("Metric", "Orders"));
-  out.push(row("Placed", s.activity.placed));
-  out.push(row("Delivered", s.activity.delivered));
-  out.push(row("Still in transit", s.activity.inTransit));
-  out.push(row("Cancelled", s.activity.cancelled));
-  out.push(row("Returned / RTO", s.activity.returned));
-  out.push(row("Failed / never paid", s.activity.failed));
+  out.push(row("Orders placed", s.activity.placed));
+  out.push(row("  of those, delivered", s.activity.delivered));
+  out.push(row("  of those, still in transit", s.activity.inTransit));
+  out.push(row("  of those, cancelled", s.activity.cancelled));
+  out.push(row("  of those, returned / RTO", s.activity.returned));
+  out.push(row("  of those, failed / never paid", s.activity.failed));
 
   blank();
-  out.push(row("MONEY EARNED", "(orders delivered this month)"));
+  out.push(row("MONEY EARNED", "(parcels DELIVERED this month, whenever they were ordered)"));
   out.push(row("Metric", "Orders", "Amount"));
-  out.push(row("Delivered orders", s.realised.orders, money(s.realised.net)));
+  out.push(row("Parcels delivered", s.realised.orders, money(s.realised.net)));
+  out.push(row("  of those, ordered in an earlier month", s.realised.fromEarlierMonths));
   out.push(row("  Product value", "", money(s.realised.gross)));
   out.push(row("  Discounts given", "", `-${money(s.realised.discount)}`));
   out.push(row("  Delivery charges", "", money(s.realised.delivery)));

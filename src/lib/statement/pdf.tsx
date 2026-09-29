@@ -187,10 +187,14 @@ export function StatementDocument({ s }: { s: MonthlyStatement }) {
 
         <Section
           title="MONEY EARNED"
-          note="Orders delivered this month. COD is cash that actually landed; an order placed this month but delivered next month counts next month."
+          note={`Parcels that reached the customer this month, whenever they were ordered — COD is cash that actually landed.${
+            r.fromEarlierMonths > 0
+              ? ` ${r.fromEarlierMonths} of these ${r.orders} were ordered in an earlier month, which is why Order Activity below shows a different delivered count.`
+              : ""
+          }`}
         >
           <View style={styles.kpiRow}>
-            <Kpi label="DELIVERED ORDERS" value={String(r.orders)} />
+            <Kpi label="PARCELS DELIVERED" value={String(r.orders)} />
             <Kpi label="NET SALES" value={`Rs. ${money(r.net)}`} />
             <Kpi label="COD COLLECTED" value={`Rs. ${money(r.cod.amount)}`} />
             <Kpi label="PREPAID" value={`Rs. ${money(r.prepaid.amount)}`} />
@@ -221,9 +225,9 @@ export function StatementDocument({ s }: { s: MonthlyStatement }) {
           </View>
         </Section>
 
-        <Section title="ORDER ACTIVITY" note="Orders placed this month, and how they ended up.">
+        <Section title="ORDER ACTIVITY" note="Orders PLACED this month, and where each one ended up. Every figure below is a slice of the placed total.">
           <View style={styles.kpiRow}>
-            <Kpi label="PLACED" value={String(s.activity.placed)} />
+            <Kpi label="ORDERS PLACED" value={String(s.activity.placed)} />
             <Kpi label="DELIVERED" value={String(s.activity.delivered)} />
             <Kpi label="IN TRANSIT" value={String(s.activity.inTransit)} />
             <Kpi label="CANCELLED" value={String(s.activity.cancelled)} />

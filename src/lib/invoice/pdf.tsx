@@ -110,9 +110,9 @@ function money(n: number): string {
   return n.toFixed(2);
 }
 
-/** "1677.81 | 18" — the value and rate pair printed in each tax column. */
+/** "1677.81 @ 18%" — the value and rate pair printed in each tax column. */
 function taxCell(value: number, rate: number): string {
-  return `${money(value)} | ${rate}`;
+  return `${money(value)} @ ${rate}%`;
 }
 
 export interface InvoiceMeta {
@@ -228,11 +228,11 @@ function LineTable({ calc }: { calc: InvoiceComputation }) {
         <Text style={[styles.th, w(c.taxable), right]}>TAXABLE VALUE</Text>
         {calc.intraState ? (
           <>
-            <Text style={[styles.th, w(c.tax1), right]}>CGST (Value | %)</Text>
-            <Text style={[styles.th, w(c.tax2), right]}>SGST (Value | %)</Text>
+            <Text style={[styles.th, w(c.tax1), right]}>CGST (Value @ Rate)</Text>
+            <Text style={[styles.th, w(c.tax2), right]}>SGST (Value @ Rate)</Text>
           </>
         ) : (
-          <Text style={[styles.th, w(c.tax1), right]}>IGST (Value | %)</Text>
+          <Text style={[styles.th, w(c.tax1), right]}>IGST (Value @ Rate)</Text>
         )}
         <Text style={[styles.th, w(c.total), right]}>TOTAL (Including GST)</Text>
       </View>

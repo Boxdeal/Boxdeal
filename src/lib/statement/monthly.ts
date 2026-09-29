@@ -80,6 +80,13 @@ export interface ActivityCounts {
 
 export interface RealisedMoney {
   orders: number;
+  /**
+   * How many of those deliveries were for orders placed in an EARLIER month.
+   * Surfaced because it is the whole reason this count differs from the
+   * delivered figure in Order Activity, which is scoped to orders placed in
+   * this month — without it the two look like a contradiction.
+   */
+  fromEarlierMonths: number;
   /** Sum of line values before any discount. */
   gross: number;
   discount: number;
@@ -236,7 +243,7 @@ export async function getMonthlyStatement(month: string): Promise<MonthlyStateme
 
   // ── Money earned, by delivery date ──
   const realised: RealisedMoney = {
-    orders: 0, gross: 0, discount: 0, delivery: 0, net: 0,
+    orders: 0, fromEarlierMonths: 0, gross: 0, discount: 0, delivery: 0, net: 0,
     cod: { orders: 0, amount: 0 },
     prepaid: { orders: 0, amount: 0 },
   };
@@ -245,6 +252,7 @@ export async function getMonthlyStatement(month: string): Promise<MonthlyStateme
   for (const o of (deliveredRes.data ?? []) as unknown as OrderRow[]) {
     const total = num(o.total_amount);
     realised.orders++;
+    if (new Date(o.placed_at) < range.start) realised.fromEarlierMonths++;
     realised.gross = round2(realised.gross + num(o.subtotal));
     realised.discount = round2(realised.discount + num(o.discount_amount) + num(o.admin_discount));
     realised.delivery = round2(realised.delivery + num(o.shipping_charge));

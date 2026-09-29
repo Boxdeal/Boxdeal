@@ -53,14 +53,25 @@ export default async function StatementPage({
         <div>
           <h2 className="font-semibold text-gray-900">Money Earned</h2>
           <p className="text-sm text-gray-500">
-            Orders <strong>delivered</strong> this month. Most orders are COD, so the cash
-            only exists once the parcel lands — an order placed this month but delivered next
-            month counts next month.
+            Parcels that <strong>reached the customer</strong> this month, whenever they were
+            ordered. Most orders are COD, so the cash only exists once the parcel lands.
+            {s.realised.fromEarlierMonths > 0 && (
+              <>
+                {" "}That is why this says {s.realised.orders} while Order Activity below says{" "}
+                {s.activity.delivered}: {s.realised.fromEarlierMonths} of these parcels were
+                ordered in an earlier month, so they are not part of this month&apos;s orders.
+              </>
+            )}
           </p>
         </div>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <StatsCard
-            title="Delivered orders" value={s.realised.orders} icon={Package}
+            title="Parcels delivered" value={s.realised.orders} icon={Package}
+            subtitle={
+              s.realised.fromEarlierMonths > 0
+                ? `${s.realised.fromEarlierMonths} of these were ordered in an earlier month`
+                : "all of these were ordered this month"
+            }
           />
           <StatsCard
             title="Net sales" value={formatPrice(s.realised.net)} icon={Wallet}
@@ -83,19 +94,24 @@ export default async function StatementPage({
         <div className={card}>
           <h2 className="font-semibold text-gray-900">Order Activity</h2>
           <p className="mb-3 text-sm text-gray-500">
-            Orders <strong>placed</strong> this month, and how they ended up.
+            Orders <strong>placed</strong> this month, and where each one ended up.
+            A parcel ordered this month but delivered next month is still counted
+            here, under &ldquo;still in transit&rdquo;.
           </p>
           <dl className="space-y-1.5 text-sm">
+            <div className="flex justify-between border-b border-gray-100 pb-2">
+              <dt className="font-medium text-gray-900">Orders placed</dt>
+              <dd className="font-bold text-gray-900 tabular-nums">{s.activity.placed}</dd>
+            </div>
             {[
-              ["Placed", s.activity.placed],
               ["Delivered", s.activity.delivered],
               ["Still in transit", s.activity.inTransit],
               ["Cancelled", s.activity.cancelled],
               ["Returned / RTO", s.activity.returned],
               ["Failed / never paid", s.activity.failed],
             ].map(([label, value]) => (
-              <div key={label as string} className="flex justify-between">
-                <dt className="text-gray-500">{label as string}</dt>
+              <div key={label as string} className="flex justify-between pl-4">
+                <dt className="text-gray-500">↳ {label as string}</dt>
                 <dd className="font-semibold text-gray-900 tabular-nums">{value as number}</dd>
               </div>
             ))}
