@@ -75,9 +75,9 @@ export interface ActivityCounts {
   placed: number;
   delivered: number;
   /**
-   * `delivered` split by the month the parcel actually landed. Orders placed
-   * late in the month often land next month, which is where their money is
-   * counted — this is what reconciles against each month's Money Earned.
+   * `delivered` split by the month the money arrived — online at checkout, COD
+   * on delivery (often next month for late orders). Same rule as Money Earned,
+   * so each row reconciles against that month's statement.
    */
   deliveredByMonth: MonthSplit[];
   inTransit: number;
@@ -293,7 +293,9 @@ export async function getMonthlyStatement(month: string): Promise<MonthlyStateme
     else activity.inTransit++;
   }
 
-  activity.deliveredByMonth = splitByMonth(deliveredOfPlaced, (o) => o.delivered_at);
+  activity.deliveredByMonth = splitByMonth(
+    deliveredOfPlaced, (o) => (o.payment_method === "cod" ? o.delivered_at : o.placed_at),
+  );
 
   // ── Money earned, by the day the money arrived ──
   const earnedRows = [...(deliveredRes.data ?? []), ...(prepaidRes.data ?? [])] as unknown as OrderRow[];

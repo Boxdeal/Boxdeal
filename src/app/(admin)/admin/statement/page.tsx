@@ -126,11 +126,11 @@ export default async function StatementPage({
           {s.activity.delivered > 0 && (
             <div className="mt-4 border-t border-gray-100 pt-3">
               <p className="mb-2 text-sm font-medium text-gray-900">
-                {s.activity.delivered} delivered orders from {s.label} — when did they land?
+                {s.activity.delivered} delivered orders from {s.label} — which month was the money received?
               </p>
               <MonthSplitTable
                 rows={s.activity.deliveredByMonth}
-                rowLabel={(r) => `Delivered in ${r.label}`}
+                rowLabel={(r) => `Paid in ${r.label}`}
                 current={s.month}
               />
             </div>

@@ -200,7 +200,7 @@ function summarySheet(wb: ExcelJS.Workbook, s: MonthlyStatement) {
   line("Orders placed", s.activity.placed, null, { bold: true });
   line("Delivered", s.activity.delivered, null, { sub: true });
   for (const m of s.activity.deliveredByMonth) {
-    line(`  delivered in ${m.label}`, m.orders, m.amount, { sub: true });
+    line(`  paid in ${m.label}`, m.orders, m.amount, { sub: true });
   }
   line("Still in transit", s.activity.inTransit, null, { sub: true });
   line("Cancelled", s.activity.cancelled, null, { sub: true });
