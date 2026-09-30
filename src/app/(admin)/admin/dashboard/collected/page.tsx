@@ -11,7 +11,7 @@ import { getPeriodStats, getISTPeriodRange } from "@/lib/admin/periods";
 import { REVENUE_STATUSES } from "@/lib/admin/order-buckets";
 import { formatPrice, formatDateTime } from "@/lib/utils/format";
 import { formatInTimeZone } from "date-fns-tz";
-import { PAYMENT_BUCKET_LABELS, PAYMENT_BUCKET_METHODS } from "@/constants";
+import { PAYMENT_BUCKET_LABELS } from "@/constants";
 import type { DashboardPeriod, Order, PaymentBucket } from "@/types";
 
 export const metadata: Metadata = { title: "Money Collected — Admin" };
@@ -84,23 +84,16 @@ export default async function CollectedMoneyPage({ searchParams }: Props) {
   const range = getISTPeriodRange(period, { from, to });
   const admin = getSupabaseAdminClient();
 
-  // Money counts on the day it ARRIVED — the same rule as the Monthly
-  // Statement: online at checkout (`placed_at`), COD on delivery
-  // (`delivered_at`). Only paid orders in a live/delivered status count, so a
-  // refund, cancellation or return drops the order out on its own.
+  // Orders PLACED in this period whose money is already in hand. Online is
+  // paid at checkout; COD only once delivered — possibly in a later month,
+  // which the month table below shows. Refunded, cancelled and returned
+  // orders drop out on their own (not "paid" / not a live status).
   const start = range.start.toISOString();
   const end = range.end.toISOString();
-  const prepaidQuery = admin
+  const paidQuery = admin
     .from("orders").select("*")
-    .in("payment_method", PAYMENT_BUCKET_METHODS.prepaid)
     .in("status", REVENUE_STATUSES).eq("payment_status", "paid")
     .gte("placed_at", start).lte("placed_at", end)
-    .limit(10000);
-  const codQuery = admin
-    .from("orders").select("*")
-    .in("payment_method", PAYMENT_BUCKET_METHODS.cod)
-    .eq("status", "delivered").eq("payment_status", "paid")
-    .gte("delivered_at", start).lte("delivered_at", end)
     .limit(10000);
 
   // Money that came in and then left again — refunds, plus cash sitting with us
@@ -112,29 +105,24 @@ export default async function CollectedMoneyPage({ searchParams }: Props) {
     .gte("placed_at", start)
     .lte("placed_at", end);
 
-  const [{ data: prepaidRows }, { data: codRows }, { data: outRows }] =
-    await Promise.all([prepaidQuery, codQuery, outQuery]);
+  const [{ data: paidRows }, { data: outRows }] = await Promise.all([paidQuery, outQuery]);
 
   const got: Record<PaymentBucket, { orders: number; amount: number }> = {
     prepaid: { orders: 0, amount: 0 },
     cod: { orders: 0, amount: 0 },
   };
-  for (const [b, rows] of [["prepaid", prepaidRows], ["cod", codRows]] as const) {
-    for (const o of (rows ?? []) as Order[]) {
-      got[b].orders++;
-      got[b].amount += Number(o.total_amount) || 0;
-    }
+  const allPaid: Order[] = [];
+  for (const o of (paidRows ?? []) as Order[]) {
+    const b: PaymentBucket = o.payment_method === "cod" ? "cod" : "prepaid";
+    got[b].orders++;
+    got[b].amount += Number(o.total_amount) || 0;
+    if (!pay || pay === b) allPaid.push(o);
   }
-
-  const allPaid = [
-    ...(pay !== "cod" ? prepaidRows ?? [] : []),
-    ...(pay !== "prepaid" ? codRows ?? [] : []),
-  ] as Order[];
-  allPaid.sort((x, y) => collectedAt(y).localeCompare(collectedAt(x)));
+  allPaid.sort((x, y) => y.placed_at.localeCompare(x.placed_at));
   const orders = allPaid.slice(0, ROW_LIMIT);
 
-  const byOrderMonth = byMonth(allPaid, (o) => o.placed_at);
-  const monthTotal = byOrderMonth.reduce(
+  const byPaidMonth = byMonth(allPaid, (o) => collectedAt(o as Order));
+  const monthTotal = byPaidMonth.reduce(
     (t, r) => ({ orders: t.orders + r.orders, cod: t.cod + r.cod, prepaid: t.prepaid + r.prepaid, amount: t.amount + r.amount }),
     { orders: 0, cod: 0, prepaid: 0, amount: 0 },
   );
@@ -152,8 +140,8 @@ export default async function CollectedMoneyPage({ searchParams }: Props) {
     }
   }
 
-  // Collected figures follow the arrival rule above; "yet to collect" is still
-  // the live-order estimate from the period aggregate.
+  // Collected figures come from the paid rows above; "yet to collect" is the
+  // live-order estimate from the period aggregate.
   const shown = {
     collected: monthTotal.amount,
     count: monthTotal.orders,
@@ -184,7 +172,7 @@ export default async function CollectedMoneyPage({ searchParams }: Props) {
     },
     {
       title: "Cash on delivery", value: formatPrice(got.cod.amount),
-      subtitle: `${got.cod.orders} order${got.cod.orders === 1 ? "" : "s"} · delivered in this period`,
+      subtitle: `${got.cod.orders} order${got.cod.orders === 1 ? "" : "s"} · delivered & paid`,
       icon: Banknote, variant: "default" as const, href: payLink("cod"),
     },
     {
@@ -234,8 +222,8 @@ export default async function CollectedMoneyPage({ searchParams }: Props) {
           <PeriodSelector defaultPeriod="month" />
         </div>
         <p className="mt-1 text-sm text-gray-500">
-          Every rupee that arrived in this period. Online orders count when paid, COD orders when
-          delivered. Refunded, cancelled and returned orders are left out.
+          Orders customers placed in this period, and the money already received for them.
+          Refunded, cancelled and returned orders are left out.
         </p>
       </div>
 
@@ -313,17 +301,18 @@ export default async function CollectedMoneyPage({ searchParams }: Props) {
         )}
       </section>
 
-      {/* Money collected, grouped by the month each order was placed */}
+      {/* This period's orders, by the month their money came in */}
       <section className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-        <p className="text-sm font-semibold text-gray-700">Money received — by order month</p>
+        <p className="text-sm font-semibold text-gray-700">
+          Orders placed in {p.label} — which month they were paid
+        </p>
         <p className="mb-3 text-xs text-gray-400">
-          Online orders are paid at checkout, so they count in the month they were ordered.
-          COD orders are paid on delivery, so an older COD order delivered now shows up here.
+          Online orders are paid the same day. COD orders are paid when delivered.
         </p>
         <table className="w-full max-w-xl text-sm">
           <thead>
             <tr>
-              <th className="pb-1 text-left text-xs font-medium text-gray-400">Ordered in</th>
+              <th className="pb-1 text-left text-xs font-medium text-gray-400">Paid in</th>
               <th className="pb-1 text-right text-xs font-medium text-gray-400">COD</th>
               <th className="pb-1 text-right text-xs font-medium text-gray-400">Online</th>
               <th className="pb-1 text-right text-xs font-medium text-gray-400">Orders</th>
@@ -331,7 +320,7 @@ export default async function CollectedMoneyPage({ searchParams }: Props) {
             </tr>
           </thead>
           <tbody>
-            {byOrderMonth.map((r) => (
+            {byPaidMonth.map((r) => (
               <tr key={r.month} className="border-t border-gray-50">
                 <td className="py-1.5 text-gray-700">{r.label}</td>
                 <td className="py-1.5 text-right text-gray-500 tabular-nums">{r.cod}</td>
