@@ -104,10 +104,9 @@ export default async function CollectedMoneyPage({ searchParams }: Props) {
     .gte("placed_at", range.start.toISOString())
     .lte("placed_at", range.end.toISOString());
 
-  // Month-wise split, without the table's row limit. The page is keyed on the
-  // day the order was PLACED, but COD cash only arrives on delivery — so a
-  // late-month order's money often lands next month. `earlier` is the mirror:
-  // cash that arrived in this period for orders placed before it.
+  // Month-wise split, without the table's row limit: this period's paid orders,
+  // plus COD cash that arrived in this period for orders placed before it
+  // (late-month orders are often delivered, and paid, next month).
   const SLIM = "payment_method, placed_at, delivered_at, updated_at, total_amount";
   let placedPaidQuery = admin
     .from("orders").select(SLIM)
@@ -127,8 +126,12 @@ export default async function CollectedMoneyPage({ searchParams }: Props) {
 
   const [{ data: orderRows }, { data: outRows }, { data: placedPaidRows }, { data: earlierRows }] =
     await Promise.all([ordersQuery, outQuery, placedPaidQuery, earlierQuery]);
-  const receivedIn = byMonth((placedPaidRows ?? []) as SlimPaid[], (o) => collectedAt(o as Order));
-  const earlierByOrderMonth = byMonth((earlierRows ?? []) as SlimPaid[], (o) => o.placed_at);
+  const byOrderMonth = byMonth(
+    [...(earlierRows ?? []), ...(placedPaidRows ?? [])] as SlimPaid[], (o) => o.placed_at,
+  );
+  const monthTotal = byOrderMonth.reduce(
+    (t, r) => ({ orders: t.orders + r.orders, amount: t.amount + r.amount }), { orders: 0, amount: 0 },
+  );
   const orders = (orderRows ?? []) as Order[];
 
   const refunded = { orders: 0, amount: 0 };
@@ -304,32 +307,25 @@ export default async function CollectedMoneyPage({ searchParams }: Props) {
         )}
       </section>
 
-      {/* Month-wise: when ordered vs when the money arrived */}
+      {/* Money collected, grouped by the month each order was placed */}
       <section className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-        <p className="text-sm font-semibold text-gray-700">Month-wise — when the money actually arrived</p>
-        <p className="mb-3 text-xs text-gray-400">
-          This page counts orders by the day they were <strong>placed</strong>. Online payments arrive
-          at checkout, but COD cash only arrives on delivery — so an order placed late in the month is
-          often paid next month.
-        </p>
-        <div className="grid gap-6 md:grid-cols-2">
-          <div>
-            <p className="mb-1 text-sm font-medium text-gray-800">
-              Orders placed in {p.label} — money received in:
-            </p>
-            <MonthTable rows={receivedIn} prefix="Received in" empty="Nothing collected yet." />
-          </div>
-          <div>
-            <p className="mb-1 text-sm font-medium text-gray-800">
-              COD received during {p.label} for orders placed <em>before</em> it:
-            </p>
-            <MonthTable
-              rows={earlierByOrderMonth} prefix="Ordered in"
-              empty="None — every rupee received was for an order placed in this period."
-            />
-            <p className="mt-1 text-xs text-gray-400">Not part of the totals above.</p>
-          </div>
-        </div>
+        <p className="mb-2 text-sm font-semibold text-gray-700">Paisa — kis month ke orders ka</p>
+        <table className="w-full max-w-md text-sm">
+          <tbody>
+            {byOrderMonth.map((r) => (
+              <tr key={r.month} className="border-t border-gray-50">
+                <td className="py-1.5 text-gray-700">{r.label} orders</td>
+                <td className="py-1.5 text-right text-gray-400 tabular-nums">{r.orders}</td>
+                <td className="py-1.5 text-right font-semibold text-gray-900 tabular-nums">{formatPrice(r.amount)}</td>
+              </tr>
+            ))}
+            <tr className="border-t-2 border-gray-200">
+              <td className="py-1.5 font-bold text-gray-900">Total</td>
+              <td className="py-1.5 text-right text-gray-500 tabular-nums">{monthTotal.orders}</td>
+              <td className="py-1.5 text-right font-bold text-gray-900 tabular-nums">{formatPrice(monthTotal.amount)}</td>
+            </tr>
+          </tbody>
+        </table>
       </section>
 
       {/* Who paid */}
@@ -424,30 +420,5 @@ export default async function CollectedMoneyPage({ searchParams }: Props) {
         )}
       </section>
     </div>
-  );
-}
-
-function MonthTable({ rows, prefix, empty }: { rows: MonthRow[]; prefix: string; empty: string }) {
-  if (rows.length === 0) return <p className="py-2 text-sm text-gray-400">{empty}</p>;
-  const total = rows.reduce((a, r) => ({ orders: a.orders + r.orders, amount: a.amount + r.amount }), { orders: 0, amount: 0 });
-  return (
-    <table className="w-full text-sm">
-      <tbody>
-        {rows.map((r) => (
-          <tr key={r.month} className="border-t border-gray-50">
-            <td className="py-1.5 text-gray-700">{prefix} {r.label}</td>
-            <td className="py-1.5 text-right text-gray-500 tabular-nums">{r.orders} orders</td>
-            <td className="py-1.5 text-right font-semibold text-gray-900 tabular-nums">{formatPrice(r.amount)}</td>
-          </tr>
-        ))}
-        {rows.length > 1 && (
-          <tr className="border-t border-gray-200">
-            <td className="py-1.5 font-medium text-gray-900">Total</td>
-            <td className="py-1.5 text-right text-gray-500 tabular-nums">{total.orders} orders</td>
-            <td className="py-1.5 text-right font-bold text-gray-900 tabular-nums">{formatPrice(total.amount)}</td>
-          </tr>
-        )}
-      </tbody>
-    </table>
   );
 }
