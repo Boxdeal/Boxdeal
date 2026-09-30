@@ -41,7 +41,7 @@ function collectedAt(o: Order): string {
   return (o.payment_method === "cod" ? o.delivered_at : o.placed_at) ?? o.updated_at;
 }
 
-interface MonthRow { month: string; label: string; orders: number; amount: number }
+interface MonthRow { month: string; label: string; orders: number; cod: number; prepaid: number; amount: number }
 
 type SlimPaid = Pick<Order, "payment_method" | "placed_at" | "delivered_at" | "updated_at" | "total_amount">;
 
@@ -52,8 +52,10 @@ function byMonth(rows: SlimPaid[], at: (o: SlimPaid) => string): MonthRow[] {
     const d = new Date(at(o));
     const month = formatInTimeZone(d, "Asia/Kolkata", "yyyy-MM");
     const row = out.get(month) ??
-      { month, label: formatInTimeZone(d, "Asia/Kolkata", "MMMM yyyy"), orders: 0, amount: 0 };
+      { month, label: formatInTimeZone(d, "Asia/Kolkata", "MMMM yyyy"), orders: 0, cod: 0, prepaid: 0, amount: 0 };
     row.orders++;
+    if (o.payment_method === "cod") row.cod++;
+    else row.prepaid++;
     row.amount += Number(o.total_amount) || 0;
     out.set(month, row);
   }
@@ -82,18 +84,24 @@ export default async function CollectedMoneyPage({ searchParams }: Props) {
   const range = getISTPeriodRange(period, { from, to });
   const admin = getSupabaseAdminClient();
 
-  // Exactly the orders behind `collectedRevenue`: revenue-bucket orders whose
-  // money is already in hand.
-  let ordersQuery = admin
-    .from("orders")
-    .select("*")
-    .in("status", REVENUE_STATUSES)
-    .eq("payment_status", "paid")
-    .gte("placed_at", range.start.toISOString())
-    .lte("placed_at", range.end.toISOString())
-    .order("placed_at", { ascending: false })
-    .limit(ROW_LIMIT);
-  if (pay) ordersQuery = ordersQuery.in("payment_method", PAYMENT_BUCKET_METHODS[pay]);
+  // Money counts on the day it ARRIVED — the same rule as the Monthly
+  // Statement: online at checkout (`placed_at`), COD on delivery
+  // (`delivered_at`). Only paid orders in a live/delivered status count, so a
+  // refund, cancellation or return drops the order out on its own.
+  const start = range.start.toISOString();
+  const end = range.end.toISOString();
+  const prepaidQuery = admin
+    .from("orders").select("*")
+    .in("payment_method", PAYMENT_BUCKET_METHODS.prepaid)
+    .in("status", REVENUE_STATUSES).eq("payment_status", "paid")
+    .gte("placed_at", start).lte("placed_at", end)
+    .limit(10000);
+  const codQuery = admin
+    .from("orders").select("*")
+    .in("payment_method", PAYMENT_BUCKET_METHODS.cod)
+    .eq("status", "delivered").eq("payment_status", "paid")
+    .gte("delivered_at", start).lte("delivered_at", end)
+    .limit(10000);
 
   // Money that came in and then left again — refunds, plus cash sitting with us
   // on orders that came back and still owe the customer a refund.
@@ -101,38 +109,35 @@ export default async function CollectedMoneyPage({ searchParams }: Props) {
     .from("orders")
     .select("total_amount, payment_status, status")
     .or("payment_status.in.(refunded,partially_refunded),and(status.eq.returned,payment_status.eq.paid)")
-    .gte("placed_at", range.start.toISOString())
-    .lte("placed_at", range.end.toISOString());
+    .gte("placed_at", start)
+    .lte("placed_at", end);
 
-  // Month-wise split, without the table's row limit: this period's paid orders,
-  // plus COD cash that arrived in this period for orders placed before it
-  // (late-month orders are often delivered, and paid, next month).
-  const SLIM = "payment_method, placed_at, delivered_at, updated_at, total_amount";
-  let placedPaidQuery = admin
-    .from("orders").select(SLIM)
-    .in("status", REVENUE_STATUSES).eq("payment_status", "paid")
-    .gte("placed_at", range.start.toISOString()).lte("placed_at", range.end.toISOString())
-    .limit(10000);
-  let earlierQuery = admin
-    .from("orders").select(SLIM)
-    .in("status", REVENUE_STATUSES).eq("payment_status", "paid").eq("payment_method", "cod")
-    .lt("placed_at", range.start.toISOString())
-    .gte("delivered_at", range.start.toISOString()).lte("delivered_at", range.end.toISOString())
-    .limit(10000);
-  if (pay) {
-    placedPaidQuery = placedPaidQuery.in("payment_method", PAYMENT_BUCKET_METHODS[pay]);
-    earlierQuery = earlierQuery.in("payment_method", PAYMENT_BUCKET_METHODS[pay]);
+  const [{ data: prepaidRows }, { data: codRows }, { data: outRows }] =
+    await Promise.all([prepaidQuery, codQuery, outQuery]);
+
+  const got: Record<PaymentBucket, { orders: number; amount: number }> = {
+    prepaid: { orders: 0, amount: 0 },
+    cod: { orders: 0, amount: 0 },
+  };
+  for (const [b, rows] of [["prepaid", prepaidRows], ["cod", codRows]] as const) {
+    for (const o of (rows ?? []) as Order[]) {
+      got[b].orders++;
+      got[b].amount += Number(o.total_amount) || 0;
+    }
   }
 
-  const [{ data: orderRows }, { data: outRows }, { data: placedPaidRows }, { data: earlierRows }] =
-    await Promise.all([ordersQuery, outQuery, placedPaidQuery, earlierQuery]);
-  const byOrderMonth = byMonth(
-    [...(earlierRows ?? []), ...(placedPaidRows ?? [])] as SlimPaid[], (o) => o.placed_at,
-  );
+  const allPaid = [
+    ...(pay !== "cod" ? prepaidRows ?? [] : []),
+    ...(pay !== "prepaid" ? codRows ?? [] : []),
+  ] as Order[];
+  allPaid.sort((x, y) => collectedAt(y).localeCompare(collectedAt(x)));
+  const orders = allPaid.slice(0, ROW_LIMIT);
+
+  const byOrderMonth = byMonth(allPaid, (o) => o.placed_at);
   const monthTotal = byOrderMonth.reduce(
-    (t, r) => ({ orders: t.orders + r.orders, amount: t.amount + r.amount }), { orders: 0, amount: 0 },
+    (t, r) => ({ orders: t.orders + r.orders, cod: t.cod + r.cod, prepaid: t.prepaid + r.prepaid, amount: t.amount + r.amount }),
+    { orders: 0, cod: 0, prepaid: 0, amount: 0 },
   );
-  const orders = (orderRows ?? []) as Order[];
 
   const refunded = { orders: 0, amount: 0 };
   const refundDue = { orders: 0, amount: 0 };
@@ -147,12 +152,13 @@ export default async function CollectedMoneyPage({ searchParams }: Props) {
     }
   }
 
-  // Headline numbers come from the period aggregate (exact, no row limit); the
-  // customer breakdown below comes from the fetched rows.
-  const scope = pay ? p.byPayment[pay] : null;
-  const shown = scope
-    ? { collected: scope.collectedRevenue, count: scope.collectedOrders, pending: scope.pendingRevenue }
-    : { collected: p.collectedRevenue, count: p.collectedOrders, pending: p.pendingRevenue };
+  // Collected figures follow the arrival rule above; "yet to collect" is still
+  // the live-order estimate from the period aggregate.
+  const shown = {
+    collected: monthTotal.amount,
+    count: monthTotal.orders,
+    pending: pay ? p.byPayment[pay].pendingRevenue : p.pendingRevenue,
+  };
 
   const q = new URLSearchParams({ period });
   if (from) q.set("from", from);
@@ -172,13 +178,13 @@ export default async function CollectedMoneyPage({ searchParams }: Props) {
       icon: Wallet, variant: "success" as const,
     },
     {
-      title: "Paid online", value: formatPrice(p.byPayment.prepaid.collectedRevenue),
-      subtitle: `${p.byPayment.prepaid.collectedOrders} order${p.byPayment.prepaid.collectedOrders === 1 ? "" : "s"} · Razorpay at checkout`,
+      title: "Paid online", value: formatPrice(got.prepaid.amount),
+      subtitle: `${got.prepaid.orders} order${got.prepaid.orders === 1 ? "" : "s"} · Razorpay at checkout`,
       icon: CreditCard, variant: "default" as const, href: payLink("prepaid"),
     },
     {
-      title: "Cash on delivery", value: formatPrice(p.byPayment.cod.collectedRevenue),
-      subtitle: `${p.byPayment.cod.collectedOrders} order${p.byPayment.cod.collectedOrders === 1 ? "" : "s"} · collected by the courier`,
+      title: "Cash on delivery", value: formatPrice(got.cod.amount),
+      subtitle: `${got.cod.orders} order${got.cod.orders === 1 ? "" : "s"} · delivered in this period`,
       icon: Banknote, variant: "default" as const, href: payLink("cod"),
     },
     {
@@ -193,7 +199,7 @@ export default async function CollectedMoneyPage({ searchParams }: Props) {
     string,
     { name: string; phone: string; orders: number; amount: number; prepaid: number; cod: number }
   >();
-  for (const o of orders) {
+  for (const o of allPaid) {
     const key = o.user_id || o.shipping_phone;
     const row = byCustomer.get(key) ?? {
       name: o.shipping_full_name, phone: o.shipping_phone,
@@ -228,8 +234,8 @@ export default async function CollectedMoneyPage({ searchParams }: Props) {
           <PeriodSelector defaultPeriod="month" />
         </div>
         <p className="mt-1 text-sm text-gray-500">
-          Every rupee already in hand for this period — where it came from, who paid it and where it
-          lands. Only orders marked paid count here; the rest of the estimate is still to collect.
+          Every rupee that arrived in this period. Online orders count when paid, COD orders when
+          delivered. Refunded, cancelled and returned orders are left out.
         </p>
       </div>
 
@@ -240,11 +246,11 @@ export default async function CollectedMoneyPage({ searchParams }: Props) {
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-sm font-medium text-gray-500">Source:</span>
         <Link href={payLink(null)} className={pill(!pay)}>
-          All ({formatPrice(p.collectedRevenue)})
+          All ({formatPrice(got.prepaid.amount + got.cod.amount)})
         </Link>
         {PAY_BUCKETS.map((b) => (
           <Link key={b} href={payLink(b)} className={pill(pay === b)}>
-            {PAYMENT_BUCKET_LABELS[b]} ({formatPrice(p.byPayment[b].collectedRevenue)})
+            {PAYMENT_BUCKET_LABELS[b]} ({formatPrice(got[b].amount)})
           </Link>
         ))}
       </div>
@@ -264,10 +270,10 @@ export default async function CollectedMoneyPage({ searchParams }: Props) {
                   <Link href={payLink(b)} className="text-sm font-semibold text-gray-800 hover:text-brand-600">
                     {PAYMENT_BUCKET_LABELS[b]}
                   </Link>
-                  <span className="text-lg font-black text-gray-900">{formatPrice(s.collectedRevenue)}</span>
+                  <span className="text-lg font-black text-gray-900">{formatPrice(got[b].amount)}</span>
                 </div>
                 <p className="text-xs text-gray-400">
-                  {s.collectedOrders} order{s.collectedOrders === 1 ? "" : "s"} paid
+                  {got[b].orders} order{got[b].orders === 1 ? "" : "s"} paid
                   {s.pendingRevenue > 0 && ` · ${formatPrice(s.pendingRevenue)} still to come`}
                 </p>
                 <dl className="mt-3 space-y-2 text-xs">
@@ -309,20 +315,37 @@ export default async function CollectedMoneyPage({ searchParams }: Props) {
 
       {/* Money collected, grouped by the month each order was placed */}
       <section className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-        <p className="mb-2 text-sm font-semibold text-gray-700">Paisa — kis month ke orders ka</p>
-        <table className="w-full max-w-md text-sm">
+        <p className="text-sm font-semibold text-gray-700">Money received — by order month</p>
+        <p className="mb-3 text-xs text-gray-400">
+          Online orders are paid at checkout, so they count in the month they were ordered.
+          COD orders are paid on delivery, so an older COD order delivered now shows up here.
+        </p>
+        <table className="w-full max-w-xl text-sm">
+          <thead>
+            <tr>
+              <th className="pb-1 text-left text-xs font-medium text-gray-400">Ordered in</th>
+              <th className="pb-1 text-right text-xs font-medium text-gray-400">COD</th>
+              <th className="pb-1 text-right text-xs font-medium text-gray-400">Online</th>
+              <th className="pb-1 text-right text-xs font-medium text-gray-400">Orders</th>
+              <th className="pb-1 text-right text-xs font-medium text-gray-400">Amount</th>
+            </tr>
+          </thead>
           <tbody>
             {byOrderMonth.map((r) => (
               <tr key={r.month} className="border-t border-gray-50">
-                <td className="py-1.5 text-gray-700">{r.label} orders</td>
-                <td className="py-1.5 text-right text-gray-400 tabular-nums">{r.orders}</td>
+                <td className="py-1.5 text-gray-700">{r.label}</td>
+                <td className="py-1.5 text-right text-gray-500 tabular-nums">{r.cod}</td>
+                <td className="py-1.5 text-right text-gray-500 tabular-nums">{r.prepaid}</td>
+                <td className="py-1.5 text-right text-gray-700 tabular-nums">{r.orders}</td>
                 <td className="py-1.5 text-right font-semibold text-gray-900 tabular-nums">{formatPrice(r.amount)}</td>
               </tr>
             ))}
-            <tr className="border-t-2 border-gray-200">
-              <td className="py-1.5 font-bold text-gray-900">Total</td>
-              <td className="py-1.5 text-right text-gray-500 tabular-nums">{monthTotal.orders}</td>
-              <td className="py-1.5 text-right font-bold text-gray-900 tabular-nums">{formatPrice(monthTotal.amount)}</td>
+            <tr className="border-t-2 border-gray-200 font-bold text-gray-900">
+              <td className="py-1.5">Total</td>
+              <td className="py-1.5 text-right tabular-nums">{monthTotal.cod}</td>
+              <td className="py-1.5 text-right tabular-nums">{monthTotal.prepaid}</td>
+              <td className="py-1.5 text-right tabular-nums">{monthTotal.orders}</td>
+              <td className="py-1.5 text-right tabular-nums">{formatPrice(monthTotal.amount)}</td>
             </tr>
           </tbody>
         </table>

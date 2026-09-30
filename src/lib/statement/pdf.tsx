@@ -187,10 +187,10 @@ export function StatementDocument({ s }: { s: MonthlyStatement }) {
 
         <Section
           title="MONEY EARNED"
-          note={`Parcels delivered in ${s.label}, whenever they were ordered — COD is cash that actually landed.`}
+          note={`Money that arrived in ${s.label}: online orders when paid, COD when delivered. Refunded, cancelled and returned orders are left out.`}
         >
           <View style={styles.kpiRow}>
-            <Kpi label="PARCELS DELIVERED" value={String(r.orders)} />
+            <Kpi label="PAID ORDERS" value={String(r.orders)} />
             <Kpi label="NET SALES" value={`Rs. ${money(r.net)}`} />
             <Kpi label="COD COLLECTED" value={`Rs. ${money(r.cod.amount)}`} />
             <Kpi label="PREPAID" value={`Rs. ${money(r.prepaid.amount)}`} />

@@ -54,17 +54,18 @@ export default async function StatementPage({
         <div>
           <h2 className="font-semibold text-gray-900">Money Earned</h2>
           <p className="text-sm text-gray-500">
-            Parcels <strong>delivered</strong> in {s.label}, whenever they were ordered. Most
-            orders are COD, so the cash only exists once the parcel lands.
+            Money that <strong>arrived</strong> in {s.label}. Online orders count in the month
+            they were paid; COD orders count in the month they were delivered. Refunded,
+            cancelled and returned orders are left out.
           </p>
         </div>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <StatsCard
-            title="Parcels delivered" value={s.realised.orders} icon={Package}
+            title="Paid orders" value={s.realised.orders} icon={Package}
             subtitle={
               s.realised.fromEarlierMonths > 0
                 ? `${s.realised.fromEarlierMonths} of these were ordered in an earlier month`
-                : "all of these were ordered this month"
+                : "all ordered this month"
             }
           />
           <StatsCard
@@ -84,7 +85,7 @@ export default async function StatementPage({
         {s.realised.orders > 0 && (
           <div className={card}>
             <p className="mb-2 text-sm font-medium text-gray-900">
-              {s.realised.orders} parcels delivered in {s.label} — when were they ordered?
+              {s.realised.orders} paid orders in {s.label} — when were they ordered?
             </p>
             <MonthSplitTable
               rows={s.realised.byOrderMonth}
@@ -357,7 +358,9 @@ function MonthSplitTable({
       <thead>
         <tr>
           <th className="py-1 text-left text-xs font-semibold text-gray-500">Month</th>
-          <th className="py-1 text-right text-xs font-semibold text-gray-500">Parcels</th>
+          <th className="py-1 text-right text-xs font-semibold text-gray-500">COD</th>
+          <th className="py-1 text-right text-xs font-semibold text-gray-500">Online</th>
+          <th className="py-1 text-right text-xs font-semibold text-gray-500">Orders</th>
           <th className="py-1 text-right text-xs font-semibold text-gray-500">Amount</th>
         </tr>
       </thead>
@@ -368,6 +371,8 @@ function MonthSplitTable({
               {rowLabel(r)}
               {r.month === current && <span className="ml-1 text-xs text-gray-400">(this month)</span>}
             </td>
+            <td className="py-1.5 text-right text-gray-500 tabular-nums">{r.cod}</td>
+            <td className="py-1.5 text-right text-gray-500 tabular-nums">{r.prepaid}</td>
             <td className="py-1.5 text-right font-semibold text-gray-900 tabular-nums">{r.orders}</td>
             <td className="py-1.5 text-right text-gray-700 tabular-nums">{formatPrice(r.amount)}</td>
           </tr>

@@ -1,6 +1,6 @@
 import { fromZonedTime, formatInTimeZone } from "date-fns-tz";
 import { getSupabaseAdminClient } from "@/lib/supabase/server";
-import { orderBucket, returnKind } from "@/lib/admin/order-buckets";
+import { orderBucket, returnKind, REVENUE_STATUSES } from "@/lib/admin/order-buckets";
 import { computeOrderInvoice, INVOICE_ITEM_SELECT, type InvoiceItemRow } from "@/lib/invoice/order";
 import { stateCode, GST_RATE } from "@/lib/invoice/gst";
 
@@ -11,10 +11,12 @@ import { stateCode, GST_RATE } from "@/lib/invoice/gst";
  * The two halves deliberately count DIFFERENT days, because they answer
  * different questions and merging them would make both wrong:
  *
- *   business — money earned, keyed on `delivered_at`. Most orders here are
- *              COD, so the cash only exists once the parcel lands. An order
- *              placed on the 30th and delivered on the 2nd is next month's
- *              money.
+ *   business — money earned, keyed on the day the money arrived: COD on
+ *              `delivered_at` (the cash only exists once the parcel lands, so
+ *              an order placed on the 30th and delivered on the 2nd is next
+ *              month's money), online on `placed_at` (paid at checkout).
+ *              Refunded, cancelled and returned orders drop out on their own:
+ *              only paid orders in a live/delivered status count.
  *   gst      — tax owed, keyed on `invoice_date`. GST liability arises when
  *              the invoice is raised, whatever the order or delivery date.
  *
@@ -85,9 +87,11 @@ export interface ActivityCounts {
 }
 
 export interface RealisedMoney {
+  /** Paid orders whose money arrived this month (COD delivered + online paid). */
   orders: number;
   /**
-   * How many of those deliveries were for orders placed in an EARLIER month.
+   * How many of those were for orders placed in an EARLIER month (always COD —
+   * online orders are paid the day they are placed).
    * Surfaced because it is the whole reason this count differs from the
    * delivered figure in Order Activity, which is scoped to orders placed in
    * this month — without it the two look like a contradiction.
@@ -112,6 +116,9 @@ export interface MonthSplit {
   /** "August 2026" */
   label: string;
   orders: number;
+  /** `orders` split by payment method. */
+  cod: number;
+  prepaid: number;
   amount: number;
 }
 
@@ -209,8 +216,10 @@ function splitByMonth(rows: OrderRow[], at: (o: OrderRow) => string | null): Mon
     if (!ts) continue;
     const month = formatInTimeZone(new Date(ts), IST, "yyyy-MM");
     const row = byMonth.get(month) ??
-      { month, label: formatInTimeZone(new Date(ts), IST, "MMMM yyyy"), orders: 0, amount: 0 };
+      { month, label: formatInTimeZone(new Date(ts), IST, "MMMM yyyy"), orders: 0, cod: 0, prepaid: 0, amount: 0 };
     row.orders++;
+    if (o.payment_method === "cod") row.cod++;
+    else row.prepaid++;
     row.amount = round2(row.amount + num(o.total_amount));
     byMonth.set(month, row);
   }
@@ -239,14 +248,19 @@ export async function getMonthlyStatement(month: string): Promise<MonthlyStateme
   const SLIM = "order_number, status, payment_status, payment_method, placed_at, delivered_at, " +
     "subtotal, discount_amount, admin_discount, shipping_charge, total_amount, shipping_state";
 
-  const [placedRes, deliveredRes, invoicedRes, returnedRes] = await Promise.all([
+  const [placedRes, deliveredRes, prepaidRes, invoicedRes, returnedRes] = await Promise.all([
     // Activity — every order raised this month, whatever became of it.
     admin.from("orders").select(SLIM)
       .gte("placed_at", from).lt("placed_at", to).limit(10000),
-    // Money earned — parcels that actually landed this month.
+    // Money earned (COD) — cash that landed with a parcel delivered this month.
     admin.from("orders").select(`${SLIM}, items:order_items(product_name, product_sku, quantity, selling_price)`)
-      .eq("status", "delivered")
+      .eq("payment_method", "cod").eq("status", "delivered").eq("payment_status", "paid")
       .gte("delivered_at", from).lt("delivered_at", to).limit(10000),
+    // Money earned (online) — paid at checkout this month. Delivery is irrelevant
+    // here: the money is already in hand.
+    admin.from("orders").select(`${SLIM}, items:order_items(product_name, product_sku, quantity, selling_price)`)
+      .neq("payment_method", "cod").in("status", REVENUE_STATUSES).eq("payment_status", "paid")
+      .gte("placed_at", from).lt("placed_at", to).limit(10000),
     // Tax owed — invoices raised this month.
     admin.from("orders").select(`${SLIM}, invoice_number, invoice_date, items:order_items(${INVOICE_ITEM_SELECT})`)
       .not("invoice_number", "is", null)
@@ -281,7 +295,8 @@ export async function getMonthlyStatement(month: string): Promise<MonthlyStateme
 
   activity.deliveredByMonth = splitByMonth(deliveredOfPlaced, (o) => o.delivered_at);
 
-  // ── Money earned, by delivery date ──
+  // ── Money earned, by the day the money arrived ──
+  const earnedRows = [...(deliveredRes.data ?? []), ...(prepaidRes.data ?? [])] as unknown as OrderRow[];
   const realised: RealisedMoney = {
     orders: 0, fromEarlierMonths: 0, byOrderMonth: [], gross: 0, discount: 0, delivery: 0, net: 0,
     cod: { orders: 0, amount: 0 },
@@ -289,7 +304,7 @@ export async function getMonthlyStatement(month: string): Promise<MonthlyStateme
   };
   const productTally = new Map<string, TopProduct>();
 
-  for (const o of (deliveredRes.data ?? []) as unknown as OrderRow[]) {
+  for (const o of earnedRows) {
     const total = num(o.total_amount);
     realised.orders++;
     if (new Date(o.placed_at) < range.start) realised.fromEarlierMonths++;
@@ -312,7 +327,7 @@ export async function getMonthlyStatement(month: string): Promise<MonthlyStateme
   }
 
   realised.byOrderMonth = splitByMonth(
-    (deliveredRes.data ?? []) as unknown as OrderRow[], (o) => o.placed_at,
+    earnedRows, (o) => o.placed_at,
   );
 
   const topProducts = [...productTally.values()]

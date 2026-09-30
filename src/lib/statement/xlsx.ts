@@ -207,8 +207,8 @@ function summarySheet(wb: ExcelJS.Workbook, s: MonthlyStatement) {
   line("Returned / RTO", s.activity.returned, null, { sub: true });
   line("Failed / never paid", s.activity.failed, null, { sub: true });
 
-  section("MONEY EARNED", "Parcels DELIVERED this month, whenever they were ordered", ["Metric", "Orders", "Amount (₹)"]);
-  line("Parcels delivered", s.realised.orders, s.realised.net, { bold: true });
+  section("MONEY EARNED", "Money that ARRIVED this month: online when paid, COD when delivered. Refunds excluded", ["Metric", "Orders", "Amount (₹)"]);
+  line("Paid orders", s.realised.orders, s.realised.net, { bold: true });
   for (const m of s.realised.byOrderMonth) {
     line(`Ordered in ${m.label}`, m.orders, m.amount, { sub: true });
   }

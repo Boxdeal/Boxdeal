@@ -51,9 +51,9 @@ export function statementToCsv(s: MonthlyStatement): string {
   out.push(row("  of those, failed / never paid", s.activity.failed));
 
   blank();
-  out.push(row("MONEY EARNED", "(parcels DELIVERED this month, whenever they were ordered)"));
+  out.push(row("MONEY EARNED", "(money that ARRIVED this month: online when paid, COD when delivered; refunds excluded)"));
   out.push(row("Metric", "Orders", "Amount"));
-  out.push(row("Parcels delivered", s.realised.orders, money(s.realised.net)));
+  out.push(row("Paid orders", s.realised.orders, money(s.realised.net)));
   for (const m of s.realised.byOrderMonth) {
     out.push(row(`  of those, ordered in ${m.label}`, m.orders, money(m.amount)));
   }
