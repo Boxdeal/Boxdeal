@@ -10,6 +10,7 @@ import { PeriodSelector } from "@/components/admin/PeriodSelector";
 import { getPeriodStats, getISTPeriodRange } from "@/lib/admin/periods";
 import { REVENUE_STATUSES } from "@/lib/admin/order-buckets";
 import { formatPrice, formatDateTime } from "@/lib/utils/format";
+import { formatInTimeZone } from "date-fns-tz";
 import { PAYMENT_BUCKET_LABELS, PAYMENT_BUCKET_METHODS } from "@/constants";
 import type { DashboardPeriod, Order, PaymentBucket } from "@/types";
 
@@ -38,6 +39,25 @@ const SOURCE_INFO: Record<PaymentBucket, { from: string; when: string; lands: st
 /** When the money actually landed: prepaid at checkout, COD on delivery. */
 function collectedAt(o: Order): string {
   return (o.payment_method === "cod" ? o.delivered_at : o.placed_at) ?? o.updated_at;
+}
+
+interface MonthRow { month: string; label: string; orders: number; amount: number }
+
+type SlimPaid = Pick<Order, "payment_method" | "placed_at" | "delivered_at" | "updated_at" | "total_amount">;
+
+/** Tallies orders into IST calendar months by the given timestamp, oldest first. */
+function byMonth(rows: SlimPaid[], at: (o: SlimPaid) => string): MonthRow[] {
+  const out = new Map<string, MonthRow>();
+  for (const o of rows) {
+    const d = new Date(at(o));
+    const month = formatInTimeZone(d, "Asia/Kolkata", "yyyy-MM");
+    const row = out.get(month) ??
+      { month, label: formatInTimeZone(d, "Asia/Kolkata", "MMMM yyyy"), orders: 0, amount: 0 };
+    row.orders++;
+    row.amount += Number(o.total_amount) || 0;
+    out.set(month, row);
+  }
+  return [...out.values()].sort((a, b) => a.month.localeCompare(b.month));
 }
 
 /** The reference that proves the payment — a Razorpay id or the courier + AWB. */
@@ -84,7 +104,31 @@ export default async function CollectedMoneyPage({ searchParams }: Props) {
     .gte("placed_at", range.start.toISOString())
     .lte("placed_at", range.end.toISOString());
 
-  const [{ data: orderRows }, { data: outRows }] = await Promise.all([ordersQuery, outQuery]);
+  // Month-wise split, without the table's row limit. The page is keyed on the
+  // day the order was PLACED, but COD cash only arrives on delivery — so a
+  // late-month order's money often lands next month. `earlier` is the mirror:
+  // cash that arrived in this period for orders placed before it.
+  const SLIM = "payment_method, placed_at, delivered_at, updated_at, total_amount";
+  let placedPaidQuery = admin
+    .from("orders").select(SLIM)
+    .in("status", REVENUE_STATUSES).eq("payment_status", "paid")
+    .gte("placed_at", range.start.toISOString()).lte("placed_at", range.end.toISOString())
+    .limit(10000);
+  let earlierQuery = admin
+    .from("orders").select(SLIM)
+    .in("status", REVENUE_STATUSES).eq("payment_status", "paid").eq("payment_method", "cod")
+    .lt("placed_at", range.start.toISOString())
+    .gte("delivered_at", range.start.toISOString()).lte("delivered_at", range.end.toISOString())
+    .limit(10000);
+  if (pay) {
+    placedPaidQuery = placedPaidQuery.in("payment_method", PAYMENT_BUCKET_METHODS[pay]);
+    earlierQuery = earlierQuery.in("payment_method", PAYMENT_BUCKET_METHODS[pay]);
+  }
+
+  const [{ data: orderRows }, { data: outRows }, { data: placedPaidRows }, { data: earlierRows }] =
+    await Promise.all([ordersQuery, outQuery, placedPaidQuery, earlierQuery]);
+  const receivedIn = byMonth((placedPaidRows ?? []) as SlimPaid[], (o) => collectedAt(o as Order));
+  const earlierByOrderMonth = byMonth((earlierRows ?? []) as SlimPaid[], (o) => o.placed_at);
   const orders = (orderRows ?? []) as Order[];
 
   const refunded = { orders: 0, amount: 0 };
@@ -260,6 +304,34 @@ export default async function CollectedMoneyPage({ searchParams }: Props) {
         )}
       </section>
 
+      {/* Month-wise: when ordered vs when the money arrived */}
+      <section className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+        <p className="text-sm font-semibold text-gray-700">Month-wise — when the money actually arrived</p>
+        <p className="mb-3 text-xs text-gray-400">
+          This page counts orders by the day they were <strong>placed</strong>. Online payments arrive
+          at checkout, but COD cash only arrives on delivery — so an order placed late in the month is
+          often paid next month.
+        </p>
+        <div className="grid gap-6 md:grid-cols-2">
+          <div>
+            <p className="mb-1 text-sm font-medium text-gray-800">
+              Orders placed in {p.label} — money received in:
+            </p>
+            <MonthTable rows={receivedIn} prefix="Received in" empty="Nothing collected yet." />
+          </div>
+          <div>
+            <p className="mb-1 text-sm font-medium text-gray-800">
+              COD received during {p.label} for orders placed <em>before</em> it:
+            </p>
+            <MonthTable
+              rows={earlierByOrderMonth} prefix="Ordered in"
+              empty="None — every rupee received was for an order placed in this period."
+            />
+            <p className="mt-1 text-xs text-gray-400">Not part of the totals above.</p>
+          </div>
+        </div>
+      </section>
+
       {/* Who paid */}
       <section className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
         <p className="mb-3 flex items-center gap-2 text-sm font-semibold text-gray-700">
@@ -352,5 +424,30 @@ export default async function CollectedMoneyPage({ searchParams }: Props) {
         )}
       </section>
     </div>
+  );
+}
+
+function MonthTable({ rows, prefix, empty }: { rows: MonthRow[]; prefix: string; empty: string }) {
+  if (rows.length === 0) return <p className="py-2 text-sm text-gray-400">{empty}</p>;
+  const total = rows.reduce((a, r) => ({ orders: a.orders + r.orders, amount: a.amount + r.amount }), { orders: 0, amount: 0 });
+  return (
+    <table className="w-full text-sm">
+      <tbody>
+        {rows.map((r) => (
+          <tr key={r.month} className="border-t border-gray-50">
+            <td className="py-1.5 text-gray-700">{prefix} {r.label}</td>
+            <td className="py-1.5 text-right text-gray-500 tabular-nums">{r.orders} orders</td>
+            <td className="py-1.5 text-right font-semibold text-gray-900 tabular-nums">{formatPrice(r.amount)}</td>
+          </tr>
+        ))}
+        {rows.length > 1 && (
+          <tr className="border-t border-gray-200">
+            <td className="py-1.5 font-medium text-gray-900">Total</td>
+            <td className="py-1.5 text-right text-gray-500 tabular-nums">{total.orders} orders</td>
+            <td className="py-1.5 text-right font-bold text-gray-900 tabular-nums">{formatPrice(total.amount)}</td>
+          </tr>
+        )}
+      </tbody>
+    </table>
   );
 }

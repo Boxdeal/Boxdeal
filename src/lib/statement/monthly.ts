@@ -72,6 +72,12 @@ export function recentMonths(count = 24, now = new Date()): string[] {
 export interface ActivityCounts {
   placed: number;
   delivered: number;
+  /**
+   * `delivered` split by the month the parcel actually landed. Orders placed
+   * late in the month often land next month, which is where their money is
+   * counted — this is what reconciles against each month's Money Earned.
+   */
+  deliveredByMonth: MonthSplit[];
   inTransit: number;
   cancelled: number;
   returned: number;
@@ -87,6 +93,8 @@ export interface RealisedMoney {
    * this month — without it the two look like a contradiction.
    */
   fromEarlierMonths: number;
+  /** `orders` split by the month each one was placed, newest first. */
+  byOrderMonth: MonthSplit[];
   /** Sum of line values before any discount. */
   gross: number;
   discount: number;
@@ -95,6 +103,16 @@ export interface RealisedMoney {
   net: number;
   cod: { orders: number; amount: number };
   prepaid: { orders: number; amount: number };
+}
+
+/** A count (and its money) attributed to one calendar month. */
+export interface MonthSplit {
+  /** "2026-08" */
+  month: string;
+  /** "August 2026" */
+  label: string;
+  orders: number;
+  amount: number;
 }
 
 export interface ReturnsBlock {
@@ -183,6 +201,22 @@ type OrderRow = {
   items?: InvoiceItemRow[] | null;
 };
 
+/** Tallies orders into calendar months (IST) by the given timestamp, newest first. */
+function splitByMonth(rows: OrderRow[], at: (o: OrderRow) => string | null): MonthSplit[] {
+  const byMonth = new Map<string, MonthSplit>();
+  for (const o of rows) {
+    const ts = at(o);
+    if (!ts) continue;
+    const month = formatInTimeZone(new Date(ts), IST, "yyyy-MM");
+    const row = byMonth.get(month) ??
+      { month, label: formatInTimeZone(new Date(ts), IST, "MMMM yyyy"), orders: 0, amount: 0 };
+    row.orders++;
+    row.amount = round2(row.amount + num(o.total_amount));
+    byMonth.set(month, row);
+  }
+  return [...byMonth.values()].sort((a, b) => b.month.localeCompare(a.month));
+}
+
 const emptyTotals = (): GstTotals => ({ taxable: 0, cgst: 0, sgst: 0, igst: 0, tax: 0, net: 0 });
 
 function addTotals(into: GstTotals, from: GstTotals) {
@@ -229,21 +263,27 @@ export async function getMonthlyStatement(month: string): Promise<MonthlyStateme
 
   // ── Activity, by order date ──
   const activity: ActivityCounts = {
-    placed: 0, delivered: 0, inTransit: 0, cancelled: 0, returned: 0, failed: 0,
+    placed: 0, delivered: 0, deliveredByMonth: [], inTransit: 0, cancelled: 0, returned: 0, failed: 0,
   };
+  const deliveredOfPlaced: OrderRow[] = [];
   for (const o of (placedRes.data ?? []) as unknown as OrderRow[]) {
     activity.placed++;
     const bucket = orderBucket(o);
     if (bucket === "failed") activity.failed++;
     else if (bucket === "cancelled") activity.cancelled++;
     else if (bucket === "returned") activity.returned++;
-    else if (o.status === "delivered") activity.delivered++;
+    else if (o.status === "delivered") {
+      activity.delivered++;
+      deliveredOfPlaced.push(o);
+    }
     else activity.inTransit++;
   }
 
+  activity.deliveredByMonth = splitByMonth(deliveredOfPlaced, (o) => o.delivered_at);
+
   // ── Money earned, by delivery date ──
   const realised: RealisedMoney = {
-    orders: 0, fromEarlierMonths: 0, gross: 0, discount: 0, delivery: 0, net: 0,
+    orders: 0, fromEarlierMonths: 0, byOrderMonth: [], gross: 0, discount: 0, delivery: 0, net: 0,
     cod: { orders: 0, amount: 0 },
     prepaid: { orders: 0, amount: 0 },
   };
@@ -270,6 +310,10 @@ export async function getMonthlyStatement(month: string): Promise<MonthlyStateme
       productTally.set(sku, row);
     }
   }
+
+  realised.byOrderMonth = splitByMonth(
+    (deliveredRes.data ?? []) as unknown as OrderRow[], (o) => o.placed_at,
+  );
 
   const topProducts = [...productTally.values()]
     .sort((a, b) => b.amount - a.amount || b.qty - a.qty)

@@ -199,6 +199,9 @@ function summarySheet(wb: ExcelJS.Workbook, s: MonthlyStatement) {
   section("ORDER ACTIVITY", "Orders PLACED this month, and where each one ended up", ["Metric", "Orders", ""]);
   line("Orders placed", s.activity.placed, null, { bold: true });
   line("Delivered", s.activity.delivered, null, { sub: true });
+  for (const m of s.activity.deliveredByMonth) {
+    line(`  delivered in ${m.label}`, m.orders, m.amount, { sub: true });
+  }
   line("Still in transit", s.activity.inTransit, null, { sub: true });
   line("Cancelled", s.activity.cancelled, null, { sub: true });
   line("Returned / RTO", s.activity.returned, null, { sub: true });
@@ -206,7 +209,9 @@ function summarySheet(wb: ExcelJS.Workbook, s: MonthlyStatement) {
 
   section("MONEY EARNED", "Parcels DELIVERED this month, whenever they were ordered", ["Metric", "Orders", "Amount (₹)"]);
   line("Parcels delivered", s.realised.orders, s.realised.net, { bold: true });
-  line("Ordered in an earlier month", s.realised.fromEarlierMonths, null, { sub: true });
+  for (const m of s.realised.byOrderMonth) {
+    line(`Ordered in ${m.label}`, m.orders, m.amount, { sub: true });
+  }
   line("Product value", null, s.realised.gross, { sub: true });
   line("Discounts given", null, -s.realised.discount, { sub: true });
   line("Delivery charges", null, s.realised.delivery, { sub: true });

@@ -6,6 +6,7 @@ import {
   getMonthlyStatement,
   getMonthRange,
   recentMonths,
+  type MonthSplit,
 } from "@/lib/statement/monthly";
 import { formatPrice } from "@/lib/utils/format";
 
@@ -53,15 +54,8 @@ export default async function StatementPage({
         <div>
           <h2 className="font-semibold text-gray-900">Money Earned</h2>
           <p className="text-sm text-gray-500">
-            Parcels that <strong>reached the customer</strong> this month, whenever they were
-            ordered. Most orders are COD, so the cash only exists once the parcel lands.
-            {s.realised.fromEarlierMonths > 0 && (
-              <>
-                {" "}That is why this says {s.realised.orders} while Order Activity below says{" "}
-                {s.activity.delivered}: {s.realised.fromEarlierMonths} of these parcels were
-                ordered in an earlier month, so they are not part of this month&apos;s orders.
-              </>
-            )}
+            Parcels <strong>delivered</strong> in {s.label}, whenever they were ordered. Most
+            orders are COD, so the cash only exists once the parcel lands.
           </p>
         </div>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -87,6 +81,18 @@ export default async function StatementPage({
             subtitle={`${s.realised.prepaid.orders} orders`}
           />
         </div>
+        {s.realised.orders > 0 && (
+          <div className={card}>
+            <p className="mb-2 text-sm font-medium text-gray-900">
+              {s.realised.orders} parcels delivered in {s.label} — when were they ordered?
+            </p>
+            <MonthSplitTable
+              rows={s.realised.byOrderMonth}
+              rowLabel={(r) => `Ordered in ${r.label}`}
+              current={s.month}
+            />
+          </div>
+        )}
       </section>
 
       {/* ── Activity + returns ── */}
@@ -94,9 +100,9 @@ export default async function StatementPage({
         <div className={card}>
           <h2 className="font-semibold text-gray-900">Order Activity</h2>
           <p className="mb-3 text-sm text-gray-500">
-            Orders <strong>placed</strong> this month, and where each one ended up.
-            A parcel ordered this month but delivered next month is still counted
-            here, under &ldquo;still in transit&rdquo;.
+            Orders <strong>placed</strong> in {s.label}, and where each one ended up today.
+            A parcel ordered this month but delivered next month counts as
+            &ldquo;delivered&rdquo; here, and its money shows in next month&apos;s Money Earned.
           </p>
           <dl className="space-y-1.5 text-sm">
             <div className="flex justify-between border-b border-gray-100 pb-2">
@@ -116,6 +122,18 @@ export default async function StatementPage({
               </div>
             ))}
           </dl>
+          {s.activity.delivered > 0 && (
+            <div className="mt-4 border-t border-gray-100 pt-3">
+              <p className="mb-2 text-sm font-medium text-gray-900">
+                {s.activity.delivered} delivered orders from {s.label} — when did they land?
+              </p>
+              <MonthSplitTable
+                rows={s.activity.deliveredByMonth}
+                rowLabel={(r) => `Delivered in ${r.label}`}
+                current={s.month}
+              />
+            </div>
+          )}
         </div>
 
         <div className={card}>
@@ -323,5 +341,38 @@ export default async function StatementPage({
         </div>
       </div>
     </div>
+  );
+}
+
+/** One line per calendar month: count and money, current month highlighted. */
+function MonthSplitTable({
+  rows, rowLabel, current,
+}: {
+  rows: MonthSplit[];
+  rowLabel: (r: MonthSplit) => string;
+  current: string;
+}) {
+  return (
+    <table className="w-full text-sm">
+      <thead>
+        <tr>
+          <th className="py-1 text-left text-xs font-semibold text-gray-500">Month</th>
+          <th className="py-1 text-right text-xs font-semibold text-gray-500">Parcels</th>
+          <th className="py-1 text-right text-xs font-semibold text-gray-500">Amount</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((r) => (
+          <tr key={r.month} className="border-t border-gray-50">
+            <td className="py-1.5 text-gray-700">
+              {rowLabel(r)}
+              {r.month === current && <span className="ml-1 text-xs text-gray-400">(this month)</span>}
+            </td>
+            <td className="py-1.5 text-right font-semibold text-gray-900 tabular-nums">{r.orders}</td>
+            <td className="py-1.5 text-right text-gray-700 tabular-nums">{formatPrice(r.amount)}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
   );
 }

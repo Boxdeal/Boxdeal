@@ -187,11 +187,7 @@ export function StatementDocument({ s }: { s: MonthlyStatement }) {
 
         <Section
           title="MONEY EARNED"
-          note={`Parcels that reached the customer this month, whenever they were ordered — COD is cash that actually landed.${
-            r.fromEarlierMonths > 0
-              ? ` ${r.fromEarlierMonths} of these ${r.orders} were ordered in an earlier month, which is why Order Activity below shows a different delivered count.`
-              : ""
-          }`}
+          note={`Parcels delivered in ${s.label}, whenever they were ordered — COD is cash that actually landed.`}
         >
           <View style={styles.kpiRow}>
             <Kpi label="PARCELS DELIVERED" value={String(r.orders)} />
@@ -211,6 +207,7 @@ export function StatementDocument({ s }: { s: MonthlyStatement }) {
             ["Delivery charges", "", money(r.delivery)],
             ["COD collected", String(r.cod.orders), money(r.cod.amount)],
             ["Prepaid", String(r.prepaid.orders), money(r.prepaid.amount)],
+            ...r.byOrderMonth.map((m) => [`Ordered in ${m.label}`, String(m.orders), money(m.amount)]),
           ].map(([label, orders, amount], i) => (
             <View key={label} style={i % 2 ? styles.trAlt : styles.tr}>
               <Text style={[styles.td, w(55)]}>{label}</Text>
@@ -234,6 +231,22 @@ export function StatementDocument({ s }: { s: MonthlyStatement }) {
             <Kpi label="RETURNED / RTO" value={String(s.activity.returned)} />
             <Kpi label="FAILED / UNPAID" value={String(s.activity.failed)} />
           </View>
+          {s.activity.deliveredByMonth.length > 0 && (
+            <>
+              <View style={[styles.headRow, { marginTop: 8 }]}>
+                <Text style={[styles.th, w(55)]}>DELIVERED — WHEN THEY LANDED</Text>
+                <Text style={[styles.th, w(20), right]}>ORDERS</Text>
+                <Text style={[styles.th, w(25), right]}>AMOUNT</Text>
+              </View>
+              {s.activity.deliveredByMonth.map((m, i) => (
+                <View key={m.month} style={i % 2 ? styles.trAlt : styles.tr}>
+                  <Text style={[styles.td, w(55)]}>Delivered in {m.label}</Text>
+                  <Text style={[styles.tdMuted, w(20), right]}>{m.orders}</Text>
+                  <Text style={[styles.td, w(25), right]}>{money(m.amount)}</Text>
+                </View>
+              ))}
+            </>
+          )}
         </Section>
 
         <Section title="RETURNS" note="Recorded this month. RTO never reached the customer; a customer return came back after delivery.">

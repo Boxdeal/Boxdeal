@@ -42,6 +42,9 @@ export function statementToCsv(s: MonthlyStatement): string {
   out.push(row("Metric", "Orders"));
   out.push(row("Orders placed", s.activity.placed));
   out.push(row("  of those, delivered", s.activity.delivered));
+  for (const m of s.activity.deliveredByMonth) {
+    out.push(row(`    delivered in ${m.label}`, m.orders, money(m.amount)));
+  }
   out.push(row("  of those, still in transit", s.activity.inTransit));
   out.push(row("  of those, cancelled", s.activity.cancelled));
   out.push(row("  of those, returned / RTO", s.activity.returned));
@@ -51,7 +54,9 @@ export function statementToCsv(s: MonthlyStatement): string {
   out.push(row("MONEY EARNED", "(parcels DELIVERED this month, whenever they were ordered)"));
   out.push(row("Metric", "Orders", "Amount"));
   out.push(row("Parcels delivered", s.realised.orders, money(s.realised.net)));
-  out.push(row("  of those, ordered in an earlier month", s.realised.fromEarlierMonths));
+  for (const m of s.realised.byOrderMonth) {
+    out.push(row(`  of those, ordered in ${m.label}`, m.orders, money(m.amount)));
+  }
   out.push(row("  Product value", "", money(s.realised.gross)));
   out.push(row("  Discounts given", "", `-${money(s.realised.discount)}`));
   out.push(row("  Delivery charges", "", money(s.realised.delivery)));
