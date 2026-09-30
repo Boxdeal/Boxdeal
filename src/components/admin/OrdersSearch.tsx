@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { Search, X, Loader2 } from "lucide-react";
 
@@ -17,18 +17,27 @@ export function OrdersSearch({ resultCount }: { resultCount?: number }) {
 
   const urlQuery = params.get("q") ?? "";
   const [value, setValue] = useState(urlQuery);
+  // Last query this box pushed itself — so the URL catching up to it doesn't
+  // clobber whatever the admin has typed since (or strip a trailing space).
+  const pushedRef = useRef(urlQuery);
 
-  // Keep in sync when the URL changes from elsewhere (status tab, back button).
-  useEffect(() => setValue(urlQuery), [urlQuery]);
+  // Keep in sync only when the URL changes from elsewhere (status tab, back button).
+  useEffect(() => {
+    if (urlQuery === pushedRef.current) return;
+    pushedRef.current = urlQuery;
+    setValue(urlQuery);
+  }, [urlQuery]);
 
   useEffect(() => {
-    if (value === urlQuery) return;
+    const q = value.trim();
+    if (q === urlQuery) return;
     const t = setTimeout(() => {
       const sp = new URLSearchParams(params.toString());
-      if (value.trim()) sp.set("q", value.trim());
+      if (q) sp.set("q", q);
       else sp.delete("q");
       sp.delete("page");
-      startTransition(() => router.push(`${pathname}?${sp.toString()}`));
+      pushedRef.current = q;
+      startTransition(() => router.replace(`${pathname}?${sp.toString()}`));
     }, 350);
     return () => clearTimeout(t);
   }, [value, urlQuery, params, pathname, router]);

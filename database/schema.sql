@@ -542,3 +542,15 @@ CREATE POLICY "Public read active coupons" ON coupons             FOR SELECT USI
   is_active = true AND (expires_at IS NULL OR expires_at > NOW())
 );
 CREATE POLICY "User log events"           ON analytics_events     FOR INSERT WITH CHECK (true);
+
+-- ============================================================
+-- DATA API GRANTS
+-- Supabase stopped auto-granting API access to new public tables
+-- (2026-10-30). Without these, a fresh project built from this file
+-- returns "permission denied" from supabase-js. Mirrors the old
+-- defaults; RLS policies above still decide which rows are visible.
+-- ============================================================
+GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES    IN SCHEMA public TO anon, authenticated, service_role;
+GRANT USAGE, SELECT                  ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated, service_role;
+GRANT EXECUTE                        ON ALL FUNCTIONS IN SCHEMA public TO anon, authenticated, service_role;
