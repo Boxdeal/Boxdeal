@@ -7,7 +7,6 @@ import { getSupabaseAdminClient } from "@/lib/supabase/server";
 import { StatsCard } from "@/components/admin/StatsCard";
 import { OrdersTable } from "@/components/admin/OrdersTable";
 import { PeriodSelector } from "@/components/admin/PeriodSelector";
-import { CodRemittancePanel, loadCodRemittances } from "@/components/admin/CodRemittancePanel";
 import { getPeriodStats, getISTPeriodRange } from "@/lib/admin/periods";
 import { REVENUE_STATUSES } from "@/lib/admin/order-buckets";
 import { formatPrice, formatDateTime } from "@/lib/utils/format";
@@ -106,11 +105,7 @@ export default async function CollectedMoneyPage({ searchParams }: Props) {
     .gte("placed_at", start)
     .lte("placed_at", end);
 
-  const [{ data: paidRows }, { data: outRows }, remittance] = await Promise.all([
-    paidQuery,
-    outQuery,
-    loadCodRemittances(range.start, range.end),
-  ]);
+  const [{ data: paidRows }, { data: outRows }] = await Promise.all([paidQuery, outQuery]);
 
   const got: Record<PaymentBucket, { orders: number; amount: number }> = {
     prepaid: { orders: 0, amount: 0 },
@@ -305,8 +300,6 @@ export default async function CollectedMoneyPage({ searchParams }: Props) {
           </div>
         )}
       </section>
-
-      <CodRemittancePanel rows={remittance.rows} error={remittance.error} label={p.label} />
 
       {/* This period's orders, by the month their money came in */}
       <section className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">

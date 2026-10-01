@@ -345,10 +345,21 @@ export async function getCodRemittances(fromDay: Date, toDay: Date): Promise<Cod
     return `${p.year}-${p.month.slice(0, 3)}-${p.day}`;
   };
 
+  // Shiprocket refuses ranges much longer than a month, so walk the period in
+  // 28-day windows (each one inclusive of both ends, hence the +1 day step).
+  // "All time" arrives as 1970; cap the walk at a year back so it stays a
+  // dozen calls, not hundreds.
+  const DAY = 86_400_000;
+  const earliest = Math.max(fromDay.getTime(), toDay.getTime() - 365 * DAY);
+  const windows: Array<[Date, Date]> = [];
+  for (let start = earliest; start <= toDay.getTime(); start += 28 * DAY) {
+    windows.push([new Date(start), new Date(Math.min(start + 27 * DAY, toDay.getTime()))]);
+  }
+
   const out: CodRemittance[] = [];
-  for (let page = 1; page <= 20; page++) {
+  for (const [winFrom, winTo] of windows) for (let page = 1; page <= 20; page++) {
     const res = await shiprocketFetch(
-      `/account/details/remittance?from=${day(fromDay)}&to=${day(toDay)}&per_page=100&page=${page}`
+      `/account/details/remittance?from=${day(winFrom)}&to=${day(winTo)}&per_page=100&page=${page}`
     );
     const data = await res.json();
     if (!res.ok) throw new Error(data.message ?? "Shiprocket remittance lookup failed");
@@ -369,5 +380,7 @@ export async function getCodRemittances(fromDay: Date, toDay: Date): Promise<Cod
     const pages = Number(data.meta?.pagination?.total_pages) || 1;
     if (page >= pages) break;
   }
-  return out.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  // Adjacent windows can share a boundary day — keep each payout once.
+  const unique = [...new Map(out.map((r) => [r.id, r])).values()];
+  return unique.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
