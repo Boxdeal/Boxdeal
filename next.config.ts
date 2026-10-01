@@ -38,6 +38,7 @@ const nextConfig: NextConfig = {
   outputFileTracingIncludes: {
     "/api/orders/[id]/invoice": ["./node_modules/pdfkit/js/standard-fonts/**"],
     "/api/admin/statement": ["./node_modules/pdfkit/js/standard-fonts/**"],
+    "/api/admin/statement/invoices": ["./node_modules/pdfkit/js/standard-fonts/**"],
   },
   compress: true,
   poweredByHeader: false,

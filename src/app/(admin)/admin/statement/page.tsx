@@ -3,6 +3,7 @@ import { Banknote, CreditCard, Package, Receipt, Undo2, Wallet } from "lucide-re
 import { StatsCard } from "@/components/admin/StatsCard";
 import { CodRemittancePanel, loadCodRemittances } from "@/components/admin/CodRemittancePanel";
 import { StatementControls } from "./StatementControls";
+import { InvoiceDownloads } from "./InvoiceDownloads";
 import {
   getMonthlyStatement,
   getMonthRange,
@@ -181,13 +182,18 @@ export default async function StatementPage({
 
       {/* ── GST ── */}
       <section className="space-y-3">
-        <div>
-          <h2 className="font-semibold text-gray-900">GST</h2>
-          <p className="text-sm text-gray-500">
-            Invoices dated this month. An invoice is issued when the parcel is delivered — online
-            orders are dated on their order day, COD on the delivery day. Prices are GST-inclusive
-            at {s.rate}%.
-          </p>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="max-w-3xl">
+            <h2 className="font-semibold text-gray-900">GST</h2>
+            <p className="text-sm text-gray-500">
+              Invoices dated this month. An invoice is issued when the parcel is delivered — online
+              orders are dated on their order day, COD on the delivery day. Prices are GST-inclusive
+              at {s.rate}%.
+            </p>
+          </div>
+          <InvoiceDownloads
+            month={s.month} issued={g.invoices.length} pending={s.realised.awaitingInvoice.orders}
+          />
         </div>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <StatsCard

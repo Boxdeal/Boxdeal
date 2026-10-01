@@ -3,16 +3,10 @@
 import { useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { FileSpreadsheet, FileText, Loader2 } from "lucide-react";
-import { toast } from "sonner";
 import { cn } from "@/lib/utils/helpers";
+import { downloadFromApi } from "./download";
 
-/**
- * Month picker plus the two download buttons.
- *
- * The downloads go through fetch rather than a plain link because the endpoint
- * answers with either a file or a JSON error — a refusal on a link would
- * navigate the admin to raw JSON instead of showing them what went wrong.
- */
+/** Month picker plus the two download buttons. */
 export function StatementControls({
   month,
   months,
@@ -28,31 +22,8 @@ export function StatementControls({
 
   async function download(format: "xlsx" | "pdf") {
     setBusy(format);
-    try {
-      const res = await fetch(`/api/admin/statement?month=${month}&format=${format}`);
-      if (!res.ok) {
-        const { error } = await res.json().catch(() => ({ error: null }));
-        toast.error(error ?? "Could not build the statement. Please try again.");
-        return;
-      }
-      const blob = await res.blob();
-      const disposition = res.headers.get("Content-Disposition") ?? "";
-      const fileName =
-        /filename="([^"]+)"/.exec(disposition)?.[1] ?? `statement.${format}`;
-
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = fileName;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-    } catch {
-      toast.error("Could not build the statement. Please check your connection.");
-    } finally {
-      setBusy(null);
-    }
+    await downloadFromApi(`/api/admin/statement?month=${month}&format=${format}`, `statement.${format}`);
+    setBusy(null);
   }
 
   const btn =

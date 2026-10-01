@@ -1,17 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServerClient, getSupabaseAdminClient } from "@/lib/supabase/server";
-import { renderInvoicePdf, type InvoiceBuyer, type InvoiceMeta } from "@/lib/invoice/pdf";
-import {
-  computeOrderInvoice,
-  INVOICE_ITEM_SELECT,
-  type InvoiceItemRow,
-} from "@/lib/invoice/order";
+import { renderInvoicePdf } from "@/lib/invoice/pdf";
+import { buildInvoiceInput, INVOICE_ORDER_SELECT, type InvoiceOrderRow } from "@/lib/invoice/build";
 import {
   canAdminInvoice,
   canCustomerInvoice,
   invoiceFileName,
 } from "@/lib/invoice/availability";
-import { formatInvoiceDate } from "@/lib/invoice/format";
 import type { OrderStatus } from "@/types";
 
 // PDF generation needs the Node runtime (the renderer is not edge-compatible),
@@ -34,16 +29,9 @@ export async function GET(
 
   const { data: order } = await admin
     .from("orders")
-    .select(`
-      id, order_number, user_id, status, placed_at,
-      shipping_full_name, shipping_address1, shipping_address2,
-      shipping_city, shipping_state, shipping_pincode,
-      discount_amount, admin_discount, shipping_charge,
-      payment_method, courier_name, tracking_number, notes,
-      items:order_items(${INVOICE_ITEM_SELECT})
-    `)
+    .select(INVOICE_ORDER_SELECT)
     .eq("id", id)
-    .single();
+    .single<InvoiceOrderRow>();
 
   if (!order) return NextResponse.json({ error: "Order not found" }, { status: 404 });
 
@@ -86,35 +74,12 @@ export async function GET(
     );
   }
 
-  const items = (order.items ?? []) as InvoiceItemRow[];
-  if (items.length === 0) {
+  if ((order.items ?? []).length === 0) {
     return NextResponse.json({ error: "This order has no items to invoice" }, { status: 409 });
   }
 
-  const calc = computeOrderInvoice({ ...order, items });
-
-  const buyer: InvoiceBuyer = {
-    name: order.shipping_full_name,
-    address1: order.shipping_address1,
-    address2: order.shipping_address2,
-    city: order.shipping_city,
-    state: order.shipping_state,
-    pincode: order.shipping_pincode,
-  };
-
-  const meta: InvoiceMeta = {
-    invoiceNumber: issued.out_number,
-    invoiceDate: formatInvoiceDate(issued.out_date),
-    orderNumber: order.order_number,
-    orderDate: formatInvoiceDate(order.placed_at),
-    channel: "BOXDEAL",
-    shippedBy: order.courier_name,
-    awb: order.tracking_number,
-    paymentMethod: order.payment_method === "cod" ? "cod" : "prepaid",
-    remark: order.notes,
-  };
-
-  const pdf = await renderInvoicePdf({ calc, buyer, meta });
+  const input = buildInvoiceInput(order, { number: issued.out_number, date: issued.out_date });
+  const pdf = await renderInvoicePdf(input);
 
   return new NextResponse(new Uint8Array(pdf), {
     headers: {

@@ -136,14 +136,14 @@ export interface InvoiceBuyer {
   pincode: string;
 }
 
-function Masthead() {
+function Masthead({ draft }: { draft?: boolean }) {
   return (
     <>
       <View style={styles.logoRow}>
         <Text style={styles.logoText}>BOXDEAL</Text>
       </View>
       <View style={styles.titleRule} />
-      <Text style={styles.title}>TAX INVOICE</Text>
+      <Text style={styles.title}>{draft ? "DRAFT — NOT YET ISSUED" : "TAX INVOICE"}</Text>
       <View style={styles.titleRule} />
     </>
   );
@@ -301,40 +301,53 @@ function Footer() {
   );
 }
 
-export function InvoiceDocument({
-  calc,
-  buyer,
-  meta,
-}: {
+export interface InvoiceInput {
   calc: InvoiceComputation;
   buyer: InvoiceBuyer;
   meta: InvoiceMeta;
-}) {
+  /**
+   * A preview of an invoice that has not been issued yet (no number). Shown
+   * as a draft so it can never be mistaken for, or filed as, a real invoice.
+   */
+  draft?: boolean;
+}
+
+/** One invoice, one A4 page — shared by the single download and the bundle. */
+function InvoicePage({ calc, buyer, meta, draft }: InvoiceInput) {
+  return (
+    <Page size="A4" style={styles.page}>
+      <Masthead draft={draft} />
+      <Parties buyer={buyer} meta={meta} />
+      <LineTable calc={calc} />
+      <Footer />
+    </Page>
+  );
+}
+
+export function InvoiceDocument(props: InvoiceInput) {
   return (
     <Document
-      title={`Tax Invoice ${meta.invoiceNumber}`}
+      title={`Tax Invoice ${props.meta.invoiceNumber}`}
       author={SELLER.name}
-      subject={`Tax invoice for order ${meta.orderNumber}`}
+      subject={`Tax invoice for order ${props.meta.orderNumber}`}
     >
-      <Page size="A4" style={styles.page}>
-        <Masthead />
-        <Parties buyer={buyer} meta={meta} />
-        <LineTable calc={calc} />
-        <Footer />
-      </Page>
+      <InvoicePage {...props} />
     </Document>
   );
 }
 
 export { computeInvoice };
 
-/** Render the invoice to a PDF buffer, ready to stream as the HTTP response. */
-export async function renderInvoicePdf(args: {
-  calc: InvoiceComputation;
-  buyer: InvoiceBuyer;
-  meta: InvoiceMeta;
-}): Promise<Buffer> {
+/** Many invoices in one PDF, one per page, in the order given. */
+export async function renderInvoiceBundlePdf(invoices: InvoiceInput[], title: string): Promise<Buffer> {
   return renderToBuffer(
-    <InvoiceDocument calc={args.calc} buyer={args.buyer} meta={args.meta} />
+    <Document title={title} author={SELLER.name}>
+      {invoices.map((inv, i) => <InvoicePage key={`${inv.meta.orderNumber}-${i}`} {...inv} />)}
+    </Document>
   );
+}
+
+/** Render the invoice to a PDF buffer, ready to stream as the HTTP response. */
+export async function renderInvoicePdf(args: InvoiceInput): Promise<Buffer> {
+  return renderToBuffer(<InvoiceDocument {...args} />);
 }

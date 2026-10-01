@@ -59,9 +59,9 @@ export function CodRemittancePanel({
         <>
           <dl className="mb-4 grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-5">
             {codCollected !== undefined && (
-              <Stat label="Our COD collected" value={formatPrice(codCollected)} note="COD delivered in this period" />
+              <Stat label="Customers paid courier" value={formatPrice(codCollected)} note="COD parcels delivered this period" />
             )}
-            <Stat label="COD in payouts" value={formatPrice(t.codPayable)} note={`${t.payouts} payout${t.payouts === 1 ? "" : "s"}`} />
+            <Stat label="Shiprocket paid us for" value={formatPrice(t.codPayable)} note={`COD settled in ${t.payouts} payout${t.payouts === 1 ? "" : "s"}`} />
             <Stat label="Shiprocket fee" value={`− ${formatPrice(t.deduction)}`} note="COD charges" />
             {t.walletRecharge > 0 && (
               <Stat label="Wallet recharge" value={`− ${formatPrice(t.walletRecharge)}`} note="kept for shipping" />
