@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Banknote, CreditCard, Package, Receipt, Undo2, Wallet } from "lucide-react";
 import { StatsCard } from "@/components/admin/StatsCard";
+import { CodRemittancePanel, loadCodRemittances } from "@/components/admin/CodRemittancePanel";
 import { StatementControls } from "./StatementControls";
 import {
   getMonthlyStatement,
@@ -34,7 +35,12 @@ export default async function StatementPage({
   const labels: Record<string, string> = {};
   for (const m of months) labels[m] = getMonthRange(m).label;
 
-  const s = await getMonthlyStatement(month);
+  const range = getMonthRange(month);
+  const [s, remittance] = await Promise.all([
+    getMonthlyStatement(month),
+    // The month range ends at the next month's first instant, exclusive.
+    loadCodRemittances(range.start, new Date(range.end.getTime() - 1)),
+  ]);
   const g = s.gst;
 
   return (
@@ -95,6 +101,11 @@ export default async function StatementPage({
           </div>
         )}
       </section>
+
+      <CodRemittancePanel
+        rows={remittance.rows} error={remittance.error} label={s.label}
+        codCollected={s.realised.cod.amount}
+      />
 
       {/* ── Activity + returns ── */}
       <div className="grid gap-4 lg:grid-cols-2">

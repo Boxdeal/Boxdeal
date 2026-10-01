@@ -306,3 +306,68 @@ export async function getShiprocketOrder(shiprocketOrderId: string | number): Pr
     shipment_id:  str(shipment.id ?? d.shipment_id),
   };
 }
+
+// ── COD remittance ──────────────────────────────────────────
+
+/** One payout of COD cash from Shiprocket to the bank account. */
+export interface CodRemittance {
+  id: number;
+  /** ISO timestamp the payout was raised. */
+  createdAt: string;
+  /** COD collected from customers that this payout settles. */
+  codPayable: number;
+  /** Shiprocket's COD fee, kept back from the payout. */
+  deduction: number;
+  /** Kept back to top up the Shiprocket shipping wallet. */
+  walletRecharge: number;
+  /** What actually reached the bank. */
+  remitted: number;
+  utr: string | null;
+  status: string;
+  /** False until the bank transfer has gone through ("Remittance success"). */
+  settled: boolean;
+}
+
+/**
+ * Every COD payout raised between two IST calendar days, inclusive.
+ *
+ * Shiprocket only exposes payout totals here — which orders a payout covers is
+ * not in the public API (it is a CSV download in their panel). The endpoint
+ * wants dates as "2026-Sep-01" and pages at 15 by default.
+ */
+export async function getCodRemittances(fromDay: Date, toDay: Date): Promise<CodRemittance[]> {
+  const fmt = (d: Date) =>
+    new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata", year: "numeric", month: "short", day: "2-digit" })
+      .formatToParts(d)
+      .reduce((acc, p) => ({ ...acc, [p.type]: p.value }), {} as Record<string, string>);
+  const day = (d: Date) => {
+    const p = fmt(d);
+    return `${p.year}-${p.month.slice(0, 3)}-${p.day}`;
+  };
+
+  const out: CodRemittance[] = [];
+  for (let page = 1; page <= 20; page++) {
+    const res = await shiprocketFetch(
+      `/account/details/remittance?from=${day(fromDay)}&to=${day(toDay)}&per_page=100&page=${page}`
+    );
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message ?? "Shiprocket remittance lookup failed");
+
+    for (const r of data.data ?? []) {
+      out.push({
+        id:             Number(r.crf_id),
+        createdAt:      new Date(Number(r.created_at) * 1000).toISOString(),
+        codPayable:     Number(r.cod_payble) || 0,
+        deduction:      Number(r.deduction_value) || 0,
+        walletRecharge: Number(r.recharge_value) || 0,
+        remitted:       Number(r.remitted_value) || 0,
+        utr:            r.utr || null,
+        status:         String(r.status ?? ""),
+        settled:        r.status === "Remittance success",
+      });
+    }
+    const pages = Number(data.meta?.pagination?.total_pages) || 1;
+    if (page >= pages) break;
+  }
+  return out.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
