@@ -123,13 +123,14 @@ export default async function StatementPage({
               </div>
             ))}
           </dl>
-          {s.activity.delivered > 0 && (
+          {s.activity.paidByMonth.length > 0 && (
             <div className="mt-4 border-t border-gray-100 pt-3">
               <p className="mb-2 text-sm font-medium text-gray-900">
-                {s.activity.delivered} delivered orders from {s.label} — which month was the money received?
+                {s.activity.paidByMonth.reduce((n, r) => n + r.orders, 0)} paid orders from {s.label} — which
+                month was the money received?
               </p>
               <MonthSplitTable
-                rows={s.activity.deliveredByMonth}
+                rows={s.activity.paidByMonth}
                 rowLabel={(r) => `Paid in ${r.label}`}
                 current={s.month}
               />
@@ -172,13 +173,20 @@ export default async function StatementPage({
         <div>
           <h2 className="font-semibold text-gray-900">GST</h2>
           <p className="text-sm text-gray-500">
-            Invoices <strong>raised</strong> this month. Tax is owed from the date the invoice
-            is issued, which is why this counts different days to the sales above. Prices are
-            GST-inclusive at {s.rate}%.
+            Invoices dated this month. An invoice is issued when the parcel is delivered — online
+            orders are dated on their order day, COD on the delivery day. Prices are GST-inclusive
+            at {s.rate}%.
           </p>
         </div>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <StatsCard title="Invoices raised" value={g.invoices.length} icon={Receipt} />
+          <StatsCard
+            title="Invoices raised" value={g.invoices.length} icon={Receipt}
+            subtitle={
+              s.realised.awaitingInvoice.orders > 0
+                ? `+${s.realised.awaitingInvoice.orders} online order${s.realised.awaitingInvoice.orders === 1 ? "" : "s"} paid but not delivered yet — invoice comes on delivery`
+                : undefined
+            }
+          />
           <StatsCard title="Taxable value" value={rs(g.totals.taxable)} icon={Wallet} />
           <StatsCard
             title="Total GST" value={rs(g.totals.tax)} icon={Receipt} variant="warning"

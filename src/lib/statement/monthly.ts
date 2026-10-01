@@ -75,11 +75,12 @@ export interface ActivityCounts {
   placed: number;
   delivered: number;
   /**
-   * `delivered` split by the month the money arrived — online at checkout, COD
-   * on delivery (often next month for late orders). Same rule as Money Earned,
-   * so each row reconciles against that month's statement.
+   * Every PAID order placed this month (delivered, plus online orders paid but
+   * still on the way), split by the month the money arrived — online at
+   * checkout, COD on delivery (often next month for late orders). Same rule as
+   * Money Earned and the Money Collected page, so the rows reconcile with both.
    */
-  deliveredByMonth: MonthSplit[];
+  paidByMonth: MonthSplit[];
   inTransit: number;
   cancelled: number;
   returned: number;
@@ -107,6 +108,13 @@ export interface RealisedMoney {
   net: number;
   cod: { orders: number; amount: number };
   prepaid: { orders: number; amount: number };
+  /**
+   * Online orders paid this month but not delivered yet. Counted above (the
+   * money is in hand) but with no invoice yet: the number is issued on
+   * delivery, dated back to the order day — so this month's invoice count
+   * grows by this many as they land.
+   */
+  awaitingInvoice: { orders: number; amount: number };
 }
 
 /** A count (and its money) attributed to one calendar month. */
@@ -258,7 +266,7 @@ export async function getMonthlyStatement(month: string): Promise<MonthlyStateme
       .gte("delivered_at", from).lt("delivered_at", to).limit(10000),
     // Money earned (online) — paid at checkout this month. Delivery is irrelevant
     // here: the money is already in hand.
-    admin.from("orders").select(`${SLIM}, items:order_items(product_name, product_sku, quantity, selling_price)`)
+    admin.from("orders").select(`${SLIM}, invoice_number, items:order_items(product_name, product_sku, quantity, selling_price)`)
       .neq("payment_method", "cod").in("status", REVENUE_STATUSES).eq("payment_status", "paid")
       .gte("placed_at", from).lt("placed_at", to).limit(10000),
     // Tax owed — invoices raised this month.
@@ -277,24 +285,22 @@ export async function getMonthlyStatement(month: string): Promise<MonthlyStateme
 
   // ── Activity, by order date ──
   const activity: ActivityCounts = {
-    placed: 0, delivered: 0, deliveredByMonth: [], inTransit: 0, cancelled: 0, returned: 0, failed: 0,
+    placed: 0, delivered: 0, paidByMonth: [], inTransit: 0, cancelled: 0, returned: 0, failed: 0,
   };
-  const deliveredOfPlaced: OrderRow[] = [];
+  const paidOfPlaced: OrderRow[] = [];
   for (const o of (placedRes.data ?? []) as unknown as OrderRow[]) {
     activity.placed++;
     const bucket = orderBucket(o);
     if (bucket === "failed") activity.failed++;
     else if (bucket === "cancelled") activity.cancelled++;
     else if (bucket === "returned") activity.returned++;
-    else if (o.status === "delivered") {
-      activity.delivered++;
-      deliveredOfPlaced.push(o);
-    }
+    else if (o.status === "delivered") activity.delivered++;
     else activity.inTransit++;
+    if (bucket === "revenue" && o.payment_status === "paid") paidOfPlaced.push(o);
   }
 
-  activity.deliveredByMonth = splitByMonth(
-    deliveredOfPlaced, (o) => (o.payment_method === "cod" ? o.delivered_at : o.placed_at),
+  activity.paidByMonth = splitByMonth(
+    paidOfPlaced, (o) => (o.payment_method === "cod" ? o.delivered_at : o.placed_at),
   );
 
   // ── Money earned, by the day the money arrived ──
@@ -303,6 +309,7 @@ export async function getMonthlyStatement(month: string): Promise<MonthlyStateme
     orders: 0, fromEarlierMonths: 0, byOrderMonth: [], gross: 0, discount: 0, delivery: 0, net: 0,
     cod: { orders: 0, amount: 0 },
     prepaid: { orders: 0, amount: 0 },
+    awaitingInvoice: { orders: 0, amount: 0 },
   };
   const productTally = new Map<string, TopProduct>();
 
@@ -318,6 +325,10 @@ export async function getMonthlyStatement(month: string): Promise<MonthlyStateme
     const side = o.payment_method === "cod" ? realised.cod : realised.prepaid;
     side.orders++;
     side.amount = round2(side.amount + total);
+    if (o.payment_method !== "cod" && !o.invoice_number) {
+      realised.awaitingInvoice.orders++;
+      realised.awaitingInvoice.amount = round2(realised.awaitingInvoice.amount + total);
+    }
 
     for (const it of o.items ?? []) {
       const sku = it.product_sku ?? "—";

@@ -199,13 +199,14 @@ function summarySheet(wb: ExcelJS.Workbook, s: MonthlyStatement) {
   section("ORDER ACTIVITY", "Orders PLACED this month, and where each one ended up", ["Metric", "Orders", ""]);
   line("Orders placed", s.activity.placed, null, { bold: true });
   line("Delivered", s.activity.delivered, null, { sub: true });
-  for (const m of s.activity.deliveredByMonth) {
-    line(`  paid in ${m.label}`, m.orders, m.amount, { sub: true });
-  }
   line("Still in transit", s.activity.inTransit, null, { sub: true });
   line("Cancelled", s.activity.cancelled, null, { sub: true });
   line("Returned / RTO", s.activity.returned, null, { sub: true });
   line("Failed / never paid", s.activity.failed, null, { sub: true });
+  line("Paid orders, by month the money arrived", null, null, { bold: true });
+  for (const m of s.activity.paidByMonth) {
+    line(`Paid in ${m.label}`, m.orders, m.amount, { sub: true });
+  }
 
   section("MONEY EARNED", "Money that ARRIVED this month: online when paid, COD when delivered. Refunds excluded", ["Metric", "Orders", "Amount (₹)"]);
   line("Paid orders", s.realised.orders, s.realised.net, { bold: true });

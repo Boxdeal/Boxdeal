@@ -42,13 +42,14 @@ export function statementToCsv(s: MonthlyStatement): string {
   out.push(row("Metric", "Orders"));
   out.push(row("Orders placed", s.activity.placed));
   out.push(row("  of those, delivered", s.activity.delivered));
-  for (const m of s.activity.deliveredByMonth) {
-    out.push(row(`    paid in ${m.label}`, m.orders, money(m.amount)));
-  }
   out.push(row("  of those, still in transit", s.activity.inTransit));
   out.push(row("  of those, cancelled", s.activity.cancelled));
   out.push(row("  of those, returned / RTO", s.activity.returned));
   out.push(row("  of those, failed / never paid", s.activity.failed));
+  out.push(row("Paid orders, by month the money arrived"));
+  for (const m of s.activity.paidByMonth) {
+    out.push(row(`  paid in ${m.label}`, m.orders, money(m.amount)));
+  }
 
   blank();
   out.push(row("MONEY EARNED", "(money that ARRIVED this month: online when paid, COD when delivered; refunds excluded)"));

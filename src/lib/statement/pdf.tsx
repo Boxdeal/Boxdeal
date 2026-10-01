@@ -231,14 +231,14 @@ export function StatementDocument({ s }: { s: MonthlyStatement }) {
             <Kpi label="RETURNED / RTO" value={String(s.activity.returned)} />
             <Kpi label="FAILED / UNPAID" value={String(s.activity.failed)} />
           </View>
-          {s.activity.deliveredByMonth.length > 0 && (
+          {s.activity.paidByMonth.length > 0 && (
             <>
               <View style={[styles.headRow, { marginTop: 8 }]}>
-                <Text style={[styles.th, w(55)]}>DELIVERED — WHICH MONTH PAID</Text>
+                <Text style={[styles.th, w(55)]}>PAID ORDERS — WHICH MONTH PAID</Text>
                 <Text style={[styles.th, w(20), right]}>ORDERS</Text>
                 <Text style={[styles.th, w(25), right]}>AMOUNT</Text>
               </View>
-              {s.activity.deliveredByMonth.map((m, i) => (
+              {s.activity.paidByMonth.map((m, i) => (
                 <View key={m.month} style={i % 2 ? styles.trAlt : styles.tr}>
                   <Text style={[styles.td, w(55)]}>Paid in {m.label}</Text>
                   <Text style={[styles.tdMuted, w(20), right]}>{m.orders}</Text>
