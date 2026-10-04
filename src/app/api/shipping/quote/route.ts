@@ -14,7 +14,7 @@ export async function POST(req: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Login required" }, { status: 401 });
 
-  const { pincode, items, cod }: { pincode: string; items: CartItem[]; cod?: boolean } = await req.json();
+  const { pincode, items, cod, discount }: { pincode: string; items: CartItem[]; cod?: boolean; discount?: number } = await req.json();
 
   if (!/^\d{6}$/.test(pincode ?? "")) {
     return NextResponse.json({ error: "Invalid pincode" }, { status: 400 });
@@ -24,7 +24,19 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const quote = await getCartDeliveryQuote(getSupabaseAdminClient(), items, pincode, cod ?? false);
+    // Order value (drives COD charge + coverage) is summed from DB prices; the
+    // client's coupon discount is applied for display only — order creation
+    // recomputes everything server-side.
+    const admin = getSupabaseAdminClient();
+    const { data: products } = await admin
+      .from("products")
+      .select("id, selling_price")
+      .in("id", items.map((i) => i.product_id));
+    const priceMap = new Map((products ?? []).map((p) => [p.id as string, Number(p.selling_price) || 0]));
+    const goods = items.reduce((s, i) => s + (priceMap.get(i.product_id) ?? 0) * i.quantity, 0);
+    const goodsValue = Math.max(0, goods - Math.max(0, Number(discount) || 0));
+
+    const quote = await getCartDeliveryQuote(admin, items, pincode, cod ?? false, goodsValue);
     return NextResponse.json({ data: quote });
   } catch (err) {
     return NextResponse.json(

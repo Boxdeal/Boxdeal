@@ -64,14 +64,23 @@ export type DeliveryRate =
  * to the cheapest available courier. `serviceable: false` means no courier
  * services the destination — the order should be blocked.
  *
+ * The returned rate is what Shiprocket actually debits for the shipment:
+ * `rate` (freight + COD charge) plus `coverage_charges` (the "Auto Secured"
+ * shipment protection the account always applies). The COD charge is a % of
+ * the order value, so `declaredValue` must be the amount Shiprocket will see on
+ * the order (sub_total + shipping − discount) — without it the API quotes only
+ * the minimum COD fee and under-quotes high-value COD orders.
+ *
  * @param deliveryPincode  destination (customer) pincode
  * @param weightKg         total package weight in kg
  * @param cod              true for cash-on-delivery, false for prepaid
+ * @param declaredValue    order value in ₹ (drives COD charge + coverage)
  */
 export async function getDeliveryRate(
   deliveryPincode: string,
   weightKg: number,
-  cod = false
+  cod = false,
+  declaredValue?: number
 ): Promise<DeliveryRate> {
   const pickup = process.env.SHIPROCKET_PICKUP_PINCODE;
   if (!pickup) throw new Error("SHIPROCKET_PICKUP_PINCODE is not configured");
@@ -82,6 +91,9 @@ export async function getDeliveryRate(
     weight:            String(weightKg),
     cod:               cod ? "1" : "0",
   });
+  if (declaredValue && declaredValue > 0) {
+    params.set("declared_value", String(Math.round(declaredValue)));
+  }
 
   const res = await shiprocketFetch(`/courier/serviceability/?${params.toString()}`);
   const data = await res.json();
@@ -90,6 +102,7 @@ export async function getDeliveryRate(
     courier_company_id: number;
     courier_name?:      string;
     rate?:              number;
+    coverage_charges?:  number;
   }> = data?.data?.available_courier_companies ?? [];
 
   if (!res.ok || couriers.length === 0) {
@@ -98,11 +111,15 @@ export async function getDeliveryRate(
 
   // Pick the cheapest available courier so the customer pays the lowest possible
   // delivery charge for their pincode.
+  // Full cost Shiprocket debits: freight + COD charge + shipment coverage.
+  const totalCost = (c: (typeof couriers)[number]) =>
+    Number(c.rate ?? Infinity) + (Number(c.coverage_charges) || 0);
+
   const chosen = couriers.reduce((cheapest, c) =>
-    Number(c.rate ?? Infinity) < Number(cheapest.rate ?? Infinity) ? c : cheapest
+    totalCost(c) < totalCost(cheapest) ? c : cheapest
   );
 
-  const rate = Number(chosen.rate);
+  const rate = totalCost(chosen);
   if (!Number.isFinite(rate)) {
     return { serviceable: false, rate: null, courierId: null, courierName: null };
   }

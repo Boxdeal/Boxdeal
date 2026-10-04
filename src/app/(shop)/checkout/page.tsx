@@ -45,7 +45,7 @@ export default function CheckoutPage() {
       fetch("/api/shipping/quote", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pincode: selectedAddress.pincode, items, cod }),
+        body: JSON.stringify({ pincode: selectedAddress.pincode, items, cod, discount }),
       })
         .then((r) => r.json())
         .then(({ data, error }) => {
@@ -62,7 +62,7 @@ export default function CheckoutPage() {
     quote(false, setDelivery);
     quote(true, setCodDelivery);
     return () => { cancelled = true; };
-  }, [selectedAddress?.pincode, items]);
+  }, [selectedAddress?.pincode, items, discount]);
 
   // If the customer had COD selected but it isn't serviceable for the new
   // address, fall back to online so they're never stuck on a dead option.

@@ -118,7 +118,7 @@ async function fulfillShiprocket(
         // assign a prepaid-only courier for a COD shipment ("no courier could be
         // assigned").
         const isCod = srOrder.payment_method === "cod";
-        const rate = await getDeliveryRate(String(srOrder.shipping_pincode), weightKg, isCod);
+        const rate = await getDeliveryRate(String(srOrder.shipping_pincode), weightKg, isCod, Number(srOrder.total_amount) || undefined);
         if (rate.serviceable) courierId = rate.courierId;
       } catch (e) {
         console.error(`Cheapest-courier lookup failed for order ${id}; using auto-assign:`, e);
