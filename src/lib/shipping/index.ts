@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getDeliveryRate } from "@/lib/shiprocket/index";
-import { DELIVERY_CHARGE_CAP, VOLUMETRIC_DIVISOR } from "@/constants";
+import { DELIVERY_CHARGE_CAP } from "@/constants";
+import { computePackage, type WeighableItem } from "./package";
 import type { CartItem } from "@/types";
 
 /**
@@ -11,45 +12,7 @@ export function applyDeliveryCap(rate: number): number {
   return Math.min(Math.ceil(rate), DELIVERY_CHARGE_CAP);
 }
 
-// A cart line with the physical attributes needed to weigh it.
-export interface WeighableItem {
-  quantity:     number;
-  weight_grams: number;
-  length_cm:    number;
-  breadth_cm:   number;
-  height_cm:    number;
-}
-
-export interface WeightBreakdown {
-  /** Summed actual weight (kg). */
-  actualKg:     number;
-  /** Summed volumetric weight (kg): Σ (L×B×H)/divisor × qty. */
-  volumetricKg: number;
-  /** What the courier bills on: max(actual, volumetric), floored at 0.1kg. */
-  chargeableKg: number;
-}
-
-/**
- * Compute a cart's actual, volumetric and chargeable weight.
- *
- * Couriers bill on the GREATER of actual and volumetric weight.
- */
-export function computeWeight(items: WeighableItem[]): WeightBreakdown {
-  let actualGrams = 0;
-  let volumetricKg = 0;
-  for (const it of items) {
-    const qty = Math.max(0, it.quantity || 0);
-    actualGrams += (Number(it.weight_grams) || 0) * qty;
-    const vol =
-      (Number(it.length_cm) || 0) *
-      (Number(it.breadth_cm) || 0) *
-      (Number(it.height_cm) || 0);
-    volumetricKg += (vol / VOLUMETRIC_DIVISOR) * qty;
-  }
-  const actualKg = actualGrams / 1000;
-  const chargeableKg = Math.max(actualKg, volumetricKg, 0.1);
-  return { actualKg, volumetricKg, chargeableKg };
-}
+export { computePackage, type WeighableItem, type ParcelPackage } from "./package";
 
 export type DeliveryQuote =
   | { serviceable: true;  delivery_charge: number; courier_name: string | null }
@@ -58,12 +21,11 @@ export type DeliveryQuote =
 /**
  * Compute the delivery charge for a cart shipping to `pincode`.
  *
- * Weight is the CHARGEABLE weight — max(actual, volumetric) — summed from each
+ * Weight is the CHARGEABLE weight from `computePackage` — the same function
+ * Shiprocket order creation and AWB courier selection use — built from each
  * product's `weight_grams` and dimensions (fetched live from the DB, since cart
- * items don't carry them), floored at 0.1kg to match what we send Shiprocket at
- * fulfillment. Sending the chargeable weight means the quoted rate matches what
- * the courier actually bills us for a bulky parcel. The live rate is capped at
- * ₹499.
+ * items don't carry them). So the rate quoted here is the rate Shiprocket bills
+ * for the parcel it receives. The customer's charge is that rate capped at ₹499.
  *
  * Returns `serviceable: false` when no courier covers the destination —
  * callers should block the order in that case. Pass `cod: true` to get the
@@ -89,14 +51,14 @@ export async function getCartDeliveryQuote(
     const p = dimMap.get(item.product_id);
     return {
       quantity:     item.quantity,
-      weight_grams: Number(p?.weight_grams) || 0,
-      length_cm:    Number(p?.length_cm)    || 0,
-      breadth_cm:   Number(p?.breadth_cm)   || 0,
-      height_cm:    Number(p?.height_cm)    || 0,
+      weight_grams: p?.weight_grams,
+      length_cm:    p?.length_cm,
+      breadth_cm:   p?.breadth_cm,
+      height_cm:    p?.height_cm,
     };
   });
 
-  const { chargeableKg } = computeWeight(weighable);
+  const { chargeableKg } = computePackage(weighable);
 
   const result = await getDeliveryRate(pincode, chargeableKg, cod);
   if (!result.serviceable) {

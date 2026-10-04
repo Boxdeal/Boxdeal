@@ -1,0 +1,8 @@
+project_id = "fhyfxchcgnsvjhagpcrj"
+
+[functions.send-sms]
+# The Send SMS Hook does not send a Supabase JWT — it signs the request with a
+# Standard Webhooks signature, which the function verifies itself. With JWT
+# verification on, every hook call is rejected with a 401 before the function
+# runs, so no SMS goes out and nothing shows up in the function logs.
+verify_jwt = false

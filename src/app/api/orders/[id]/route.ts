@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { getSupabaseAdminClient } from "@/lib/supabase/server";
 import { sendOrderShipped, sendOrderDelivered } from "@/lib/resend/index";
+import { computePackage } from "@/lib/shipping/package";
 import { createShiprocketOrder, generateAWB, getDeliveryRate, getShiprocketOrder, getTrackingUrl, type ShipmentItem } from "@/lib/shiprocket/index";
 import { cancelOnShiprocket, collectCodOnDelivery, settleEndedOrder } from "@/lib/orders/fulfillment";
 import { ENDED_STATUSES, mapShiprocketStatus, STATUS_TIMESTAMP_FIELD } from "@/lib/shiprocket/status";
@@ -97,15 +98,21 @@ async function fulfillShiprocket(
       // blocked.
       let courierId: number | undefined;
       try {
+        // Same package sizing as checkout + Shiprocket order creation, so the
+        // courier picked here is the one whose rate the customer was quoted.
         const wItems = (srOrder.items ?? []) as Array<{
           quantity: number;
-          product?: { weight_grams?: number | null };
+          product?: { weight_grams?: number | null; length_cm?: number | null; breadth_cm?: number | null; height_cm?: number | null };
         }>;
-        const totalGrams = wItems.reduce(
-          (s, it) => s + (it.product?.weight_grams ?? 0) * it.quantity,
-          0
+        const { chargeableKg: weightKg } = computePackage(
+          wItems.map((it) => ({
+            quantity:     it.quantity,
+            weight_grams: it.product?.weight_grams,
+            length_cm:    it.product?.length_cm,
+            breadth_cm:   it.product?.breadth_cm,
+            height_cm:    it.product?.height_cm,
+          }))
         );
-        const weightKg = Math.max(totalGrams / 1000, 0.1);
         // Pass the order's COD flag so serviceability picks a courier that can
         // actually do COD to this pincode — otherwise generateAWB later fails to
         // assign a prepaid-only courier for a COD shipment ("no courier could be

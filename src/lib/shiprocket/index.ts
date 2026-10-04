@@ -1,4 +1,5 @@
 import type { Order, OrderItem } from "@/types";
+import { computePackage } from "@/lib/shipping/package";
 
 const BASE_URL = "https://apiv2.shiprocket.in/v1/external";
 
@@ -125,8 +126,8 @@ export type ShipmentItem = OrderItem & {
 
 /**
  * Push an order to Shiprocket as an ad-hoc order.
- * Weight is summed from each item's product weight; package dimensions use the
- * largest dimension found across items (Shiprocket takes one box per shipment).
+ * Weight and box dimensions come from `computePackage` (all items × qty), the
+ * same calculation used for the checkout delivery quote.
  * Returns { order_id, shipment_id }.
  */
 export async function createShiprocketOrder(
@@ -145,20 +146,10 @@ export async function createShiprocketOrder(
     selling_price: item.selling_price,
   }));
 
-  // Total actual weight in kg (Shiprocket expects kg). Floor at 0.1kg.
-  const totalGrams = items.reduce(
-    (sum, item) => sum + (item.weight_grams ?? 0) * item.quantity,
-    0
-  );
-  const weightKg = Math.max(totalGrams / 1000, 0.1);
-
-  // Package dimensions in cm — largest single-item value, sensible defaults.
-  const maxDim = (pick: (i: ShipmentItem) => number | null | undefined, fallback: number) =>
-    Math.max(...items.map((i) => Number(pick(i)) || 0), 0) || fallback;
-
-  const length  = maxDim((i) => i.length_cm, 10);
-  const breadth = maxDim((i) => i.breadth_cm, 10);
-  const height  = maxDim((i) => i.height_cm, 5);
+  // Same sizing as the checkout quote: every unit of every item, chargeable
+  // weight + combined box — so the label, Shiprocket's bill and the customer's
+  // delivery charge all agree.
+  const { chargeableKg, length, breadth, height } = computePackage(items);
 
   const res = await shiprocketFetch("/orders/create/adhoc", {
     method: "POST",
@@ -187,7 +178,7 @@ export async function createShiprocketOrder(
       length,
       breadth,
       height,
-      weight:                 weightKg,
+      weight:                 chargeableKg,
     }),
   });
 

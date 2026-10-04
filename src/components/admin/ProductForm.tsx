@@ -113,6 +113,12 @@ export function ProductForm({ categories, subcategories, brands, product }: Prod
       toast.error("Name, SKU, category, MRP and selling price are required");
       return;
     }
+    // Category ke subcategories hain to ek choose karna zaroori hai, warna
+    // product listing me "Other" group me chala jaata hai.
+    if (filteredSubs.length > 0 && !form.subcategory_id) {
+      toast.error("Please select a subcategory");
+      return;
+    }
     if (sellNum > mrpNum) {
       toast.error("Selling price cannot be more than MRP");
       return;
@@ -242,7 +248,7 @@ export function ProductForm({ categories, subcategories, brands, product }: Prod
             </select>
           </div>
           <div>
-            <label className={labelCls}>Subcategory</label>
+            <label className={labelCls}>Subcategory{filteredSubs.length > 0 ? " *" : ""}</label>
             <select
               className={inputCls}
               value={form.subcategory_id}

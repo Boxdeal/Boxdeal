@@ -9,27 +9,14 @@ import type { OrderStatus } from "@/types";
  */
 
 /**
- * Customers get the invoice once the order is actually delivered. Issuing it
- * earlier risks handing out a tax document for an order that gets cancelled or
- * comes back RTO. A "returned" order still gets one, because a return means it
- * was delivered first and the invoice was already issued.
+ * The invoice exists only once the order is actually delivered — for customers
+ * and admins alike. Issuing it earlier risks minting a tax document for an
+ * order that gets cancelled or comes back RTO. A "returned" order still gets
+ * one, because a return means it was delivered first and the invoice was
+ * already issued.
  */
-export function canCustomerInvoice(status: OrderStatus): boolean {
+export function canInvoice(status: OrderStatus): boolean {
   return status === "delivered" || status === "returned";
-}
-
-/**
- * Admins get it from the moment the parcel is packed — that's when the printed
- * copy goes into the box, which is also the point of supply for GST.
- */
-export function canAdminInvoice(status: OrderStatus): boolean {
-  return (
-    status === "packed" ||
-    status === "shipped" ||
-    status === "out_for_delivery" ||
-    status === "delivered" ||
-    status === "returned"
-  );
 }
 
 /** Downloaded file name, e.g. "INV00001.pdf". */

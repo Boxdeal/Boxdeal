@@ -2,11 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServerClient, getSupabaseAdminClient } from "@/lib/supabase/server";
 import { renderInvoicePdf } from "@/lib/invoice/pdf";
 import { buildInvoiceInput, INVOICE_ORDER_SELECT, type InvoiceOrderRow } from "@/lib/invoice/build";
-import {
-  canAdminInvoice,
-  canCustomerInvoice,
-  invoiceFileName,
-} from "@/lib/invoice/availability";
+import { canInvoice, invoiceFileName } from "@/lib/invoice/availability";
 import type { OrderStatus } from "@/types";
 
 // PDF generation needs the Node runtime (the renderer is not edge-compatible),
@@ -48,13 +44,11 @@ export async function GET(
     return NextResponse.json({ error: "Order not found" }, { status: 404 });
   }
 
-  const status = order.status as OrderStatus;
-  const allowed = isAdmin ? canAdminInvoice(status) : canCustomerInvoice(status);
-  if (!allowed) {
+  if (!canInvoice(order.status as OrderStatus)) {
     return NextResponse.json(
       {
         error: isAdmin
-          ? "The invoice is issued once the order is packed for dispatch."
+          ? "The invoice is issued once the order is delivered."
           : "Your invoice will be available once the order is delivered.",
       },
       { status: 409 }

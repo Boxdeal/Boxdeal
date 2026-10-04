@@ -8,7 +8,7 @@ import { ORDER_STATUS_LABELS, ORDER_STATUS_COLORS } from "@/constants";
 import { formatPrice, formatDate } from "@/lib/utils/format";
 import { cn } from "@/lib/utils/helpers";
 import { InvoiceDownloadButton } from "@/components/shared/InvoiceDownloadButton";
-import { canCustomerInvoice } from "@/lib/invoice/availability";
+import { canInvoice } from "@/lib/invoice/availability";
 
 export const metadata: Metadata = { title: "My Orders", robots: { index: false, follow: false } };
 
@@ -70,7 +70,7 @@ export default async function OrdersPage() {
             </div>
           </Link>
 
-          {canCustomerInvoice(order.status) && (
+          {canInvoice(order.status) && (
             <div className="border-t border-gray-100 px-5 py-3">
               <InvoiceDownloadButton
                 orderId={order.id}

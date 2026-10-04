@@ -14,7 +14,7 @@ import {
 } from "@/constants";
 import { CancelOrderButton } from "./CancelOrderButton";
 import { InvoiceDownloadButton } from "@/components/shared/InvoiceDownloadButton";
-import { canCustomerInvoice } from "@/lib/invoice/availability";
+import { canInvoice } from "@/lib/invoice/availability";
 import { formatPrice, formatDate, formatDateTime } from "@/lib/utils/format";
 import { cn } from "@/lib/utils/helpers";
 import type { Order, OrderItem, OrderStatusHistory } from "@/types";
@@ -114,7 +114,7 @@ export default async function OrderDetailPage({
       </div>
 
       {/* Tax invoice — available once the order has actually been delivered */}
-      {canCustomerInvoice(typedOrder.status) && (
+      {canInvoice(typedOrder.status) && (
         <div className="rounded-2xl border border-gray-100 bg-white p-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-start gap-2">
