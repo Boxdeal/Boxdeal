@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
   // sent by the client. A non-serviceable pincode blocks the order entirely.
   let shipping_charge: number;
   try {
-    const quote = await getCartDeliveryQuote(admin, items, address.pincode, false, subtotal - discount);
+    const quote = await getCartDeliveryQuote(admin, items, address.pincode, false, { goods: subtotal - discount });
     if (!quote.serviceable) {
       return NextResponse.json(
         { error: "Delivery isn't available to this pincode" },

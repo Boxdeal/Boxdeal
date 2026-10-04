@@ -75,6 +75,10 @@ export type DeliveryRate =
  * @param weightKg         total package weight in kg
  * @param cod              true for cash-on-delivery, false for prepaid
  * @param declaredValue    order value in ₹ (drives COD charge + coverage)
+ *
+ * Answers are cached in memory for RATE_CACHE_TTL_MS per (pincode, weight,
+ * COD, value): checkout re-quotes the same cart on every address / payment
+ * toggle, and order creation repeats the quote moments later.
  */
 export async function getDeliveryRate(
   deliveryPincode: string,
@@ -85,15 +89,41 @@ export async function getDeliveryRate(
   const pickup = process.env.SHIPROCKET_PICKUP_PINCODE;
   if (!pickup) throw new Error("SHIPROCKET_PICKUP_PINCODE is not configured");
 
+  const value = declaredValue && declaredValue > 0 ? Math.round(declaredValue) : 0;
+  const key = `${pickup}|${deliveryPincode}|${weightKg}|${cod ? 1 : 0}|${value}`;
+  const hit = rateCache.get(key);
+  if (hit && hit.expiresAt > Date.now()) return hit.rate;
+
+  const { rate, cacheable } = await fetchDeliveryRate(pickup, deliveryPincode, weightKg, cod, value);
+  if (cacheable) {
+    if (rateCache.size >= RATE_CACHE_MAX) rateCache.clear();
+    rateCache.set(key, { rate, expiresAt: Date.now() + RATE_CACHE_TTL_MS });
+  }
+  return rate;
+}
+
+const RATE_CACHE_TTL_MS = 10 * 60 * 1000;
+const RATE_CACHE_MAX = 1000;
+const rateCache = new Map<string, { rate: DeliveryRate; expiresAt: number }>();
+
+// One uncached serviceability lookup. `cacheable` is false when Shiprocket
+// errored, so a transient failure isn't remembered as "not serviceable".
+async function fetchDeliveryRate(
+  pickup: string,
+  deliveryPincode: string,
+  weightKg: number,
+  cod: boolean,
+  declaredValue: number
+): Promise<{ rate: DeliveryRate; cacheable: boolean }> {
+  const unserviceable: DeliveryRate = { serviceable: false, rate: null, courierId: null, courierName: null };
+
   const params = new URLSearchParams({
     pickup_postcode:   pickup,
     delivery_postcode: deliveryPincode,
     weight:            String(weightKg),
     cod:               cod ? "1" : "0",
   });
-  if (declaredValue && declaredValue > 0) {
-    params.set("declared_value", String(Math.round(declaredValue)));
-  }
+  if (declaredValue > 0) params.set("declared_value", String(declaredValue));
 
   const res = await shiprocketFetch(`/courier/serviceability/?${params.toString()}`);
   const data = await res.json();
@@ -105,9 +135,8 @@ export async function getDeliveryRate(
     coverage_charges?:  number;
   }> = data?.data?.available_courier_companies ?? [];
 
-  if (!res.ok || couriers.length === 0) {
-    return { serviceable: false, rate: null, courierId: null, courierName: null };
-  }
+  if (!res.ok) return { rate: unserviceable, cacheable: false };
+  if (couriers.length === 0) return { rate: unserviceable, cacheable: true };
 
   // Pick the cheapest available courier so the customer pays the lowest possible
   // delivery charge for their pincode.
@@ -120,15 +149,16 @@ export async function getDeliveryRate(
   );
 
   const rate = totalCost(chosen);
-  if (!Number.isFinite(rate)) {
-    return { serviceable: false, rate: null, courierId: null, courierName: null };
-  }
+  if (!Number.isFinite(rate)) return { rate: unserviceable, cacheable: true };
 
   return {
-    serviceable: true,
-    rate,
-    courierId:   chosen.courier_company_id,
-    courierName: chosen.courier_name ?? null,
+    rate: {
+      serviceable: true,
+      rate,
+      courierId:   chosen.courier_company_id,
+      courierName: chosen.courier_name ?? null,
+    },
+    cacheable: true,
   };
 }
 

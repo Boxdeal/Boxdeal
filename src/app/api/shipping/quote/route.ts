@@ -24,19 +24,10 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    // Order value (drives COD charge + coverage) is summed from DB prices; the
-    // client's coupon discount is applied for display only — order creation
-    // recomputes everything server-side.
-    const admin = getSupabaseAdminClient();
-    const { data: products } = await admin
-      .from("products")
-      .select("id, selling_price")
-      .in("id", items.map((i) => i.product_id));
-    const priceMap = new Map((products ?? []).map((p) => [p.id as string, Number(p.selling_price) || 0]));
-    const goods = items.reduce((s, i) => s + (priceMap.get(i.product_id) ?? 0) * i.quantity, 0);
-    const goodsValue = Math.max(0, goods - Math.max(0, Number(discount) || 0));
-
-    const quote = await getCartDeliveryQuote(admin, items, pincode, cod ?? false, goodsValue);
+    // The client's coupon discount only trims the order value used for the
+    // COD/coverage part of this display quote — order creation recomputes
+    // everything server-side.
+    const quote = await getCartDeliveryQuote(getSupabaseAdminClient(), items, pincode, cod ?? false, { discount });
     return NextResponse.json({ data: quote });
   } catch (err) {
     return NextResponse.json(

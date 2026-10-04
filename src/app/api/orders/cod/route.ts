@@ -45,7 +45,7 @@ export async function POST(req: NextRequest) {
   // COD courier blocks the order — the customer should use online payment instead.
   let shipping_charge: number;
   try {
-    const quote = await getCartDeliveryQuote(admin, items, address.pincode, true, subtotal - discount);
+    const quote = await getCartDeliveryQuote(admin, items, address.pincode, true, { goods: subtotal - discount });
     if (!quote.serviceable) {
       return NextResponse.json(
         { error: "Cash on Delivery isn't available for this pincode. Please use online payment." },

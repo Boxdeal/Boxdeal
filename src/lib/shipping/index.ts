@@ -31,8 +31,9 @@ export type DeliveryQuote =
  * goods + this delivery charge — so the rate is re-fetched on goods + charge
  * until it settles. The customer's charge is the result capped at ₹499.
  *
- * `goodsValue` is subtotal − discount; order-creation routes pass the server-
- * priced value. When omitted (display quote), it's summed from DB prices.
+ * `value.goods` is subtotal − discount; order-creation routes pass the server-
+ * priced value. When omitted (display quote), it's summed from DB prices minus
+ * `value.discount`.
  *
  * Returns `serviceable: false` when no courier covers the destination —
  * callers should block the order in that case. Pass `cod: true` to get the
@@ -43,7 +44,7 @@ export async function getCartDeliveryQuote(
   items: CartItem[],
   pincode: string,
   cod = false,
-  goodsValue?: number
+  value: { goods?: number; discount?: number } = {}
 ): Promise<DeliveryQuote> {
   const ids = items.map((i) => i.product_id);
   const { data: products } = await admin
@@ -68,9 +69,12 @@ export async function getCartDeliveryQuote(
 
   const { chargeableKg } = computePackage(weighable);
 
-  const goods = goodsValue ?? items.reduce(
-    (sum, item) => sum + (Number(dimMap.get(item.product_id)?.selling_price) || 0) * item.quantity,
-    0
+  const goods = value.goods ?? Math.max(
+    0,
+    items.reduce(
+      (sum, item) => sum + (Number(dimMap.get(item.product_id)?.selling_price) || 0) * item.quantity,
+      0
+    ) - Math.max(0, Number(value.discount) || 0)
   );
 
   // The charge feeds back into the order value Shiprocket prices on, and
