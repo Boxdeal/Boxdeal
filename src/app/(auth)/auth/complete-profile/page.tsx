@@ -103,8 +103,12 @@ export default function CompleteProfilePage() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ email: email.trim() }),
         });
-        const json = await res.json();
-        if (!res.ok) throw new Error(json.error ?? "Failed to save email");
+        const json = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          throw new Error(
+            typeof json.error === "string" ? json.error : "Failed to save email"
+          );
+        }
       }
 
       const supabase = getSupabaseBrowserClient();
@@ -129,7 +133,15 @@ export default function CompleteProfilePage() {
       router.push(takePostLoginRedirect());
       router.refresh();
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Failed to complete profile";
+      // Supabase hands back a plain PostgrestError, not an Error instance, so
+      // `instanceof` alone swallows the only message worth showing.
+      console.error("Complete profile failed:", err);
+      const msg =
+        err instanceof Error
+          ? err.message
+          : typeof err === "object" && err !== null && "message" in err
+            ? String((err as { message: unknown }).message)
+            : "Failed to complete profile";
       toast.error(msg);
     } finally {
       setLoading(false);
