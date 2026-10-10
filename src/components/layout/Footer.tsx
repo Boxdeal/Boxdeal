@@ -170,9 +170,12 @@ export function Footer() {
         </div>
 
         <div className="mt-10 flex flex-col items-center justify-between gap-4 border-t border-gray-800 pt-8 text-sm sm:flex-row">
-          <p className="text-gray-500">
-            © 2026 BoxDeal. All rights reserved.
-          </p>
+          <div className="text-gray-500">
+            <p>© 2026 BoxDeal. All rights reserved.</p>
+            <p className="mt-1 text-xs">
+              BoxDeal is a brand operated by Smart Accessories Hub · GSTIN 07EYWPS5792D1ZH
+            </p>
+          </div>
           <div className="flex gap-4 text-gray-500">
             <Link href="/privacy" className="hover:text-white transition-colors">Privacy Policy</Link>
             <Link href="/terms" className="hover:text-white transition-colors">Terms of Service</Link>
