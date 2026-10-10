@@ -136,7 +136,7 @@ async function getProducts(params: Record<string, string>, filters: Filters) {
   if (params.is_featured === "true")      query = query.eq("is_featured",     true);
   if (params.is_deal_of_day === "true")   query = query.eq("is_deal_of_day",  true);
   // Partial substring match (e.g. "son" → "sony"), served by the pg_trgm
-  // GIN indexes from database/search_indexes.sql.
+  // GIN indexes from database/schema.sql.
   if (params.q) {
     const safe = params.q.replace(/[%_,()]/g, " ").trim();
     if (safe) query = query.or(`name.ilike.%${safe}%,slug.ilike.%${safe}%,short_description.ilike.%${safe}%`);

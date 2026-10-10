@@ -40,3 +40,5 @@ coverage/
 # Cache
 .turbo/
 .next/cache/
+# Supabase CLI scratch
+supabase/.temp/

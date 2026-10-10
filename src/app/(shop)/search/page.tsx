@@ -31,7 +31,7 @@ export default async function SearchPage({ searchParams }: Props) {
 
   const supabase = getSupabasePublicClient();
   // Partial substring match (e.g. "son" → "sony"), served by the pg_trgm
-  // GIN indexes from database/search_indexes.sql.
+  // GIN indexes from database/schema.sql.
   const safe = q.trim().replace(/[%_,()]/g, " ").trim();
   const { data } = await supabase
     .from("products")
