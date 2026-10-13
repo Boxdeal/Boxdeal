@@ -4,12 +4,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { Search, Loader2, Plus, Check, Edit, Sparkles, Flame } from "lucide-react";
+import { Search, Loader2, Plus, Check, Edit, Sparkles, Flame, ArrowUp, ArrowDown, ArrowUpToLine } from "lucide-react";
 import { toast } from "sonner";
 import { formatPrice } from "@/lib/utils/format";
 import { cn } from "@/lib/utils/helpers";
 
-export type MerchFlag = "is_featured" | "is_deal_of_day";
+import type { MerchFlag } from "@/lib/merchandising";
+
+export type { MerchFlag };
 
 export interface MerchProduct {
   id: string;
@@ -27,17 +29,15 @@ export interface MerchProduct {
 const SECTIONS = {
   is_featured: {
     title: "Featured Products",
-    limit: 10,
+    limit: 5,
     icon: Sparkles,
     iconCls: "text-purple-500",
-    orderNote: "Ordered by units sold (best sellers first).",
   },
   is_deal_of_day: {
     title: "Deal of the Day",
     limit: 8,
     icon: Flame,
     iconCls: "text-orange-500",
-    orderNote: "Ordered by newest first.",
   },
 } as const;
 
@@ -139,6 +139,61 @@ export function FeaturedDealsManager({
 
   const flaggedIds = useMemo(() => new Set(rows.map((r) => r.id)), [rows]);
 
+  const rowsRef = useRef(rows);
+  rowsRef.current = rows;
+
+  const saveOrder = useCallback(
+    async (ids: string[]) => {
+      try {
+        const res = await fetch("/api/admin/featured/reorder", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ flag, ids }),
+        });
+        const json = await res.json();
+        if (json.error) {
+          toast.error(json.error);
+          return false;
+        }
+        return true;
+      } catch {
+        toast.error("Could not save the order");
+        return false;
+      }
+    },
+    [flag]
+  );
+
+  // Moves are applied locally at once and saved after a short pause, so a
+  // burst of clicks becomes a single request carrying the final order.
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [savingOrder, setSavingOrder] = useState(false);
+  useEffect(() => () => {
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+  }, []);
+
+  const move = useCallback(
+    (from: number, to: number) => {
+      const next = [...rowsRef.current];
+      if (to < 0 || to >= next.length || from === to) return;
+      const [item] = next.splice(from, 1);
+      next.splice(to, 0, item);
+      setRows(next);
+
+      if (saveTimer.current) clearTimeout(saveTimer.current);
+      setSavingOrder(true);
+      saveTimer.current = setTimeout(async () => {
+        saveTimer.current = null;
+        const ok = await saveOrder(next.map((r) => r.id));
+        if (saveTimer.current) return; // a newer move is already queued
+        setSavingOrder(false);
+        if (ok) toast.success("Order saved");
+        else router.refresh();
+      }, 600);
+    },
+    [router, saveOrder]
+  );
+
   const setFlag = useCallback(
     async (product: MerchProduct, next: boolean) => {
       setBusyId(product.id);
@@ -155,20 +210,23 @@ export function FeaturedDealsManager({
         return;
       }
 
-      setRows((prev) =>
-        next
-          ? prev.some((r) => r.id === product.id)
-            ? prev
-            : [{ ...product, [flag]: true }, ...prev]
-          : prev.filter((r) => r.id !== product.id)
-      );
+      const current = rowsRef.current;
+      const nextRows = next
+        ? current.some((r) => r.id === product.id)
+          ? current
+          : [...current, { ...product, [flag]: true }]
+        : current.filter((r) => r.id !== product.id);
+      setRows(nextRows);
+      // New products join at the bottom; persist that so a stale position
+      // from an earlier stint in this section can't put them elsewhere.
+      if (next) await saveOrder(nextRows.map((r) => r.id));
       setResults((prev) =>
         prev.map((r) => (r.id === product.id ? { ...r, [flag]: next } : r))
       );
       toast.success(next ? `Added to ${section.title}` : `Removed from ${section.title}`);
       router.refresh();
     },
-    [flag, router, section.title]
+    [flag, router, saveOrder, section.title]
   );
 
   const shown = Math.min(rows.length, section.limit);
@@ -250,7 +308,8 @@ export function FeaturedDealsManager({
             <span className="font-normal text-gray-400">({rows.length})</span>
           </h2>
           <p className="text-xs text-gray-500">
-            Homepage shows {shown} of {rows.length}. {section.orderNote}
+            {savingOrder && <Loader2 className="mr-1 inline h-3 w-3 animate-spin" />}
+            Homepage shows the top {shown} of {rows.length}, in this order. Use the arrows to reorder.
           </p>
         </div>
 
@@ -272,6 +331,27 @@ export function FeaturedDealsManager({
                   )}
                 >
                   <span className="w-6 text-xs font-semibold text-gray-400">{i + 1}</span>
+
+                  <div className="flex flex-col">
+                    <button
+                      type="button"
+                      onClick={() => move(i, i - 1)}
+                      disabled={i === 0}
+                      aria-label={`Move ${p.name} up`}
+                      className="rounded p-0.5 text-gray-500 hover:bg-gray-100 hover:text-gray-900 disabled:opacity-25 disabled:hover:bg-transparent"
+                    >
+                      <ArrowUp className="h-4 w-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => move(i, i + 1)}
+                      disabled={i === rows.length - 1}
+                      aria-label={`Move ${p.name} down`}
+                      className="rounded p-0.5 text-gray-500 hover:bg-gray-100 hover:text-gray-900 disabled:opacity-25 disabled:hover:bg-transparent"
+                    >
+                      <ArrowDown className="h-4 w-4" />
+                    </button>
+                  </div>
 
                   <div className="relative h-12 w-12 flex-shrink-0 overflow-hidden rounded-lg bg-gray-100">
                     {img && <Image src={img} alt="" fill sizes="48px" className="object-cover" />}
@@ -301,6 +381,16 @@ export function FeaturedDealsManager({
                       </span>
                     )}
                   </div>
+
+                  {i > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => move(i, 0)}
+                      className="flex items-center gap-1 rounded-lg px-2 py-1 text-sm text-gray-600 hover:bg-gray-100"
+                    >
+                      <ArrowUpToLine className="h-4 w-4" /> Top
+                    </button>
+                  )}
 
                   <Link
                     href={`/admin/products/${p.id}`}

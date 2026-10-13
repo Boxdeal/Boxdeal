@@ -83,6 +83,8 @@ CREATE TABLE public.products (
   is_active           boolean DEFAULT true,
   is_featured         boolean DEFAULT false,
   is_deal_of_day      boolean DEFAULT false,
+  featured_position   integer,
+  deal_position       integer,
   rating              numeric DEFAULT 0 CHECK (rating >= 0 AND rating <= 5),
   review_count        integer DEFAULT 0,
   sold_count          integer DEFAULT 0,

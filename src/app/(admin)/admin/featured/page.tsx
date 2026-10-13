@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
+import { fetchMerchProducts } from "@/lib/merchandising";
 import { FeaturedDealsManager, type MerchProduct, type MerchFlag } from "@/components/admin/FeaturedDealsManager";
 
 export const metadata: Metadata = { title: "Featured & Deals — Admin" };
@@ -22,16 +23,14 @@ export default async function FeaturedAndDealsPage({ searchParams }: Props) {
 
   const supabase = await getSupabaseServerClient();
 
-  // Match the homepage's ordering so this list mirrors what shoppers see.
+  // Same ordering as the homepage so this list mirrors what shoppers see.
   const [featuredRes, dealsRes] = await Promise.all([
-    supabase.from("products").select(SELECT).eq("is_featured", true)
-      .order("sold_count", { ascending: false }),
-    supabase.from("products").select(SELECT).eq("is_deal_of_day", true)
-      .order("created_at", { ascending: false }),
+    fetchMerchProducts<MerchProduct>(supabase, "is_featured", SELECT),
+    fetchMerchProducts<MerchProduct>(supabase, "is_deal_of_day", SELECT),
   ]);
 
-  const featured = (featuredRes.data ?? []) as unknown as MerchProduct[];
-  const deals = (dealsRes.data ?? []) as unknown as MerchProduct[];
+  const featured = featuredRes.data ?? [];
+  const deals = dealsRes.data ?? [];
   const products = isDeals ? deals : featured;
 
   const tabs = [
@@ -44,7 +43,7 @@ export default async function FeaturedAndDealsPage({ searchParams }: Props) {
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Featured &amp; Deals</h1>
         <p className="mt-0.5 text-sm text-gray-500">
-          Pick the products that appear in the homepage sections.
+          Pick the products that appear in the homepage sections and the order they show in.
         </p>
       </div>
 

@@ -7,6 +7,7 @@ import { CategorySection } from "@/components/home/CategorySection";
 import { ProductGridSkeleton } from "@/components/shared/LoadingSpinner";
 import { BrandMarquee } from "@/components/home/BrandMarquee";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
+import { fetchMerchProducts } from "@/lib/merchandising";
 import type { Category, Subcategory } from "@/types";
 import type { Metadata } from "next";
 import { SITE_DESCRIPTION } from "@/lib/seo";
@@ -23,6 +24,9 @@ export const metadata: Metadata = {
 };
 
 export const revalidate = 1800;
+
+const MERCH_SELECT =
+  "id, name, slug, mrp, selling_price, discount_percent, stock_quantity, rating, review_count, product_images(image_url, thumbnail_url, is_primary)";
 
 // Loading skeleton components
 function HeroBannerSkeleton() {
@@ -81,20 +85,8 @@ async function getHomeData() {
       .select("id, name, slug")
       .eq("is_active", true)
       .limit(15),
-    supabase
-      .from("products")
-      .select("id, name, slug, mrp, selling_price, discount_percent, stock_quantity, rating, review_count, product_images(image_url, thumbnail_url, is_primary)")
-      .eq("is_active", true)
-      .eq("is_deal_of_day", true)
-      .order("created_at", { ascending: false })
-      .limit(8),
-    supabase
-      .from("products")
-      .select("id, name, slug, mrp, selling_price, discount_percent, stock_quantity, rating, review_count, product_images(image_url, thumbnail_url, is_primary)")
-      .eq("is_active", true)
-      .eq("is_featured", true)
-      .order("sold_count", { ascending: false })
-      .limit(10),
+    fetchMerchProducts<Product>(supabase, "is_deal_of_day", MERCH_SELECT, { activeOnly: true, limit: 8 }),
+    fetchMerchProducts<Product>(supabase, "is_featured", MERCH_SELECT, { activeOnly: true, limit: 5 }),
     supabase
       .from("subcategories")
       .select("id, category_id, name, slug, image_url, is_active, sort_order, created_at, updated_at")

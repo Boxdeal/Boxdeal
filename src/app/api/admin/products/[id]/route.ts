@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { getSupabaseServerClient, getSupabaseAdminClient } from "@/lib/supabase/server";
 
 async function requireAdmin() {
@@ -104,6 +105,9 @@ export async function PATCH(
       if (error) return NextResponse.json({ error: error.message }, { status: 400 });
     }
   }
+
+  // Homepage sections are statically cached; rebuild when their membership changes.
+  if ("is_featured" in b || "is_deal_of_day" in b) revalidatePath("/");
 
   return NextResponse.json({ data: { success: true } });
 }
