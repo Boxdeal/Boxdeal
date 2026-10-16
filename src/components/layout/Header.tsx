@@ -61,11 +61,11 @@ function HeaderContent() {
         Flat delivery — capped at ₹{DELIVERY_CHARGE_CAP}, no matter where you are &nbsp;🚀
       </div>
 
-      <div className="mx-auto flex max-w-7xl items-center gap-3 px-4 py-3 sm:gap-4 sm:py-3.5">
+      <div className="mx-auto flex max-w-7xl items-center gap-1.5 px-3 py-3 sm:gap-4 sm:px-4 sm:py-3.5">
 
         {/* Logo */}
         <Link href="/" className="flex-shrink-0" prefetch={true}>
-          <span className="text-xl font-black tracking-tight text-gray-900">
+          <span className="text-lg font-black tracking-tight text-gray-900 sm:text-xl">
             Box<span className="text-brand-500">Deal</span>
           </span>
         </Link>
@@ -85,7 +85,7 @@ function HeaderContent() {
         </button>
 
         {/* Right actions */}
-        <div className="ml-auto flex items-center gap-1">
+        <div className="ml-auto flex items-center gap-0.5 sm:gap-1">
 
           {/* Wishlist */}
           <Link
@@ -107,7 +107,7 @@ function HeaderContent() {
             <div className="relative" ref={dropdownRef}>
               <button
                 onClick={() => setShowDropdown(!showDropdown)}
-                className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-100"
+                className="flex items-center gap-2 rounded-xl px-1.5 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-100 sm:px-3"
               >
                 <div className="flex h-7 w-7 items-center justify-center rounded-full bg-brand-50 text-xs font-bold text-brand-600">
                   {firstName?.[0]?.toUpperCase() ?? <User className="h-4 w-4" />}
@@ -149,7 +149,7 @@ function HeaderContent() {
           ) : (
             <Link
               href={`/login?redirect=${encodeURIComponent(pathname)}`}
-              className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-100"
+              className="flex items-center gap-2 rounded-xl px-1.5 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-100 sm:px-3"
               prefetch={true}
             >
               <div className="flex h-7 w-7 items-center justify-center rounded-full bg-gray-100 text-gray-500">
@@ -162,7 +162,7 @@ function HeaderContent() {
           {/* Cart */}
           <button
             onClick={() => dispatch(openCart())}
-            className="relative ml-1 flex h-9 items-center gap-2 rounded-xl bg-brand-500 px-3 py-2 text-sm font-semibold text-white shadow-md shadow-brand-500/25 transition-all hover:bg-brand-600 hover:shadow-brand-500/40 active:scale-95"
+            className="relative ml-0.5 flex h-9 items-center gap-1.5 rounded-xl bg-brand-500 px-2.5 py-2 sm:ml-1 sm:gap-2 sm:px-3 text-sm font-semibold text-white shadow-md shadow-brand-500/25 transition-all hover:bg-brand-600 hover:shadow-brand-500/40 active:scale-95"
             aria-label={`Cart (${cartCount} items)`}
           >
             <ShoppingCart className="h-4 w-4" />
