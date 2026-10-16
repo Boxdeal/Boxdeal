@@ -189,19 +189,22 @@ function ProductCardComponent({ product, isDeal }: ProductCardProps) {
               Out of Stock
             </button>
           ) : (
-            <div className="mt-2 flex flex-row gap-1.5">
+            // Container query on the row: very narrow cards (carousel / 2-col on
+            // small phones) drop the ⚡ icon and slim the cart button so
+            // "Buy Now" always fits inside the card.
+            <div className="mt-2 flex flex-row gap-1 [container-type:inline-size] [@container(min-width:110px)]:gap-1.5">
               <button
                 onClick={handleAddToCart}
                 aria-label="Add to Cart"
-                className="flex items-center justify-center rounded-lg border border-brand-500 px-3 py-1.5 text-brand-600 transition-colors hover:bg-brand-50 active:scale-95 sm:py-2"
+                className="flex shrink-0 items-center justify-center rounded-lg border border-brand-500 px-1.5 py-1.5 text-brand-600 [@container(min-width:110px)]:px-2 [@container(min-width:150px)]:px-3 transition-colors hover:bg-brand-50 active:scale-95 sm:py-2"
               >
                 <ShoppingCart className="h-4 w-4 shrink-0 sm:h-[18px] sm:w-[18px]" />
               </button>
               <button
                 onClick={handleBuyNow}
-                className="flex flex-1 items-center justify-center gap-1 whitespace-nowrap rounded-lg bg-brand-500 py-1.5 text-[11px] font-semibold text-white transition-colors hover:bg-brand-600 active:scale-95 sm:gap-1.5 sm:py-2 sm:text-xs"
+                className="flex min-w-0 flex-1 items-center justify-center gap-1 overflow-hidden whitespace-nowrap rounded-lg bg-brand-500 px-0.5 py-1.5 [@container(min-width:110px)]:px-1 text-[11px] font-semibold text-white transition-colors hover:bg-brand-600 active:scale-95 sm:gap-1.5 sm:py-2 sm:text-xs"
               >
-                <Zap className="h-3 w-3 shrink-0 fill-current sm:h-3.5 sm:w-3.5" />
+                <Zap className="hidden h-3 w-3 shrink-0 fill-current sm:h-3.5 sm:w-3.5 [@container(min-width:130px)]:block" />
                 Buy Now
               </button>
             </div>

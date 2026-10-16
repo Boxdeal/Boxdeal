@@ -38,12 +38,12 @@ export function Pagination({
       <p className="text-sm text-gray-500">
         Showing {from}–{to} of {totalItems.toLocaleString()} products
       </p>
-      <div className="flex items-center gap-1">
+      <div className="flex flex-wrap items-center justify-center gap-1">
         <button
           onClick={() => goTo(currentPage - 1)}
           disabled={currentPage === 1}
           className={cn(
-            "flex h-9 w-9 items-center justify-center rounded-lg border text-gray-600 transition",
+            "flex h-8 w-8 items-center justify-center rounded-lg border text-gray-600 transition sm:h-9 sm:w-9",
             currentPage === 1
               ? "cursor-not-allowed opacity-40"
               : "hover:bg-gray-50"
@@ -53,7 +53,7 @@ export function Pagination({
         </button>
         {pages.map((p, i) =>
           p === "..." ? (
-            <span key={`ellipsis-${i}`} className="px-2 text-gray-400">
+            <span key={`ellipsis-${i}`} className="px-1 text-gray-400 sm:px-2">
               …
             </span>
           ) : (
@@ -61,7 +61,7 @@ export function Pagination({
               key={p}
               onClick={() => goTo(Number(p))}
               className={cn(
-                "h-9 min-w-[36px] rounded-lg border px-2 text-sm font-medium transition",
+                "h-8 min-w-[32px] rounded-lg border px-1.5 text-sm font-medium transition sm:h-9 sm:min-w-[36px] sm:px-2",
                 p === currentPage
                   ? "border-brand-500 bg-brand-500 text-white"
                   : "text-gray-600 hover:bg-gray-50"
@@ -75,7 +75,7 @@ export function Pagination({
           onClick={() => goTo(currentPage + 1)}
           disabled={currentPage === totalPages}
           className={cn(
-            "flex h-9 w-9 items-center justify-center rounded-lg border text-gray-600 transition",
+            "flex h-8 w-8 items-center justify-center rounded-lg border text-gray-600 transition sm:h-9 sm:w-9",
             currentPage === totalPages
               ? "cursor-not-allowed opacity-40"
               : "hover:bg-gray-50"
