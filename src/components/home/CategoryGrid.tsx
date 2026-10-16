@@ -73,7 +73,7 @@ export function CategoryGrid({ categories }: Props) {
       <div className="px-6 sm:px-10 lg:px-16">
 
         <div className="mb-6 flex items-center justify-between">
-          <h2 className="text-xl font-bold text-gray-900">Shop by Category</h2>
+          <h2 className="text-base font-bold text-gray-900 sm:text-lg lg:text-xl">Shop by Category</h2>
           <Link href="/products" className="text-sm font-semibold text-brand-500 hover:text-brand-600 transition-colors">
             View all →
           </Link>
