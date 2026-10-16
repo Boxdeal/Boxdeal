@@ -23,7 +23,7 @@ export default async function AdminProductsPage({ searchParams }: Props) {
   const { data } = await supabase
     .from("products")
     .select(`
-      id, name, sku, selling_price, mrp, stock_quantity, low_stock_threshold, is_active, is_featured, is_deal_of_day,
+      id, name, sku, selling_price, mrp, stock_quantity, low_stock_threshold, is_active, is_featured, is_deal_of_day, cod_available,
       category:categories!category_id(name),
       subcategory:subcategories!subcategory_id(name),
       brand:brands!brand_id(name),

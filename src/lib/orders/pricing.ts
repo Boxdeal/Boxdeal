@@ -24,6 +24,8 @@ export type OrderPricing =
       discount:    number;
       /** The coupon code that actually applied (uppercased), or null. */
       coupon_code: string | null;
+      /** Names of cart products that have Cash on Delivery turned off by admin. */
+      cod_blocked: string[];
     };
 
 /**
@@ -44,12 +46,13 @@ export async function computeOrderPricing(
   const ids = items.map((i) => i.product_id);
   const { data: products } = await admin
     .from("products")
-    .select("id, name, sku, hsn_code, mrp, selling_price, stock_quantity, product_images(image_url, is_primary)")
+    .select("id, name, sku, hsn_code, mrp, selling_price, stock_quantity, cod_available, product_images(image_url, is_primary)")
     .in("id", ids);
 
   const productMap = new Map(products?.map((p) => [p.id, p]) ?? []);
 
   const priced: PricedLineItem[] = [];
+  const codBlocked: string[] = [];
   let subtotal = 0;
 
   for (const item of items) {
@@ -63,6 +66,8 @@ export async function computeOrderPricing(
     if (product.stock_quantity < quantity) {
       return { ok: false, status: 409, error: `Only ${product.stock_quantity} left of "${product.name}"` };
     }
+
+    if (product.cod_available === false) codBlocked.push(product.name);
 
     const sellingPrice = Number(product.selling_price);
     subtotal += sellingPrice * quantity;
@@ -95,5 +100,5 @@ export async function computeOrderPricing(
     }
   }
 
-  return { ok: true, items: priced, subtotal, discount, coupon_code: appliedCoupon };
+  return { ok: true, items: priced, subtotal, discount, coupon_code: appliedCoupon, cod_blocked: codBlocked };
 }

@@ -23,11 +23,28 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Cart is empty" }, { status: 400 });
   }
 
+  const admin = getSupabaseAdminClient();
+
+  // COD quote: if admin has turned COD off for any product in the cart, COD is
+  // unavailable regardless of pincode — tell checkout which products cause it.
+  if (cod) {
+    const { data: blocked } = await admin
+      .from("products")
+      .select("name")
+      .in("id", items.map((i) => i.product_id))
+      .eq("cod_available", false);
+    if (blocked?.length) {
+      return NextResponse.json({
+        data: { serviceable: false, cod_blocked: blocked.map((p) => p.name as string) },
+      });
+    }
+  }
+
   try {
     // The client's coupon discount only trims the order value used for the
     // COD/coverage part of this display quote — order creation recomputes
     // everything server-side.
-    const quote = await getCartDeliveryQuote(getSupabaseAdminClient(), items, pincode, cod ?? false, { discount });
+    const quote = await getCartDeliveryQuote(admin, items, pincode, cod ?? false, { discount });
     return NextResponse.json({ data: quote });
   } catch (err) {
     return NextResponse.json(

@@ -17,6 +17,7 @@ interface ProductRow {
   is_active: boolean;
   is_featured: boolean;
   is_deal_of_day: boolean;
+  cod_available: boolean;
   category: { name: string } | null;
   subcategory: { name: string } | null;
   brand: { name: string } | null;
@@ -27,6 +28,7 @@ export function ProductsTable({ products }: { products: ProductRow[] }) {
   const [rows, setRows] = useState<ProductRow[]>(products);
   const [query, setQuery] = useState("");
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [codSavingId, setCodSavingId] = useState<string | null>(null);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -62,6 +64,24 @@ export function ProductsTable({ products }: { products: ProductRow[] }) {
     toast.success("Product deleted");
   }
 
+  async function toggleCod(p: ProductRow) {
+    const next = !p.cod_available;
+    setCodSavingId(p.id);
+    const res = await fetch(`/api/admin/products/${p.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ cod_available: next }),
+    });
+    const json = await res.json();
+    setCodSavingId(null);
+    if (json.error) {
+      toast.error(json.error);
+      return;
+    }
+    setRows((prev) => prev.map((row) => (row.id === p.id ? { ...row, cod_available: next } : row)));
+    toast.success(next ? `COD enabled for "${p.name}"` : `COD disabled for "${p.name}"`);
+  }
+
   return (
     <div className="space-y-4">
       {/* Search */}
@@ -89,13 +109,14 @@ export function ProductsTable({ products }: { products: ProductRow[] }) {
               <th className="px-4 py-3 text-left font-semibold text-gray-600">Stock</th>
               <th className="px-4 py-3 text-left font-semibold text-gray-600">Status</th>
               <th className="px-4 py-3 text-left font-semibold text-gray-600">Placement</th>
+              <th className="px-4 py-3 text-left font-semibold text-gray-600">COD</th>
               <th className="px-4 py-3" />
             </tr>
           </thead>
           <tbody>
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-4 py-10 text-center text-gray-400">
+                <td colSpan={8} className="px-4 py-10 text-center text-gray-400">
                   No products found
                 </td>
               </tr>
@@ -151,6 +172,28 @@ export function ProductsTable({ products }: { products: ProductRow[] }) {
                         <span className="text-xs text-gray-300">—</span>
                       )}
                     </div>
+                  </td>
+                  <td className="px-4 py-3">
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={p.cod_available}
+                      aria-label={`Cash on Delivery for ${p.name}`}
+                      title={p.cod_available ? "COD on — click to turn off" : "COD off — click to turn on"}
+                      onClick={() => toggleCod(p)}
+                      disabled={codSavingId === p.id}
+                      className={cn(
+                        "relative inline-flex h-5 w-9 flex-shrink-0 items-center rounded-full transition-colors disabled:opacity-50",
+                        p.cod_available ? "bg-green-500" : "bg-gray-300"
+                      )}
+                    >
+                      <span
+                        className={cn(
+                          "inline-block h-4 w-4 rounded-full bg-white shadow transition-transform",
+                          p.cod_available ? "translate-x-4" : "translate-x-0.5"
+                        )}
+                      />
+                    </button>
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-end gap-1">

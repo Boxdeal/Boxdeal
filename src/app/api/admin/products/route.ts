@@ -90,6 +90,7 @@ export async function POST(req: NextRequest) {
     is_active:           b.is_active ?? true,
     is_featured:         b.is_featured ?? false,
     is_deal_of_day:      b.is_deal_of_day ?? false,
+    cod_available:       b.cod_available ?? true,
     meta_title:          b.meta_title || null,
     meta_description:    b.meta_description || null,
   };

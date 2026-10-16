@@ -44,7 +44,7 @@ export async function PATCH(
     "name", "sku", "hsn_code", "description", "short_description", "category_id",
     "subcategory_id", "brand_id", "stock_quantity", "low_stock_threshold",
     "weight_grams", "length_cm", "breadth_cm", "height_cm",
-    "is_active", "is_featured", "is_deal_of_day",
+    "is_active", "is_featured", "is_deal_of_day", "cod_available",
     "meta_title", "meta_description",
   ];
   for (const k of passthrough) {

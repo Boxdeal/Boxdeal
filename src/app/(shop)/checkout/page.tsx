@@ -28,6 +28,8 @@ export default function CheckoutPage() {
   // customer has selected.
   const [delivery, setDelivery] = useState<ShippingState>("pending");
   const [codDelivery, setCodDelivery] = useState<ShippingState>("pending");
+  // Cart products the admin has turned COD off for (empty = no product-level block).
+  const [codBlocked, setCodBlocked] = useState<string[]>([]);
   const [paymentMethod, setPaymentMethod] = useState<"online" | "cod">("online");
 
   // Whenever the selected address (pincode) or cart changes, fetch the live
@@ -37,6 +39,7 @@ export default function CheckoutPage() {
     if (!selectedAddress?.pincode || items.length === 0) {
       setDelivery("pending");
       setCodDelivery("pending");
+      setCodBlocked([]);
       return;
     }
     let cancelled = false;
@@ -54,6 +57,7 @@ export default function CheckoutPage() {
           // pickup pincode not configured) — distinct from a pincode that genuinely
           // has no courier (`serviceable: false`).
           if (error) { set("error"); return; }
+          if (cod) setCodBlocked(data?.cod_blocked ?? []);
           if (!data?.serviceable) { set("unserviceable"); return; }
           set(data.delivery_charge as number);
         })
@@ -255,7 +259,9 @@ export default function CheckoutPage() {
                   <div className="text-sm">
                     <p className="font-semibold text-gray-900">Cash on Delivery</p>
                     <p className="text-gray-500 mt-0.5">
-                      {codDelivery === "unserviceable"
+                      {codBlocked.length > 0
+                        ? `Not available for ${codBlocked.length === 1 ? `"${codBlocked[0]}"` : "some items in your cart"}`
+                        : codDelivery === "unserviceable"
                         ? "Not available for this pincode"
                         : "Pay in cash when your order arrives"}
                     </p>

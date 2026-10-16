@@ -41,6 +41,14 @@ export async function POST(req: NextRequest) {
   if (!pricing.ok) return NextResponse.json({ error: pricing.error }, { status: pricing.status });
   const { subtotal, discount } = pricing;
 
+  // Admin can switch COD off per product — any such product in the cart blocks COD.
+  if (pricing.cod_blocked.length > 0) {
+    return NextResponse.json(
+      { error: `Cash on Delivery isn't available for "${pricing.cod_blocked[0]}". Please use online payment.` },
+      { status: 422 }
+    );
+  }
+
   // Recompute the COD delivery charge server-side (cod = true). A pincode with no
   // COD courier blocks the order — the customer should use online payment instead.
   let shipping_charge: number;

@@ -33,6 +33,7 @@ export interface ProductInitial {
   is_active: boolean;
   is_featured: boolean;
   is_deal_of_day: boolean;
+  cod_available: boolean;
   meta_title: string | null;
   meta_description: string | null;
   images: ExistingImage[];
@@ -70,6 +71,7 @@ export function ProductForm({ categories, subcategories, brands, product }: Prod
     is_active:           product?.is_active ?? true,
     is_featured:         product?.is_featured ?? false,
     is_deal_of_day:      product?.is_deal_of_day ?? false,
+    cod_available:       product?.cod_available ?? true,
     meta_title:          product?.meta_title ?? "",
     meta_description:    product?.meta_description ?? "",
   });
@@ -392,6 +394,11 @@ export function ProductForm({ categories, subcategories, brands, product }: Prod
         <label className="flex cursor-pointer items-center gap-2 text-sm text-gray-700">
           <input type="checkbox" checked={form.is_deal_of_day} onChange={(e) => set("is_deal_of_day", e.target.checked)} className="rounded text-brand-500" />
           Deal of the day
+        </label>
+        <label className="flex cursor-pointer items-center gap-2 text-sm text-gray-700">
+          <input type="checkbox" checked={form.cod_available} onChange={(e) => set("cod_available", e.target.checked)} className="rounded text-brand-500" />
+          Cash on Delivery available
+          <span className="text-xs text-gray-400">(off → customer must pay online for any cart with this product)</span>
         </label>
       </section>
 

@@ -122,6 +122,8 @@ export interface Product {
   is_active: boolean;
   is_featured: boolean;
   is_deal_of_day: boolean;
+  // false → Cash on Delivery is blocked for any cart containing this product.
+  cod_available: boolean;
   rating: number;
   review_count: number;
   sold_count: number;
