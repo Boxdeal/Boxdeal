@@ -147,7 +147,9 @@ function ProductCardComponent({ product, isDeal }: ProductCardProps) {
             "absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full shadow transition-all",
             isWishlisted
               ? "bg-red-50 text-red-500"
-              : "bg-white text-gray-400 opacity-0 group-hover:opacity-100"
+              // Touch screens have no hover, so keep it visible there; on
+              // mouse devices reveal it on card hover.
+              : "bg-white text-gray-400 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100"
           )}
           aria-label={isWishlisted ? "Remove from wishlist" : "Add to wishlist"}
         >

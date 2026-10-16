@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import Image from "next/image";
 import { ChevronLeft, ChevronRight, ZoomIn } from "lucide-react";
 import { cn } from "@/lib/utils/helpers";
@@ -14,6 +15,19 @@ interface ProductImageGalleryProps {
 export function ProductImageGallery({ images, productName }: ProductImageGalleryProps) {
   const [current, setCurrent] = useState(0);
   const [zoomed, setZoomed] = useState(false);
+
+  // Close on Esc and stop the page scrolling behind the open lightbox.
+  useEffect(() => {
+    if (!zoomed) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setZoomed(false); };
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [zoomed]);
 
   if (!images.length) {
     return (
@@ -85,10 +99,12 @@ export function ProductImageGallery({ images, productName }: ProductImageGallery
         </div>
       )}
 
-      {/* Lightbox */}
-      {zoomed && (
+      {/* Lightbox — portalled to <body>: the gallery sits inside a sticky column,
+          which is its own stacking context, so rendering it inline let the
+          header and rating stars paint over it. */}
+      {zoomed && createPortal(
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4"
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 p-4"
           onClick={() => setZoomed(false)}
         >
           <div className="relative max-h-full max-w-3xl w-full aspect-square">
@@ -100,7 +116,8 @@ export function ProductImageGallery({ images, productName }: ProductImageGallery
               sizes="100vw"
             />
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

@@ -204,14 +204,14 @@ export default async function ProductDetailPage({ params }: Props) {
       <script {...jsonLdScriptProps(breadcrumbSchema)} />
       <Breadcrumb items={breadcrumbs} />
 
-      <div className="grid gap-8 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
         {/* Gallery */}
-        <div className="lg:sticky lg:top-24 lg:self-start">
+        <div className="min-w-0 lg:sticky lg:top-24 lg:self-start">
           <ProductImageGallery images={sortedImages} productName={product.name} />
         </div>
 
         {/* Info */}
-        <div className="space-y-5">
+        <div className="min-w-0 space-y-5">
           {product.brand && (
             <p className="text-sm font-medium text-brand-600 uppercase tracking-wide">
               {product.brand.name}

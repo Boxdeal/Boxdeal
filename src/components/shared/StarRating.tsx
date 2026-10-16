@@ -23,8 +23,8 @@ export function StarRating({
   className,
 }: StarRatingProps) {
   return (
-    <div className={cn("flex items-center gap-1", className)}>
-      <div className="flex items-center gap-0.5">
+    <div className={cn("flex min-w-0 items-center gap-1", className)}>
+      <div className="flex flex-shrink-0 items-center gap-0.5">
         {Array.from({ length: 5 }).map((_, i) => {
           const filled = i < Math.floor(rating);
           const partial = !filled && i < rating;
@@ -48,7 +48,7 @@ export function StarRating({
         })}
       </div>
       {showCount && (
-        <span className="text-xs text-gray-500">
+        <span className="min-w-0 truncate text-xs text-gray-500">
           {rating.toFixed(1)}
           {reviewCount !== undefined && (
             <span className="ml-1">({reviewCount.toLocaleString()})</span>
