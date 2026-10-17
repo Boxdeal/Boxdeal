@@ -3,7 +3,6 @@ import { getSupabaseServerClient, getSupabaseAdminClient } from "@/lib/supabase/
 import { renderInvoicePdf } from "@/lib/invoice/pdf";
 import { buildInvoiceInput, INVOICE_ORDER_SELECT, type InvoiceOrderRow } from "@/lib/invoice/build";
 import { canInvoice, invoiceFileName } from "@/lib/invoice/availability";
-import type { OrderStatus } from "@/types";
 
 // PDF generation needs the Node runtime (the renderer is not edge-compatible),
 // and the response must never be cached: the invoice number is minted on the
@@ -44,7 +43,7 @@ export async function GET(
     return NextResponse.json({ error: "Order not found" }, { status: 404 });
   }
 
-  if (!canInvoice(order.status as OrderStatus)) {
+  if (!canInvoice(order)) {
     return NextResponse.json(
       {
         error: isAdmin

@@ -390,6 +390,11 @@ export function StatementDocument({ s }: { s: MonthlyStatement }) {
               <Text style={[styles.tdTotal, w(11), right]}>{money(g.totals.net)}</Text>
             </View>
           )}
+          {g.voided.length > 0 && (
+            <Text style={[styles.tdMuted, { paddingTop: 8 }]}>
+              Voided, not counted: {g.voided.map((v) => `${v.invoiceNumber} (${v.orderNumber}, ${v.reason})`).join("; ")}.
+            </Text>
+          )}
         </Section>
 
         <Footer page="Invoice Register" />

@@ -98,6 +98,12 @@ export function statementToCsv(s: MonthlyStatement): string {
       i.paymentMethod, money(i.taxable), money(i.cgst), money(i.sgst), money(i.igst), money(i.total)));
   }
   if (s.gst.invoices.length === 0) out.push(row("No invoices raised this month"));
+  if (s.gst.voided.length > 0) {
+    blank();
+    out.push(row("VOIDED INVOICES", "(issued, then voided before delivery: not counted above)"));
+    out.push(row("Invoice No", "Invoice Date", "Order No", "Reason"));
+    for (const v of s.gst.voided) out.push(row(v.invoiceNumber, v.invoiceDate, v.orderNumber, v.reason));
+  }
 
   blank();
   out.push(row("HSN SUMMARY", "(GSTR-1 Table 12 — product lines only, delivery excluded)"));

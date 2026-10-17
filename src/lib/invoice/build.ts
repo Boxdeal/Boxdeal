@@ -10,7 +10,7 @@ import type { InvoiceInput } from "./pdf";
 
 /** The `select` an order needs to be printed as an invoice. */
 export const INVOICE_ORDER_SELECT = `
-  id, order_number, user_id, status, placed_at,
+  id, order_number, user_id, status, placed_at, delivered_at,
   shipping_full_name, shipping_address1, shipping_address2,
   shipping_city, shipping_state, shipping_pincode,
   discount_amount, admin_discount, shipping_charge,
@@ -25,6 +25,7 @@ export interface InvoiceOrderRow {
   user_id: string | null;
   status: string;
   placed_at: string;
+  delivered_at: string | null;
   shipping_full_name: string;
   shipping_address1: string;
   shipping_address2: string | null;

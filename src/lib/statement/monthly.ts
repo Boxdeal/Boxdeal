@@ -176,6 +176,14 @@ export interface StateSummaryRow extends GstTotals {
   invoices: number;
 }
 
+/** An invoice number issued, then voided (cancelled / RTO before delivery). */
+export interface VoidedInvoiceRow {
+  invoiceNumber: string;
+  invoiceDate: string;
+  orderNumber: string;
+  reason: string;
+}
+
 export interface MonthlyStatement {
   month: string;
   label: string;
@@ -190,6 +198,11 @@ export interface MonthlyStatement {
     totals: GstTotals;
     hsn: HsnSummaryRow[];
     states: StateSummaryRow[];
+    /**
+     * Numbers dated this month that were voided. Not counted in any total —
+     * listed so the series gaps are explained (GSTR-1 Table 13, "cancelled").
+     */
+    voided: VoidedInvoiceRow[];
   };
 }
 
@@ -256,7 +269,7 @@ export async function getMonthlyStatement(month: string): Promise<MonthlyStateme
   const SLIM = "order_number, status, payment_status, payment_method, placed_at, delivered_at, " +
     "subtotal, discount_amount, admin_discount, shipping_charge, total_amount, shipping_state";
 
-  const [placedRes, deliveredRes, prepaidRes, invoicedRes, returnedRes] = await Promise.all([
+  const [placedRes, deliveredRes, prepaidRes, invoicedRes, returnedRes, voidedRes] = await Promise.all([
     // Activity — every order raised this month, whatever became of it.
     admin.from("orders").select(SLIM)
       .gte("placed_at", from).lt("placed_at", to).limit(10000),
@@ -269,9 +282,11 @@ export async function getMonthlyStatement(month: string): Promise<MonthlyStateme
     admin.from("orders").select(`${SLIM}, invoice_number, items:order_items(product_name, product_sku, quantity, selling_price)`)
       .neq("payment_method", "cod").in("status", REVENUE_STATUSES).eq("payment_status", "paid")
       .gte("placed_at", from).lt("placed_at", to).limit(10000),
-    // Tax owed — invoices raised this month.
+    // Tax owed — invoices raised this month. Only delivered parcels carry an
+    // invoice; the delivered_at guard keeps a stray number on a cancelled or
+    // RTO order out of the GST totals even if one ever slips through again.
     admin.from("orders").select(`${SLIM}, invoice_number, invoice_date, items:order_items(${INVOICE_ITEM_SELECT})`)
-      .not("invoice_number", "is", null)
+      .not("invoice_number", "is", null).not("delivered_at", "is", null)
       .gte("invoice_date", from).lt("invoice_date", to)
       .order("invoice_number", { ascending: true }).limit(10000),
     // Goods that came back. Keyed off the status-history entry rather than the
@@ -281,6 +296,10 @@ export async function getMonthlyStatement(month: string): Promise<MonthlyStateme
       .select(`created_at, order:orders(${SLIM})`)
       .eq("status", "returned")
       .gte("created_at", from).lt("created_at", to).limit(10000),
+    // Invoice numbers dated this month that were later voided.
+    admin.from("voided_invoices").select("invoice_number, invoice_date, order_number, reason")
+      .gte("invoice_date", from).lt("invoice_date", to)
+      .order("invoice_number", { ascending: true }).limit(10000),
   ]);
 
   // ── Activity, by order date ──
@@ -424,6 +443,12 @@ export async function getMonthlyStatement(month: string): Promise<MonthlyStateme
       totals,
       hsn: [...hsnMap.values()].sort((a, b) => b.taxable - a.taxable),
       states: [...stateMap.values()].sort((a, b) => b.taxable - a.taxable),
+      voided: (voidedRes.data ?? []).map((v) => ({
+        invoiceNumber: v.invoice_number,
+        invoiceDate: formatInTimeZone(new Date(v.invoice_date), IST, "dd/MM/yyyy"),
+        orderNumber: v.order_number,
+        reason: v.reason,
+      })),
     },
   };
 }

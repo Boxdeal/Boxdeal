@@ -39,7 +39,7 @@ export async function GET(req: NextRequest) {
 
   const { data, error } = kind === "issued"
     ? await admin.from("orders").select(INVOICE_ORDER_SELECT)
-        .not("invoice_number", "is", null)
+        .not("invoice_number", "is", null).not("delivered_at", "is", null)
         .gte("invoice_date", from).lt("invoice_date", to)
         .order("invoice_number", { ascending: true })
         .limit(10000)

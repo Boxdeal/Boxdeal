@@ -114,7 +114,7 @@ export default async function OrderDetailPage({
       </div>
 
       {/* Tax invoice — available once the order has actually been delivered */}
-      {canInvoice(typedOrder.status) && (
+      {canInvoice(typedOrder) && (
         <div className="rounded-2xl border border-gray-100 bg-white p-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-start gap-2">

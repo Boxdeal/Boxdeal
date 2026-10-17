@@ -231,6 +231,10 @@ function summarySheet(wb: ExcelJS.Workbook, s: MonthlyStatement) {
   line("IGST", null, s.gst.totals.igst, { sub: true });
   line("Total GST", null, s.gst.totals.tax);
   line("Invoice value (incl. GST)", null, s.gst.totals.net, { bold: true });
+  if (s.gst.voided.length > 0) {
+    line(`Voided, not counted: ${s.gst.voided.map((v) => `${v.invoiceNumber} (${v.orderNumber})`).join(", ")}`,
+      s.gst.voided.length, null, { sub: true });
+  }
 }
 
 export async function statementToXlsx(s: MonthlyStatement): Promise<Buffer> {

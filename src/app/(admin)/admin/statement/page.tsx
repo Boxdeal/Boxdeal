@@ -211,6 +211,12 @@ export default async function StatementPage({
           />
           <StatsCard title="Invoice value" value={rs(g.totals.net)} icon={Banknote} variant="success" />
         </div>
+        {g.voided.length > 0 && (
+          <p className="text-xs text-gray-500">
+            Voided, not counted:{" "}
+            {g.voided.map((v) => `${v.invoiceNumber} (${v.orderNumber}, ${v.reason})`).join("; ")}
+          </p>
+        )}
       </section>
 
       {/* ── HSN + state summaries ── */}

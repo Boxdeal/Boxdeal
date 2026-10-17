@@ -1,5 +1,3 @@
-import type { OrderStatus } from "@/types";
-
 /**
  * Who can pull an invoice, and when.
  *
@@ -11,12 +9,15 @@ import type { OrderStatus } from "@/types";
 /**
  * The invoice exists only once the order is actually delivered — for customers
  * and admins alike. Issuing it earlier risks minting a tax document for an
- * order that gets cancelled or comes back RTO. A "returned" order still gets
- * one, because a return means it was delivered first and the invoice was
- * already issued.
+ * order that gets cancelled or comes back RTO.
+ *
+ * The test is `delivered_at`, not the status alone: an RTO also ends as
+ * "returned", but was never delivered, so it must never get an invoice. A
+ * customer return (delivered first, sent back later) keeps its own.
+ * `issue_invoice_number` enforces the same rule in the database.
  */
-export function canInvoice(status: OrderStatus): boolean {
-  return status === "delivered" || status === "returned";
+export function canInvoice(order: { status: string; delivered_at: string | null }): boolean {
+  return Boolean(order.delivered_at) && (order.status === "delivered" || order.status === "returned");
 }
 
 /** Downloaded file name, e.g. "INV00001.pdf". */

@@ -51,7 +51,7 @@ export default async function AdminOrderDetailPage({
           {ORDER_STATUS_LABELS[order.status as keyof typeof ORDER_STATUS_LABELS]}
         </span>
         {/* The invoice is downloadable only once the order is delivered. */}
-        {canInvoice(order.status) && (
+        {canInvoice(order) && (
           <div className="ml-auto flex items-center gap-3">
             {order.invoice_number && (
               <span className="font-mono text-xs text-gray-500">{order.invoice_number}</span>

@@ -70,7 +70,7 @@ export default async function OrdersPage() {
             </div>
           </Link>
 
-          {canInvoice(order.status) && (
+          {canInvoice(order) && (
             <div className="border-t border-gray-100 px-5 py-3">
               <InvoiceDownloadButton
                 orderId={order.id}
