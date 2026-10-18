@@ -6,7 +6,7 @@ import { ProductsTable } from "@/components/admin/ProductsTable";
 
 export const metadata: Metadata = { title: "Products — Admin" };
 
-type Filter = "all" | "low-stock" | "featured" | "deal-of-day";
+type Filter = "all" | "low-stock" | "out-of-stock" | "featured" | "deal-of-day";
 
 interface Props {
   searchParams: Promise<{ filter?: string }>;
@@ -15,7 +15,7 @@ interface Props {
 export default async function AdminProductsPage({ searchParams }: Props) {
   const { filter } = await searchParams;
   const active: Filter =
-    filter === "low-stock" || filter === "featured" || filter === "deal-of-day"
+    filter === "low-stock" || filter === "out-of-stock" || filter === "featured" || filter === "deal-of-day"
       ? filter
       : "all";
 
@@ -38,15 +38,20 @@ export default async function AdminProductsPage({ searchParams }: Props) {
   const isLowStock = (p: (typeof all)[number]) =>
     p.is_active && (p.stock_quantity ?? 0) <= (p.low_stock_threshold ?? 0);
 
+  // Same rule the storefront uses to show "Out of Stock" (active or not).
+  const isOutOfStock = (p: (typeof all)[number]) => (p.stock_quantity ?? 0) <= 0;
+
   const counts = {
     all: all.length,
     "low-stock": all.filter(isLowStock).length,
+    "out-of-stock": all.filter(isOutOfStock).length,
     featured: all.filter((p) => p.is_featured).length,
     "deal-of-day": all.filter((p) => p.is_deal_of_day).length,
   } satisfies Record<Filter, number>;
 
   const products =
     active === "low-stock"  ? all.filter(isLowStock)
+    : active === "out-of-stock" ? all.filter(isOutOfStock)
     : active === "featured"    ? all.filter((p) => p.is_featured)
     : active === "deal-of-day" ? all.filter((p) => p.is_deal_of_day)
     : all;
@@ -54,6 +59,7 @@ export default async function AdminProductsPage({ searchParams }: Props) {
   const tabs: Array<{ key: Filter; label: string; href: string }> = [
     { key: "all",         label: "All",             href: "/admin/products" },
     { key: "low-stock",   label: "Low Stock",       href: "/admin/products?filter=low-stock" },
+    { key: "out-of-stock", label: "Out of Stock",   href: "/admin/products?filter=out-of-stock" },
     { key: "featured",    label: "Featured",        href: "/admin/products?filter=featured" },
     { key: "deal-of-day", label: "Deal of the Day", href: "/admin/products?filter=deal-of-day" },
   ];
@@ -66,6 +72,11 @@ export default async function AdminProductsPage({ searchParams }: Props) {
           {active === "low-stock" && (
             <span className="rounded-full bg-yellow-100 px-3 py-1 text-xs font-semibold text-yellow-700">
               Low stock ({products.length})
+            </span>
+          )}
+          {active === "out-of-stock" && (
+            <span className="rounded-full bg-red-100 px-3 py-1 text-xs font-semibold text-red-700">
+              Out of stock ({products.length})
             </span>
           )}
           {active === "featured" && (
