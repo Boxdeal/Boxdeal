@@ -33,13 +33,14 @@ export default async function AdminProductsPage({ searchParams }: Props) {
 
   const all = data ?? [];
 
-  // Low-stock = active products at/under their threshold. PostgREST can't compare
-  // two columns in a filter, so we narrow in JS.
-  const isLowStock = (p: (typeof all)[number]) =>
-    p.is_active && (p.stock_quantity ?? 0) <= (p.low_stock_threshold ?? 0);
-
   // Same rule the storefront uses to show "Out of Stock" (active or not).
   const isOutOfStock = (p: (typeof all)[number]) => (p.stock_quantity ?? 0) <= 0;
+
+  // Low-stock = active products at/under their threshold but still in stock —
+  // zero-stock items live in the Out of Stock tab. PostgREST can't compare
+  // two columns in a filter, so we narrow in JS.
+  const isLowStock = (p: (typeof all)[number]) =>
+    p.is_active && !isOutOfStock(p) && (p.stock_quantity ?? 0) <= (p.low_stock_threshold ?? 0);
 
   const counts = {
     all: all.length,
@@ -124,7 +125,8 @@ export default async function AdminProductsPage({ searchParams }: Props) {
         </p>
       )}
 
-      <ProductsTable products={products as never} />
+      {/* key remounts the table per tab — it seeds local state from props once */}
+      <ProductsTable key={active} products={products as never} />
     </div>
   );
 }

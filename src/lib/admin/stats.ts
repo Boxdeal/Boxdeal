@@ -88,7 +88,7 @@ export async function getAdminDashboard(): Promise<{
   }
 
   const lowStock = (productsRes.data ?? []).filter(
-    (p) => p.is_active && p.stock_quantity <= (p.low_stock_threshold ?? 0)
+    (p) => p.is_active && p.stock_quantity > 0 && p.stock_quantity <= (p.low_stock_threshold ?? 0)
   ).length;
 
   const stats: DashboardStats = {
