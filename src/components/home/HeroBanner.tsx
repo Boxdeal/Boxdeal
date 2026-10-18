@@ -61,6 +61,8 @@ export function HeroBanner({ banners }: Props) {
 
   const b     = banners[idx];
   const light = b.text_theme === "light";
+  // banner3 artwork already has its own CTA/visuals — skip the overlay button + feature strip
+  const hideExtras = /banner3\.(jpe?g|png|webp)/i.test(b.image_url);
 
   function prev() { advance((idx - 1 + banners.length) % banners.length); resetTimer(); }
   function next() { advance((idx + 1) % banners.length); resetTimer(); }
@@ -172,6 +174,7 @@ export function HeroBanner({ banners }: Props) {
             )}
 
             {/* CTA Button */}
+            {!hideExtras && (
             <Link
               href={b.cta_link}
               className={cn(
@@ -195,8 +198,10 @@ export function HeroBanner({ banners }: Props) {
                 style={{ width: "clamp(8px, 0.9vw, 14px)", height: "clamp(8px, 0.9vw, 14px)" }}
               />
             </Link>
+            )}
 
             {/* Feature strip — compact */}
+            {!hideExtras && (
             <div className={cn(
               "mt-2 hidden overflow-hidden rounded-lg border sm:mt-3 sm:flex lg:mt-4",
               "w-full",
@@ -232,6 +237,7 @@ export function HeroBanner({ banners }: Props) {
                 </div>
               ))}
             </div>
+            )}
 
           </div>
         </div>

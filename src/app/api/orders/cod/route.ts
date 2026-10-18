@@ -117,6 +117,7 @@ export async function POST(req: NextRequest) {
     quantity:      item.quantity,
     mrp:           item.mrp,
     selling_price: item.selling_price,
+    total_price:   item.selling_price * item.quantity,
   }));
 
   await Promise.all([

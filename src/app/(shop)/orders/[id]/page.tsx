@@ -242,7 +242,7 @@ export default async function OrderDetailPage({
                 <p className="text-xs text-gray-400">Qty: {item.quantity} · {formatPrice(item.selling_price)} each</p>
               </div>
               <p className="text-sm font-semibold text-gray-900 flex-shrink-0">
-                {formatPrice(item.total_price ?? item.selling_price * item.quantity)}
+                {formatPrice(Number(item.total_price) || item.selling_price * item.quantity)}
               </p>
             </div>
           ))}

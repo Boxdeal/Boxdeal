@@ -112,3 +112,5 @@ $$;
 -- Expect INV00213 and INV00215, and zero rows from the second query.
 SELECT * FROM voided_invoices ORDER BY invoice_number;
 SELECT order_number, status FROM orders WHERE invoice_number IS NOT NULL AND delivered_at IS NULL;
+
+
