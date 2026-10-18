@@ -61,7 +61,7 @@ export function HeroBanner({ banners }: Props) {
 
   const b     = banners[idx];
   const light = b.text_theme === "light";
-  // banner3 artwork already has its own CTA/visuals — skip the overlay button + feature strip
+  // banner3 artwork is self-contained — show only the image, no text overlay
   const hideExtras = /banner3\.(jpe?g|png|webp)/i.test(b.image_url);
 
   function prev() { advance((idx - 1 + banners.length) % banners.length); resetTimer(); }
@@ -106,6 +106,7 @@ export function HeroBanner({ banners }: Props) {
         {/* Text overlay — always left 35%, right 65% reserved for product images.
             pointer-events-none so clicks fall through to the banner-wide link above;
             interactive children re-enable pointer events. */}
+        {!hideExtras && (
         <div className="pointer-events-none absolute inset-0 z-20 flex items-center pl-4 sm:pl-10 lg:pl-16">
           <div key={animKey} className="flex w-[35%] flex-col">
 
@@ -174,7 +175,6 @@ export function HeroBanner({ banners }: Props) {
             )}
 
             {/* CTA Button */}
-            {!hideExtras && (
             <Link
               href={b.cta_link}
               className={cn(
@@ -198,10 +198,8 @@ export function HeroBanner({ banners }: Props) {
                 style={{ width: "clamp(8px, 0.9vw, 14px)", height: "clamp(8px, 0.9vw, 14px)" }}
               />
             </Link>
-            )}
 
             {/* Feature strip — compact */}
-            {!hideExtras && (
             <div className={cn(
               "mt-2 hidden overflow-hidden rounded-lg border sm:mt-3 sm:flex lg:mt-4",
               "w-full",
@@ -237,10 +235,10 @@ export function HeroBanner({ banners }: Props) {
                 </div>
               ))}
             </div>
-            )}
 
           </div>
         </div>
+        )}
 
         {/* Prev / Next arrows */}
         {banners.length > 1 && (
