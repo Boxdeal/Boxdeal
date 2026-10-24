@@ -61,8 +61,10 @@ export function HeroBanner({ banners }: Props) {
 
   const b     = banners[idx];
   const light = b.text_theme === "light";
-  // banner3 artwork is self-contained — show only the image, no text overlay
-  const hideExtras = /banner3\.(jpe?g|png|webp)/i.test(b.image_url);
+  // Self-contained artwork (Honeywell banner3, Titan banner2, or any banner with no title)
+  // shows only the image — no text, button or feature strip on top.
+  const hideExtras =
+    !b.title?.trim() || /banner[23]\.(jpe?g|png|webp)/i.test(b.image_url);
 
   function prev() { advance((idx - 1 + banners.length) % banners.length); resetTimer(); }
   function next() { advance((idx + 1) % banners.length); resetTimer(); }
