@@ -126,6 +126,8 @@ export interface Product {
   cod_available: boolean;
   rating: number;
   review_count: number;
+  // Star counts from offline reviews, e.g. {"5": 8, "3": 2}. Null when not set.
+  rating_breakdown?: Record<string, number> | null;
   sold_count: number;
   meta_title: string | null;
   meta_description: string | null;

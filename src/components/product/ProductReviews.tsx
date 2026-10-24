@@ -12,12 +12,15 @@ interface ProductReviewsProps {
   reviews: Review[];
   productRating: number;
   reviewCount: number;
+  /** Star counts from offline reviews, e.g. {"5": 8, "3": 2}. */
+  ratingBreakdown?: Record<string, number> | null;
 }
 
 export function ProductReviews({
   reviews,
   productRating,
   reviewCount,
+  ratingBreakdown,
 }: ProductReviewsProps) {
   const [showAll, setShowAll] = useState(false);
   const displayed = showAll ? reviews : reviews.slice(0, 5);
@@ -31,6 +34,8 @@ export function ProductReviews({
   let counts: number[];
   if (realCount > 0) {
     counts = stars.map((star) => reviews.filter((r) => r.rating === star).length);
+  } else if (ratingBreakdown && Object.keys(ratingBreakdown).length > 0) {
+    counts = stars.map((star) => Math.max(0, Number(ratingBreakdown[String(star)]) || 0));
   } else if (reviewCount > 0) {
     const weights = stars.map((s) => Math.exp(-Math.pow(s - productRating, 2) / 0.5));
     const wSum = weights.reduce((a, b) => a + b, 0);

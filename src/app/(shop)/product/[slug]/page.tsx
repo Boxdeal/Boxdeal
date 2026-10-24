@@ -297,6 +297,7 @@ export default async function ProductDetailPage({ params }: Props) {
             reviews={reviews as never}
             productRating={product.rating}
             reviewCount={product.review_count}
+            ratingBreakdown={product.rating_breakdown}
           />
         </section>
       </div>
