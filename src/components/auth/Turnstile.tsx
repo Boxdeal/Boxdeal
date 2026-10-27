@@ -79,6 +79,8 @@ export const Turnstile = forwardRef<TurnstileHandle, Props>(function Turnstile({
         widgetId.current = window.turnstile.render(containerRef.current, {
           sitekey: SITE_KEY,
           size: "flexible",
+          // Auth pages are always white, so don't follow the OS dark mode
+          theme: "light",
           callback: (token: string) => onTokenRef.current(token),
           "expired-callback": () => onTokenRef.current(null),
           "error-callback": () => onTokenRef.current(null),
