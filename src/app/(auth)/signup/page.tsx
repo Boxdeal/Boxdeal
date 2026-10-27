@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { Mail, ArrowRight, Loader2, User as UserIcon, Phone, Lock } from "lucide-react";
 import Link from "next/link";
@@ -9,6 +9,7 @@ import { supabasePhoneOtpService } from "@/services/supabasePhoneOtp";
 import { googleOAuthService } from "@/services/googleOAuth";
 import { profileService } from "@/services/profile";
 import { toast } from "sonner";
+import { Turnstile, CAPTCHA_ENABLED, type TurnstileHandle } from "@/components/auth/Turnstile";
 
 export default function SignupPage() {
   const [method, setMethod] = useState<"password" | "phone">("password");
@@ -26,6 +27,18 @@ export default function SignupPage() {
   // every user has both a phone and an email for order notifications.
   const [profileEmail, setProfileEmail] = useState("");
   const router = useRouter();
+
+  // Captcha token from Turnstile. Single-use, so the widget is reset after
+  // every auth call. Undefined when captcha isn't configured.
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const captchaRef = useRef<TurnstileHandle>(null);
+  function captchaReady() {
+    if (CAPTCHA_ENABLED && !captchaToken) {
+      toast.error("Please complete the security check");
+      return false;
+    }
+    return true;
+  }
 
   const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -46,9 +59,11 @@ export default function SignupPage() {
       return;
     }
 
+    if (!captchaReady()) return;
+
     setLoading(true);
     try {
-      const { data, error } = await authService.signUp(email, password);
+      const { data, error } = await authService.signUp(email, password, captchaToken ?? undefined);
       if (error) throw error;
 
       if (data.user) {
@@ -60,6 +75,7 @@ export default function SignupPage() {
       const msg = err instanceof Error ? err.message : "Signup failed";
       toast.error(msg);
     } finally {
+      captchaRef.current?.reset();
       setLoading(false);
     }
   }
@@ -81,9 +97,11 @@ export default function SignupPage() {
       return;
     }
 
+    if (!captchaReady()) return;
+
     setLoading(true);
     try {
-      const result = await supabasePhoneOtpService.sendOtp(phone);
+      const result = await supabasePhoneOtpService.sendOtp(phone, captchaToken ?? undefined);
       if (!result.success) throw new Error(result.error);
 
       toast.success("OTP sent to your phone!");
@@ -92,6 +110,7 @@ export default function SignupPage() {
       const msg = err instanceof Error ? err.message : "Failed to send OTP";
       toast.error(msg);
     } finally {
+      captchaRef.current?.reset();
       setLoading(false);
     }
   }
@@ -519,6 +538,9 @@ export default function SignupPage() {
             </button>
           </form>
         )}
+
+        {/* Hidden on the profile step, where no captcha-checked call is made */}
+        {step === "signup" && <Turnstile ref={captchaRef} onToken={setCaptchaToken} />}
       </div>
     </div>
   );

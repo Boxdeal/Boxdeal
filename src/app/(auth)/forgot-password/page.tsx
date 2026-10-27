@@ -1,15 +1,28 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Mail, ArrowRight, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { authService } from "@/services/auth";
 import { toast } from "sonner";
+import { Turnstile, CAPTCHA_ENABLED, type TurnstileHandle } from "@/components/auth/Turnstile";
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+
+  // Captcha token from Turnstile. Single-use, so the widget is reset after
+  // every auth call. Undefined when captcha isn't configured.
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const captchaRef = useRef<TurnstileHandle>(null);
+  function captchaReady() {
+    if (CAPTCHA_ENABLED && !captchaToken) {
+      toast.error("Please complete the security check");
+      return false;
+    }
+    return true;
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -19,9 +32,11 @@ export default function ForgotPasswordPage() {
       return;
     }
 
+    if (!captchaReady()) return;
+
     setLoading(true);
     try {
-      const { error } = await authService.resetPassword(email);
+      const { error } = await authService.resetPassword(email, captchaToken ?? undefined);
       if (error) throw error;
 
       setSubmitted(true);
@@ -30,6 +45,7 @@ export default function ForgotPasswordPage() {
       const msg = err instanceof Error ? err.message : "Failed to send reset email";
       toast.error(msg);
     } finally {
+      captchaRef.current?.reset();
       setLoading(false);
     }
   }
@@ -68,6 +84,8 @@ export default function ForgotPasswordPage() {
                 />
               </div>
             </div>
+
+            <Turnstile ref={captchaRef} onToken={setCaptchaToken} />
 
             <button
               type="submit"

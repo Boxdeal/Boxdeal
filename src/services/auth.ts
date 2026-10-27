@@ -106,20 +106,22 @@ export const authService = {
   },
 
   // Sign up with email/password (legacy)
-  async signUp(email: string, password: string) {
+  async signUp(email: string, password: string, captchaToken?: string) {
     const supabase = getSupabaseBrowserClient();
     return supabase.auth.signUp({
       email,
       password,
+      options: { captchaToken },
     });
   },
 
   // Sign in with email/password (legacy)
-  async signIn(email: string, password: string) {
+  async signIn(email: string, password: string, captchaToken?: string) {
     const supabase = getSupabaseBrowserClient();
     return supabase.auth.signInWithPassword({
       email,
       password,
+      options: { captchaToken },
     });
   },
 
@@ -136,10 +138,11 @@ export const authService = {
   },
 
   // Reset password
-  async resetPassword(email: string) {
+  async resetPassword(email: string, captchaToken?: string) {
     const supabase = getSupabaseBrowserClient();
     return supabase.auth.resetPasswordForEmail(email, {
       redirectTo: `${window.location.origin}/reset-password`,
+      captchaToken,
     });
   },
 };

@@ -52,6 +52,14 @@ Deno.serve(async (req) => {
   // Supabase stores the phone as "919876543210" — country code, no "+"
   const mobile = user.phone.replace(/\D/g, "");
 
+  // We only sell in India. Anything that isn't a +91 mobile number is refused,
+  // so a script calling Supabase directly can't use us to send SMS abroad
+  // (international "SMS pumping" is where these attacks make their money).
+  if (!/^91[6-9]\d{9}$/.test(mobile)) {
+    console.warn(`send-sms: refused non-Indian number ...${mobile.slice(-4)}`);
+    return fail(400, "Only Indian mobile numbers (+91) are supported");
+  }
+
   try {
     const res = await fetch("https://control.msg91.com/api/v5/flow/", {
       method: "POST",

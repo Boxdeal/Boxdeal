@@ -3,7 +3,7 @@
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 export const supabasePhoneOtpService = {
-  async sendOtp(phoneNumber: string) {
+  async sendOtp(phoneNumber: string, captchaToken?: string) {
     try {
       const cleanPhone = phoneNumber.replace(/\D/g, "");
       const formattedPhone = `+91${cleanPhone}`;
@@ -11,7 +11,7 @@ export const supabasePhoneOtpService = {
       const supabase = getSupabaseBrowserClient();
       const { error } = await supabase.auth.signInWithOtp({
         phone: formattedPhone,
-        options: { shouldCreateUser: true },
+        options: { shouldCreateUser: true, captchaToken },
       });
 
       if (error) throw error;

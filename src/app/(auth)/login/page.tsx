@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Mail, ArrowRight, Loader2, Lock, Phone } from "lucide-react";
 import Link from "next/link";
@@ -10,6 +10,7 @@ import { googleOAuthService } from "@/services/googleOAuth";
 import { profileService } from "@/services/profile";
 import { setPostLoginRedirect, takePostLoginRedirect } from "@/lib/utils/authRedirect";
 import { toast } from "sonner";
+import { Turnstile, CAPTCHA_ENABLED, type TurnstileHandle } from "@/components/auth/Turnstile";
 
 export default function LoginPage() {
   const [method, setMethod] = useState<"password" | "phone">("password");
@@ -22,6 +23,18 @@ export default function LoginPage() {
   const [resendTimer, setResendTimer] = useState(0);
   const router = useRouter();
   const searchParams = useSearchParams();
+
+  // Captcha token from Turnstile. Single-use, so the widget is reset after
+  // every auth call. Undefined when captcha isn't configured.
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const captchaRef = useRef<TurnstileHandle>(null);
+  function captchaReady() {
+    if (CAPTCHA_ENABLED && !captchaToken) {
+      toast.error("Please complete the security check");
+      return false;
+    }
+    return true;
+  }
 
   // Remember where to return after login (the page the user came from). Stored
   // so it survives the OTP→complete-profile and Google OAuth round-trips.
@@ -44,9 +57,11 @@ export default function LoginPage() {
       return;
     }
 
+    if (!captchaReady()) return;
+
     setLoading(true);
     try {
-      const { error } = await authService.signIn(email, password);
+      const { error } = await authService.signIn(email, password, captchaToken ?? undefined);
       if (error) throw error;
 
       toast.success("Logged in successfully!");
@@ -56,6 +71,7 @@ export default function LoginPage() {
       const msg = err instanceof Error ? err.message : "Login failed";
       toast.error(msg);
     } finally {
+      captchaRef.current?.reset();
       setLoading(false);
     }
   }
@@ -72,9 +88,11 @@ export default function LoginPage() {
       return;
     }
 
+    if (!captchaReady()) return;
+
     setLoading(true);
     try {
-      const result = await supabasePhoneOtpService.sendOtp(phone);
+      const result = await supabasePhoneOtpService.sendOtp(phone, captchaToken ?? undefined);
       if (!result.success) throw new Error(result.error);
 
       toast.success("OTP sent to your phone!");
@@ -84,16 +102,18 @@ export default function LoginPage() {
       const msg = err instanceof Error ? err.message : "Failed to send OTP";
       toast.error(msg);
     } finally {
+      captchaRef.current?.reset();
       setLoading(false);
     }
   }
 
   async function handleResendOtp() {
     if (resendTimer > 0 || loading) return;
+    if (!captchaReady()) return;
 
     setLoading(true);
     try {
-      const result = await supabasePhoneOtpService.sendOtp(phone);
+      const result = await supabasePhoneOtpService.sendOtp(phone, captchaToken ?? undefined);
       if (!result.success) throw new Error(result.error);
 
       toast.success("OTP resent to your phone!");
@@ -103,6 +123,7 @@ export default function LoginPage() {
       const msg = err instanceof Error ? err.message : "Failed to resend OTP";
       toast.error(msg);
     } finally {
+      captchaRef.current?.reset();
       setLoading(false);
     }
   }
@@ -389,6 +410,9 @@ export default function LoginPage() {
             </button>
           </form>
         )}
+
+        {/* Stays mounted across tabs/steps so it's ready for "Resend OTP" too */}
+        <Turnstile ref={captchaRef} onToken={setCaptchaToken} />
 
         <div className="border-t border-gray-100 pt-4">
           <p className="text-center text-sm text-gray-600">
