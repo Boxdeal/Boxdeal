@@ -1,6 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Search, Mail, Phone } from "lucide-react";
 import { formatPrice } from "@/lib/utils/format";
 import { getInitials } from "@/lib/utils/helpers";
@@ -16,6 +18,7 @@ export interface CustomerRow {
 }
 
 export function CustomersTable({ customers }: { customers: CustomerRow[] }) {
+  const router = useRouter();
   const [query, setQuery] = useState("");
 
   const filtered = useMemo(() => {
@@ -62,13 +65,23 @@ export function CustomersTable({ customers }: { customers: CustomerRow[] }) {
               </tr>
             )}
             {filtered.map((c) => (
-              <tr key={c.id} className="border-b border-gray-50 hover:bg-gray-50/50">
+              <tr
+                key={c.id}
+                onClick={() => router.push(`/admin/customers/${c.id}`)}
+                className="cursor-pointer border-b border-gray-50 hover:bg-gray-50"
+              >
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-3">
                     <div className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-100 text-xs font-bold text-brand-700">
                       {getInitials(c.name) || "U"}
                     </div>
-                    <span className="font-medium text-gray-900">{c.name || "Unnamed"}</span>
+                    <Link
+                      href={`/admin/customers/${c.id}`}
+                      onClick={(e) => e.stopPropagation()}
+                      className="font-medium text-gray-900 hover:text-brand-600"
+                    >
+                      {c.name || "Unnamed"}
+                    </Link>
                   </div>
                 </td>
                 <td className="px-4 py-3 text-gray-600">

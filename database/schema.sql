@@ -238,6 +238,14 @@ CREATE TABLE public.wishlists (
   PRIMARY KEY (user_id, product_id)
 );
 
+-- Server copy of the browser cart, synced for logged-in customers so the
+-- admin Customers page can show it. See database/customer_activity.sql.
+CREATE TABLE public.user_carts (
+  user_id    uuid PRIMARY KEY REFERENCES auth.users (id) ON DELETE CASCADE,
+  items      jsonb NOT NULL DEFAULT '[]'::jsonb,   -- [{ product_id, quantity, price, name }]
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
 CREATE TABLE public.reviews (
   id                   uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
   product_id           uuid NOT NULL REFERENCES public.products (id),
@@ -557,6 +565,7 @@ ALTER TABLE orders                 ENABLE ROW LEVEL SECURITY;
 ALTER TABLE order_items            ENABLE ROW LEVEL SECURITY;
 ALTER TABLE order_status_history   ENABLE ROW LEVEL SECURITY;
 ALTER TABLE wishlists              ENABLE ROW LEVEL SECURITY;
+ALTER TABLE user_carts             ENABLE ROW LEVEL SECURITY;  -- service role only
 ALTER TABLE reviews                ENABLE ROW LEVEL SECURITY;
 ALTER TABLE coupons                ENABLE ROW LEVEL SECURITY;
 

@@ -14,6 +14,7 @@ import { PriceDisplay } from "@/components/shared/PriceDisplay";
 import { cn } from "@/lib/utils/helpers";
 import type { ProductCard as ProductCardType } from "@/types";
 import { toast } from "sonner";
+import { useRequireLogin } from "@/hooks/useRequireLogin";
 
 interface ProductCardProps {
   product: ProductCardType;
@@ -25,6 +26,7 @@ function ProductCardComponent({ product, isDeal }: ProductCardProps) {
   const dispatch = useAppDispatch();
   const router = useRouter();
   const isWishlisted = useIsWishlisted(product.id);
+  const requireLogin = useRequireLogin();
 
   function cartPayload() {
     return {
@@ -39,22 +41,25 @@ function ProductCardComponent({ product, isDeal }: ProductCardProps) {
     };
   }
 
-  function handleAddToCart(e: React.MouseEvent) {
+  async function handleAddToCart(e: React.MouseEvent) {
     e.preventDefault();
+    if (!(await requireLogin("cart"))) return;
     dispatch(addItem(cartPayload()));
     dispatch(openCart());
     toast.success("Added to cart!");
   }
 
-  function handleBuyNow(e: React.MouseEvent) {
+  async function handleBuyNow(e: React.MouseEvent) {
     e.preventDefault();
+    if (!(await requireLogin("cart"))) return;
     // Add to cart and go straight to checkout (don't open the drawer).
     dispatch(addItem(cartPayload()));
     router.push("/checkout");
   }
 
-  function handleWishlist(e: React.MouseEvent) {
+  async function handleWishlist(e: React.MouseEvent) {
     e.preventDefault();
+    if (!(await requireLogin("wishlist"))) return;
     dispatch(toggleWishlist(product.id));
     toast.success(isWishlisted ? "Removed from wishlist" : "Added to wishlist");
   }

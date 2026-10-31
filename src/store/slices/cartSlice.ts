@@ -44,6 +44,13 @@ const cartSlice = createSlice({
       }
     },
 
+    // Replace every item at once — used by the account sync, which merges the
+    // saved cart from other devices into this one.
+    setCartItems(state, action: PayloadAction<CartItem[]>) {
+      state.items = action.payload;
+      if (state.items.length === 0) state.coupon = null;
+    },
+
     clearCart(state) {
       state.items = [];
       state.coupon = null;
@@ -66,6 +73,7 @@ export const {
   addItem,
   removeItem,
   updateQuantity,
+  setCartItems,
   clearCart,
   applyCoupon,
   removeCoupon,

@@ -9,6 +9,7 @@ import { toggleWishlist } from "@/store/slices/wishlistSlice";
 import { openCart } from "@/store/slices/uiSlice";
 import { cn } from "@/lib/utils/helpers";
 import { toast } from "sonner";
+import { useRequireLogin } from "@/hooks/useRequireLogin";
 import type { Product } from "@/types";
 
 export function AddToCartButton({ product }: { product: Product }) {
@@ -16,6 +17,7 @@ export function AddToCartButton({ product }: { product: Product }) {
   const dispatch = useAppDispatch();
   const router = useRouter();
   const isWishlisted = useIsWishlisted(product.id);
+  const requireLogin = useRequireLogin();
   const outOfStock = product.stock_quantity <= 0;
 
   const primaryImage =
@@ -36,13 +38,15 @@ export function AddToCartButton({ product }: { product: Product }) {
     };
   }
 
-  function handleAddToCart() {
+  async function handleAddToCart() {
+    if (!(await requireLogin("cart"))) return;
     dispatch(addItem(cartPayload()));
     dispatch(openCart());
     toast.success("Added to cart!");
   }
 
-  function handleBuyNow() {
+  async function handleBuyNow() {
+    if (!(await requireLogin("cart"))) return;
     // Add to cart and go straight to checkout.
     dispatch(addItem(cartPayload()));
     router.push("/checkout");
@@ -91,7 +95,8 @@ export function AddToCartButton({ product }: { product: Product }) {
           </button>
 
           <button
-            onClick={() => {
+            onClick={async () => {
+              if (!(await requireLogin("wishlist"))) return;
               dispatch(toggleWishlist(product.id));
               toast.success(isWishlisted ? "Removed from wishlist" : "Added to wishlist");
             }}

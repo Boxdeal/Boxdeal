@@ -5,6 +5,7 @@ import { Footer } from "@/components/layout/Footer";
 import { MobileMenu } from "@/components/layout/MobileMenu";
 import { SearchOverlay } from "@/components/layout/SearchOverlay";
 import { CartDrawer } from "@/components/cart/CartDrawer";
+import { CustomerActivitySync } from "@/components/shared/CustomerActivitySync";
 
 export const revalidate = 3600;
 
@@ -22,6 +23,7 @@ export default function ShopLayout({ children }: { children: React.ReactNode }) 
       <MobileMenu />
       <SearchOverlay />
       <CartDrawer />
+      <CustomerActivitySync />
       <main className="flex-1">{children}</main>
       <Footer />
     </div>

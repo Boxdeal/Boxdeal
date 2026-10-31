@@ -17,9 +17,13 @@ const wishlistSlice = createSlice({
         state.productIds.splice(idx, 1);
       }
     },
+    // Replace the whole list — used by the account sync.
+    setWishlist(state, action: PayloadAction<string[]>) {
+      state.productIds = action.payload;
+    },
   },
 });
 
-export const { toggleWishlist } = wishlistSlice.actions;
+export const { toggleWishlist, setWishlist } = wishlistSlice.actions;
 
 export default wishlistSlice.reducer;

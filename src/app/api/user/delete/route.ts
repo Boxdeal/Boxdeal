@@ -60,6 +60,11 @@ export async function DELETE(request: NextRequest) {
       headers,
     });
 
+    await fetch(`${deleteUrl}/user_carts?user_id=eq.${userId}`, {
+      method: "DELETE",
+      headers,
+    });
+
     await fetch(`${deleteUrl}/reviews?user_id=eq.${userId}`, {
       method: "DELETE",
       headers,
