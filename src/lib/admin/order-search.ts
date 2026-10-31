@@ -1,3 +1,4 @@
+import { listAllAuthUsers } from "./fetch-all";
 import { getSupabaseAdminClient } from "@/lib/supabase/server";
 
 // Free-text search for the admin orders list. One box has to cover everything
@@ -104,9 +105,10 @@ async function findUserIds(admin: Admin, q: string, pattern: string): Promise<st
   for (const p of profiles ?? []) ids.add(p.id as string);
 
   if (q.includes("@")) {
-    const { data } = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 });
+    // All pages — the first 1000 users missed every newer customer.
+    const users = await listAllAuthUsers(admin);
     const needle = q.toLowerCase();
-    for (const u of data?.users ?? []) {
+    for (const u of users) {
       if (u.email?.toLowerCase().includes(needle)) ids.add(u.id);
     }
   }

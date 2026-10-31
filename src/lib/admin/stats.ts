@@ -1,3 +1,4 @@
+import { fetchAllRows } from "@/lib/admin/fetch-all";
 import { getSupabaseAdminClient } from "@/lib/supabase/server";
 import { istDayKey, istDayStart, addDaysKey } from "@/lib/admin/periods";
 import { countsAsRevenue, LIVE_ORDER_STATUSES, REVENUE_STATUSES } from "@/lib/admin/order-buckets";
@@ -35,7 +36,10 @@ export async function getAdminDashboard(): Promise<{
   const fetchSince = chartStart < startOfMonth ? chartStart : startOfMonth;
 
   const [ordersRes, pendingRes, overdueRes, productsRes, customersRes, recentRes] = await Promise.all([
-    admin.from("orders").select("placed_at, total_amount, payment_status, payment_method, status").gte("placed_at", fetchSince.toISOString()),
+    fetchAllRows<{ placed_at: string; total_amount: number; payment_status: string; payment_method: string; status: string }>((from, to) =>
+      admin.from("orders").select("placed_at, total_amount, payment_status, payment_method, status")
+        .gte("placed_at", fetchSince.toISOString()).order("id").range(from, to)
+    ).then((data) => ({ data })),
     // "Pending" / "overdue" mean waiting to be PACKED, so they track confirmed
     // orders only — an order still at "placed" was never paid for (see
     // lib/admin/order-buckets) and belongs in the Failed tab, not on the
@@ -112,11 +116,16 @@ export async function getAdminDashboard(): Promise<{
 export async function getTopProducts(limit = 10): Promise<TopProduct[]> {
   const admin = getSupabaseAdminClient();
 
-  const { data: items } = await admin
-    .from("order_items")
-    .select("product_id, product_name, quantity, selling_price, orders!inner(status, payment_status)")
-    .in("orders.status", REVENUE_STATUSES)
-    .neq("orders.payment_status", "failed");
+  // Paged — every line item ever sold, well past the 1000-row ceiling.
+  const items = await fetchAllRows((from, to) =>
+    admin
+      .from("order_items")
+      .select("product_id, product_name, quantity, selling_price, orders!inner(status, payment_status)")
+      .in("orders.status", REVENUE_STATUSES)
+      .neq("orders.payment_status", "failed")
+      .order("id")
+      .range(from, to)
+  );
 
   const map = new Map<string, TopProduct>();
   for (const it of (items ?? []) as Array<{ product_id: string; product_name: string; quantity: number; selling_price: number }>) {

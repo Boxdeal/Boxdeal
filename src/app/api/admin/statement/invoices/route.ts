@@ -1,3 +1,4 @@
+import { fetchAllResult } from "@/lib/admin/fetch-all";
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdminClient } from "@/lib/supabase/server";
 import { requireAdmin } from "@/lib/supabase/admin-guard";
@@ -37,18 +38,19 @@ export async function GET(req: NextRequest) {
   const to = range.end.toISOString();
   const admin = getSupabaseAdminClient();
 
-  const { data, error } = kind === "issued"
-    ? await admin.from("orders").select(INVOICE_ORDER_SELECT)
+  // Paged — a plain .limit() is still capped at 1000 rows by the API.
+  const { data, error } = await fetchAllResult((f, t) => kind === "issued"
+    ? admin.from("orders").select(INVOICE_ORDER_SELECT)
         .not("invoice_number", "is", null).not("delivered_at", "is", null)
         .gte("invoice_date", from).lt("invoice_date", to)
-        .order("invoice_number", { ascending: true })
-        .limit(10000)
-    : await admin.from("orders").select(INVOICE_ORDER_SELECT)
+        .order("invoice_number", { ascending: true }).order("id")
+        .range(f, t)
+    : admin.from("orders").select(INVOICE_ORDER_SELECT)
         .neq("payment_method", "cod").in("status", REVENUE_STATUSES).eq("payment_status", "paid")
         .is("invoice_number", null)
         .gte("placed_at", from).lt("placed_at", to)
-        .order("placed_at", { ascending: true })
-        .limit(10000);
+        .order("placed_at", { ascending: true }).order("id")
+        .range(f, t));
 
   if (error) return NextResponse.json({ error: "Could not load the invoices." }, { status: 500 });
 

@@ -1,3 +1,4 @@
+import { fetchAllResult } from "@/lib/admin/fetch-all";
 import { fromZonedTime, formatInTimeZone } from "date-fns-tz";
 import { getSupabaseAdminClient } from "@/lib/supabase/server";
 import { orderBucket, returnKind, REVENUE_STATUSES } from "@/lib/admin/order-buckets";
@@ -271,24 +272,24 @@ export async function getMonthlyStatement(month: string): Promise<MonthlyStateme
 
   const [placedRes, deliveredRes, prepaidRes, invoicedRes, returnedRes, voidedRes] = await Promise.all([
     // Activity — every order raised this month, whatever became of it.
-    admin.from("orders").select(SLIM)
-      .gte("placed_at", from).lt("placed_at", to).limit(10000),
+    fetchAllResult((f, t) => admin.from("orders").select(SLIM)
+      .gte("placed_at", from).lt("placed_at", to).order("id").range(f, t)),
     // Money earned (COD) — cash that landed with a parcel delivered this month.
-    admin.from("orders").select(`${SLIM}, items:order_items(product_name, product_sku, quantity, selling_price)`)
+    fetchAllResult((f, t) => admin.from("orders").select(`${SLIM}, items:order_items(product_name, product_sku, quantity, selling_price)`)
       .eq("payment_method", "cod").eq("status", "delivered").eq("payment_status", "paid")
-      .gte("delivered_at", from).lt("delivered_at", to).limit(10000),
+      .gte("delivered_at", from).lt("delivered_at", to).order("id").range(f, t)),
     // Money earned (online) — paid at checkout this month. Delivery is irrelevant
     // here: the money is already in hand.
-    admin.from("orders").select(`${SLIM}, invoice_number, items:order_items(product_name, product_sku, quantity, selling_price)`)
+    fetchAllResult((f, t) => admin.from("orders").select(`${SLIM}, invoice_number, items:order_items(product_name, product_sku, quantity, selling_price)`)
       .neq("payment_method", "cod").in("status", REVENUE_STATUSES).eq("payment_status", "paid")
-      .gte("placed_at", from).lt("placed_at", to).limit(10000),
+      .gte("placed_at", from).lt("placed_at", to).order("id").range(f, t)),
     // Tax owed — invoices raised this month. Only delivered parcels carry an
     // invoice; the delivered_at guard keeps a stray number on a cancelled or
     // RTO order out of the GST totals even if one ever slips through again.
-    admin.from("orders").select(`${SLIM}, invoice_number, invoice_date, items:order_items(${INVOICE_ITEM_SELECT})`)
+    fetchAllResult((f, t) => admin.from("orders").select(`${SLIM}, invoice_number, invoice_date, items:order_items(${INVOICE_ITEM_SELECT})`)
       .not("invoice_number", "is", null).not("delivered_at", "is", null)
       .gte("invoice_date", from).lt("invoice_date", to)
-      .order("invoice_number", { ascending: true }).limit(10000),
+      .order("invoice_number", { ascending: true }).order("id").range(f, t)),
     // Goods that came back. Keyed off the status-history entry rather than the
     // order's updated_at: that column moves on any later edit, so it would drag
     // an old return into whatever month someone last touched the order.

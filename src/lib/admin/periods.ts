@@ -1,3 +1,4 @@
+import { fetchAllRows } from "@/lib/admin/fetch-all";
 import { fromZonedTime, formatInTimeZone } from "date-fns-tz";
 import { getSupabaseAdminClient } from "@/lib/supabase/server";
 import { orderBucket, returnKind } from "@/lib/admin/order-buckets";
@@ -153,17 +154,26 @@ export async function getPeriodStats(
   const admin = getSupabaseAdminClient();
   const range = getISTPeriodRange(period, opts);
 
+  // Paged: "All time" and long custom ranges pass PostgREST's 1000-row cap.
   const [curRes, prevRes] = await Promise.all([
-    admin
-      .from("orders")
-      .select("placed_at, delivered_at, total_amount, payment_status, payment_method, status")
-      .gte("placed_at", range.start.toISOString())
-      .lte("placed_at", range.end.toISOString()),
-    admin
-      .from("orders")
-      .select("total_amount, payment_status, status")
-      .gte("placed_at", range.prev.start.toISOString())
-      .lte("placed_at", range.prev.end.toISOString()),
+    fetchAllRows((from, to) =>
+      admin
+        .from("orders")
+        .select("placed_at, delivered_at, total_amount, payment_status, payment_method, status")
+        .gte("placed_at", range.start.toISOString())
+        .lte("placed_at", range.end.toISOString())
+        .order("id")
+        .range(from, to)
+    ).then((data) => ({ data })),
+    fetchAllRows((from, to) =>
+      admin
+        .from("orders")
+        .select("total_amount, payment_status, status")
+        .gte("placed_at", range.prev.start.toISOString())
+        .lte("placed_at", range.prev.end.toISOString())
+        .order("id")
+        .range(from, to)
+    ).then((data) => ({ data })),
   ]);
 
   const rows = (curRes.data ?? []) as OrderRow[];

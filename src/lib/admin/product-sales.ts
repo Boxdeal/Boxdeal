@@ -1,3 +1,4 @@
+import { fetchAllRows } from "@/lib/admin/fetch-all";
 import { getSupabaseAdminClient } from "@/lib/supabase/server";
 import { getISTPeriodRange, istDayKey } from "@/lib/admin/periods";
 import { orderBucket } from "@/lib/admin/order-buckets";
@@ -79,16 +80,16 @@ async function fetchItems(
   const admin = getSupabaseAdminClient();
   const range = getISTPeriodRange(period, opts);
 
-  let q = admin
-    .from("order_items")
-    .select(SELECT)
-    .gte("orders.placed_at", range.start.toISOString())
-    .lte("orders.placed_at", range.end.toISOString());
-
-  if (opts.productId) q = q.eq("product_id", opts.productId);
-
-  const { data } = await q;
-  return (data ?? []) as unknown as ItemRow[];
+  // Paged past the 1000-row ceiling — line items outnumber orders.
+  return fetchAllRows<ItemRow>((from, to) => {
+    let q = admin
+      .from("order_items")
+      .select(SELECT)
+      .gte("orders.placed_at", range.start.toISOString())
+      .lte("orders.placed_at", range.end.toISOString());
+    if (opts.productId) q = q.eq("product_id", opts.productId);
+    return q.order("id").range(from, to);
+  });
 }
 
 /** Empty per-product totals — identity fields filled from any line of the product. */

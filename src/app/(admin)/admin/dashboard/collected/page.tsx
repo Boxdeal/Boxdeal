@@ -1,3 +1,4 @@
+import { fetchAllRows } from "@/lib/admin/fetch-all";
 import type { Metadata } from "next";
 import Link from "next/link";
 import {
@@ -90,20 +91,27 @@ export default async function CollectedMoneyPage({ searchParams }: Props) {
   // orders drop out on their own (not "paid" / not a live status).
   const start = range.start.toISOString();
   const end = range.end.toISOString();
-  const paidQuery = admin
-    .from("orders").select("*")
-    .in("status", REVENUE_STATUSES).eq("payment_status", "paid")
-    .gte("placed_at", start).lte("placed_at", end)
-    .limit(10000);
+  // Paged — .limit(10000) is still capped at 1000 rows by the API.
+  const paidQuery = fetchAllRows((from, to) =>
+    admin
+      .from("orders").select("*")
+      .in("status", REVENUE_STATUSES).eq("payment_status", "paid")
+      .gte("placed_at", start).lte("placed_at", end)
+      .order("id").range(from, to)
+  ).then((data) => ({ data }));
 
   // Money that came in and then left again — refunds, plus cash sitting with us
   // on orders that came back and still owe the customer a refund.
-  const outQuery = admin
-    .from("orders")
-    .select("total_amount, payment_status, status")
-    .or("payment_status.in.(refunded,partially_refunded),and(status.eq.returned,payment_status.eq.paid)")
-    .gte("placed_at", start)
-    .lte("placed_at", end);
+  const outQuery = fetchAllRows((from, to) =>
+    admin
+      .from("orders")
+      .select("total_amount, payment_status, status")
+      .or("payment_status.in.(refunded,partially_refunded),and(status.eq.returned,payment_status.eq.paid)")
+      .gte("placed_at", start)
+      .lte("placed_at", end)
+      .order("id")
+      .range(from, to)
+  ).then((data) => ({ data }));
 
   const [{ data: paidRows }, { data: outRows }] = await Promise.all([paidQuery, outQuery]);
 
