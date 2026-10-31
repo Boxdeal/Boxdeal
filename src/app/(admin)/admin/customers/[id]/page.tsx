@@ -73,7 +73,7 @@ function Section({
 
 function Detail({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div>
+    <div className="min-w-0">
       <dt className="text-xs text-gray-400">{label}</dt>
       <dd className="mt-0.5 break-words text-sm text-gray-900">{children}</dd>
     </div>
@@ -95,12 +95,30 @@ function stockFlag(p: ProductInfo | undefined): { label: string; cls: string } |
   return null;
 }
 
+// Filters for the orders list; the summary cards link straight to one.
+const ORDER_FILTERS = {
+  all:       { label: "All",                          match: () => true },
+  revenue:   { label: "Confirmed → delivered",        match: (o: Order) => orderBucket(o) === "revenue" },
+  paid:      { label: "Paid",                         match: (o: Order) => o.payment_status === "paid" },
+  cod:       { label: "COD",                          match: (o: Order) => o.payment_method === "cod" },
+  problem:   { label: "Failed / cancelled / returned", match: (o: Order) => orderBucket(o) !== "revenue" },
+  failed:    { label: "Failed",                       match: (o: Order) => orderBucket(o) === "failed" },
+  cancelled: { label: "Cancelled",                    match: (o: Order) => orderBucket(o) === "cancelled" },
+  returned:  { label: "Returned",                     match: (o: Order) => orderBucket(o) === "returned" },
+} satisfies Record<string, { label: string; match: (o: Order) => boolean }>;
+
+type OrderFilter = keyof typeof ORDER_FILTERS;
+
 export default async function AdminCustomerDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ show?: string }>;
 }) {
   const { id } = await params;
+  const { show: showParam } = await searchParams;
+  const show: OrderFilter = showParam && showParam in ORDER_FILTERS ? (showParam as OrderFilter) : "all";
   if (!/^[0-9a-f-]{36}$/i.test(id)) notFound();
   const admin = getSupabaseAdminClient();
 
@@ -203,12 +221,14 @@ export default async function AdminCustomerDetailPage({
           value={revenueCount}
           subtitle={`${orders.length} placed in total · ${cod} COD`}
           icon={ShoppingBag}
+          href={`/admin/customers/${id}?show=revenue#orders`}
         />
         <StatsCard
           title="Order value"
           value={formatPrice(revenueValue)}
           subtitle={`Average ${formatPrice(avgOrder)} per order`}
           icon={IndianRupee}
+          href={`/admin/customers/${id}?show=revenue#orders`}
         />
         <StatsCard
           title="Money received"
@@ -216,6 +236,7 @@ export default async function AdminCustomerDetailPage({
           subtitle="Orders with payment marked paid"
           icon={Wallet}
           variant="success"
+          href={`/admin/customers/${id}?show=paid#orders`}
         />
         <StatsCard
           title="Failed / cancelled / returned"
@@ -223,19 +244,21 @@ export default async function AdminCustomerDetailPage({
           subtitle={lastOrder ? `Last order ${formatDate(lastOrder)}` : "No orders yet"}
           icon={AlertTriangle}
           variant={failed + cancelled + returned > 0 ? "warning" : "default"}
+          href={`/admin/customers/${id}?show=problem#orders`}
         />
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid gap-6 lg:grid-cols-2 [&>*]:min-w-0">
         {/* ── Details ── */}
         <Section title="Customer details" icon={Package}>
           <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Detail label="Name">{name || "—"}</Detail>
             <Detail label="Email">
               {email ? (
-                <span className="flex flex-wrap items-center gap-2">
-                  <a href={`mailto:${email}`} className="inline-flex items-center gap-1 text-brand-600 hover:underline">
-                    <Mail className="h-3.5 w-3.5" /> {email}
+                <span className="flex min-w-0 flex-wrap items-center gap-2">
+                  <a href={`mailto:${email}`} className="flex min-w-0 max-w-full items-start gap-1 text-brand-600 hover:underline">
+                    <Mail className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
+                    <span className="min-w-0 break-all">{email}</span>
                   </a>
                   <span className={cn(
                     "rounded-full px-2 py-0.5 text-[11px] font-semibold",
@@ -383,14 +406,31 @@ export default async function AdminCustomerDetailPage({
       </Section>
 
       {/* ── Orders ── */}
-      <div className="space-y-3">
+      <div id="orders" className="scroll-mt-6 space-y-3">
         <h2 className="flex items-center gap-2 font-semibold text-gray-900">
-          <ShoppingBag className="h-4 w-4 text-gray-400" /> All orders
+          <ShoppingBag className="h-4 w-4 text-gray-400" /> Orders
           <span className="text-xs font-normal text-gray-400">
-            {orders.length} — including failed and cancelled
+            {orders.length} in total — including failed and cancelled
           </span>
         </h2>
-        <OrdersTable orders={orders} />
+        <div className="flex flex-wrap gap-2">
+          {(Object.keys(ORDER_FILTERS) as OrderFilter[]).map((f) => (
+            <Link
+              key={f}
+              href={f === "all" ? `/admin/customers/${id}#orders` : `/admin/customers/${id}?show=${f}#orders`}
+              className={cn(
+                "rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+                show === f
+                  ? "border-brand-500 bg-brand-50 text-brand-700"
+                  : "border-gray-200 bg-white text-gray-600 hover:border-gray-300"
+              )}
+            >
+              {ORDER_FILTERS[f].label}
+              <span className="ml-1.5 text-gray-400">{orders.filter(ORDER_FILTERS[f].match).length}</span>
+            </Link>
+          ))}
+        </div>
+        <OrdersTable orders={orders.filter(ORDER_FILTERS[show].match)} />
       </div>
     </div>
   );
