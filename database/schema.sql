@@ -203,7 +203,19 @@ CREATE TABLE public.orders (
   admin_discount         numeric NOT NULL DEFAULT 0,
   -- GST invoice identity. NULL until issued; see PART 3.
   invoice_number         text,
-  invoice_date           timestamptz
+  invoice_date           timestamptz,
+  -- Shipping cost tracking + parcel override; see database/shipping_quality.sql.
+  quoted_courier_id      integer,
+  quoted_courier_name    text,
+  quoted_rate            numeric,
+  quoted_weight_kg       numeric,
+  parcel_length_cm       numeric,
+  parcel_breadth_cm      numeric,
+  parcel_height_cm       numeric,
+  parcel_weight_kg       numeric,
+  shipped_weight_kg      numeric,
+  shipping_cost          numeric,
+  shipping_cost_extra    numeric NOT NULL DEFAULT 0
 );
 
 CREATE TABLE public.order_items (

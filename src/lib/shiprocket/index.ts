@@ -1,5 +1,6 @@
 import type { Order, OrderItem } from "@/types";
-import { computePackage } from "@/lib/shipping/package";
+import { computePackage, type ParcelPackage } from "@/lib/shipping/package";
+import { getRtoTable, rtoRateFor, expectedCost } from "@/lib/shipping/courier-quality";
 
 const BASE_URL = "https://apiv2.shiprocket.in/v1/external";
 
@@ -54,15 +55,26 @@ export function getTrackingUrl(awb: string): string {
 }
 
 export type DeliveryRate =
-  | { serviceable: true; rate: number; courierId: number; courierName: string | null }
-  | { serviceable: false; rate: null; courierId: null; courierName: null };
+  | { serviceable: true; rate: number; courierId: number; courierName: string | null; rtoRate: number }
+  | { serviceable: false; rate: null; courierId: null; courierName: null; rtoRate: null };
+
+/** One courier Shiprocket can use for a shipment, with its full cost. */
+export interface CourierOption {
+  courierId:   number;
+  courierName: string | null;
+  /** What Shiprocket debits: freight + COD charge + "Auto Secured" coverage. */
+  cost:        number;
+}
 
 /**
  * Fetch the live delivery rate from Shiprocket for a destination pincode.
- * Uses the courier serviceability API and returns the rate of the courier
- * Shiprocket would actually auto-assign (its recommended courier), falling back
- * to the cheapest available courier. `serviceable: false` means no courier
- * services the destination — the order should be blocked.
+ *
+ * Asks the courier serviceability API for every courier that covers the
+ * pincode, then picks the one with the lowest EXPECTED cost — its price with
+ * its RTO risk priced in (see lib/shipping/courier-quality). Checkout quotes
+ * and the courier forced at pack time both come from here, so the customer is
+ * charged for the courier that actually ships. `serviceable: false` means no
+ * courier services the destination — the order should be blocked.
  *
  * The returned rate is what Shiprocket actually debits for the shipment:
  * `rate` (freight + COD charge) plus `coverage_charges` (the "Auto Secured"
@@ -75,10 +87,6 @@ export type DeliveryRate =
  * @param weightKg         total package weight in kg
  * @param cod              true for cash-on-delivery, false for prepaid
  * @param declaredValue    order value in ₹ (drives COD charge + coverage)
- *
- * Answers are cached in memory for RATE_CACHE_TTL_MS per (pincode, weight,
- * COD, value): checkout re-quotes the same cart on every address / payment
- * toggle, and order creation repeats the quote moments later.
  */
 export async function getDeliveryRate(
   deliveryPincode: string,
@@ -86,37 +94,85 @@ export async function getDeliveryRate(
   cod = false,
   declaredValue?: number
 ): Promise<DeliveryRate> {
+  const options = await getCourierOptions(deliveryPincode, weightKg, cod, declaredValue);
+  if (options.length === 0) {
+    return { serviceable: false, rate: null, courierId: null, courierName: null, rtoRate: null };
+  }
+
+  const rto = await getRtoTable();
+  let best = options[0];
+  let bestScore = Infinity;
+  for (const o of options) {
+    const score = expectedCost(o.cost, rtoRateFor(rto, o.courierName));
+    // Ties go to the cheaper price.
+    if (score < bestScore || (score === bestScore && o.cost < best.cost)) {
+      best = o;
+      bestScore = score;
+    }
+  }
+
+  return {
+    serviceable: true,
+    rate:        best.cost,
+    courierId:   best.courierId,
+    courierName: best.courierName,
+    rtoRate:     rtoRateFor(rto, best.courierName),
+  };
+}
+
+/** Shiprocket's cost for one specific courier, or null if it isn't offered. */
+export async function getCourierCost(
+  deliveryPincode: string,
+  weightKg: number,
+  cod: boolean,
+  declaredValue: number | undefined,
+  courierId: number
+): Promise<number | null> {
+  const options = await getCourierOptions(deliveryPincode, weightKg, cod, declaredValue);
+  return options.find((o) => o.courierId === courierId)?.cost ?? null;
+}
+
+/**
+ * Every courier that covers the shipment, with its full cost. Empty when the
+ * pincode isn't serviceable. Throws only when Shiprocket itself errors.
+ *
+ * Answers are cached in memory for RATE_CACHE_TTL_MS per (pincode, weight,
+ * COD, value): checkout re-quotes the same cart on every address / payment
+ * toggle, and order creation repeats the quote moments later.
+ */
+async function getCourierOptions(
+  deliveryPincode: string,
+  weightKg: number,
+  cod: boolean,
+  declaredValue?: number
+): Promise<CourierOption[]> {
   const pickup = process.env.SHIPROCKET_PICKUP_PINCODE;
   if (!pickup) throw new Error("SHIPROCKET_PICKUP_PINCODE is not configured");
 
   const value = declaredValue && declaredValue > 0 ? Math.round(declaredValue) : 0;
   const key = `${pickup}|${deliveryPincode}|${weightKg}|${cod ? 1 : 0}|${value}`;
   const hit = rateCache.get(key);
-  if (hit && hit.expiresAt > Date.now()) return hit.rate;
+  if (hit && hit.expiresAt > Date.now()) return hit.options;
 
-  const { rate, cacheable } = await fetchDeliveryRate(pickup, deliveryPincode, weightKg, cod, value);
-  if (cacheable) {
-    if (rateCache.size >= RATE_CACHE_MAX) rateCache.clear();
-    rateCache.set(key, { rate, expiresAt: Date.now() + RATE_CACHE_TTL_MS });
-  }
-  return rate;
+  const options = await fetchCourierOptions(pickup, deliveryPincode, weightKg, cod, value);
+  if (rateCache.size >= RATE_CACHE_MAX) rateCache.clear();
+  rateCache.set(key, { options, expiresAt: Date.now() + RATE_CACHE_TTL_MS });
+  return options;
 }
 
 const RATE_CACHE_TTL_MS = 10 * 60 * 1000;
 const RATE_CACHE_MAX = 1000;
-const rateCache = new Map<string, { rate: DeliveryRate; expiresAt: number }>();
+const rateCache = new Map<string, { options: CourierOption[]; expiresAt: number }>();
 
-// One uncached serviceability lookup. `cacheable` is false when Shiprocket
-// errored, so a transient failure isn't remembered as "not serviceable".
-async function fetchDeliveryRate(
+// One uncached serviceability lookup. Throws when Shiprocket errors, so a
+// transient failure is never cached as "not serviceable".
+async function fetchCourierOptions(
   pickup: string,
   deliveryPincode: string,
   weightKg: number,
   cod: boolean,
   declaredValue: number
-): Promise<{ rate: DeliveryRate; cacheable: boolean }> {
-  const unserviceable: DeliveryRate = { serviceable: false, rate: null, courierId: null, courierName: null };
-
+): Promise<CourierOption[]> {
   const params = new URLSearchParams({
     pickup_postcode:   pickup,
     delivery_postcode: deliveryPincode,
@@ -126,7 +182,8 @@ async function fetchDeliveryRate(
   if (declaredValue > 0) params.set("declared_value", String(declaredValue));
 
   const res = await shiprocketFetch(`/courier/serviceability/?${params.toString()}`);
-  const data = await res.json();
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.message ?? "Shiprocket rate lookup failed");
 
   const couriers: Array<{
     courier_company_id: number;
@@ -135,31 +192,14 @@ async function fetchDeliveryRate(
     coverage_charges?:  number;
   }> = data?.data?.available_courier_companies ?? [];
 
-  if (!res.ok) return { rate: unserviceable, cacheable: false };
-  if (couriers.length === 0) return { rate: unserviceable, cacheable: true };
-
-  // Pick the cheapest available courier so the customer pays the lowest possible
-  // delivery charge for their pincode.
-  // Full cost Shiprocket debits: freight + COD charge + shipment coverage.
-  const totalCost = (c: (typeof couriers)[number]) =>
-    Number(c.rate ?? Infinity) + (Number(c.coverage_charges) || 0);
-
-  const chosen = couriers.reduce((cheapest, c) =>
-    totalCost(c) < totalCost(cheapest) ? c : cheapest
-  );
-
-  const rate = totalCost(chosen);
-  if (!Number.isFinite(rate)) return { rate: unserviceable, cacheable: true };
-
-  return {
-    rate: {
-      serviceable: true,
-      rate,
-      courierId:   chosen.courier_company_id,
-      courierName: chosen.courier_name ?? null,
-    },
-    cacheable: true,
-  };
+  const out: CourierOption[] = [];
+  for (const c of couriers) {
+    // Full cost Shiprocket debits: freight + COD charge + shipment coverage.
+    const cost = Number(c.rate) + (Number(c.coverage_charges) || 0);
+    if (!Number.isFinite(cost) || c.rate == null) continue;
+    out.push({ courierId: Number(c.courier_company_id), courierName: c.courier_name ?? null, cost });
+  }
+  return out;
 }
 
 // Order item enriched with the product's physical attributes (joined from
@@ -182,7 +222,10 @@ export async function createShiprocketOrder(
   // Channel order_id to register on Shiprocket. Defaults to our order_number, but
   // a re-ship (after a prior cancellation) must pass a unique value — Shiprocket
   // dedupes ad-hoc orders by this id and would otherwise return the old shipment.
-  channelOrderId?: string
+  channelOrderId?: string,
+  // The parcel to declare. Defaults to the computed box; pass the resolved one
+  // when the admin measured the real box (resolveParcel).
+  parcel?: ParcelPackage
 ) {
   const items = (order.items ?? []) as ShipmentItem[];
 
@@ -196,7 +239,7 @@ export async function createShiprocketOrder(
   // Same sizing as the checkout quote: every unit of every item, chargeable
   // weight + combined box — so the label, Shiprocket's bill and the customer's
   // delivery charge all agree.
-  const { chargeableKg, length, breadth, height } = computePackage(items);
+  const { chargeableKg, length, breadth, height } = parcel ?? computePackage(items);
 
   const res = await shiprocketFetch("/orders/create/adhoc", {
     method: "POST",
@@ -260,10 +303,11 @@ export async function generateAWB(shipmentId: number, courierId?: number) {
   const d = data?.response?.data ?? {};
   const awb_code     = d.awb_code     ?? data.awb_code     ?? null;
   const courier_name = d.courier_name ?? data.courier_name ?? null;
+  const courier_id   = Number(d.courier_company_id ?? data.courier_company_id) || null;
 
   if (!awb_code) throw new Error(data.message ?? "No courier could be assigned (check serviceability / wallet balance)");
 
-  return { awb_code: String(awb_code), courier_name: courier_name as string | null };
+  return { awb_code: String(awb_code), courier_name: courier_name as string | null, courier_id };
 }
 
 export async function schedulePickup(shipmentIds: number[]) {
@@ -310,6 +354,45 @@ export async function cancelShiprocketOrder(shiprocketOrderId: string | number) 
   const msg = String(data?.message ?? "");
   if (!res.ok && !/already|cancel/i.test(msg)) {
     throw new Error(msg || "Shiprocket order cancellation failed");
+  }
+  return data;
+}
+
+/** A delivery address as Shiprocket's order API names its fields. */
+export interface ShiprocketAddress {
+  name:     string;
+  phone:    string;
+  address1: string;
+  address2: string | null;
+  city:     string;
+  state:    string;
+  pincode:  string;
+}
+
+/**
+ * Change the delivery address on an order already pushed to Shiprocket.
+ * Shiprocket refuses once the parcel is picked up; its message is passed on.
+ */
+export async function updateShiprocketAddress(shiprocketOrderId: string | number, a: ShiprocketAddress) {
+  const res = await shiprocketFetch("/orders/address/update", {
+    method: "POST",
+    body: JSON.stringify({
+      order_id:               Number(shiprocketOrderId),
+      shipping_customer_name: a.name,
+      shipping_phone:         a.phone,
+      shipping_address:       a.address1,
+      shipping_address_2:     a.address2 ?? "",
+      shipping_city:          a.city,
+      shipping_state:         a.state,
+      shipping_country:       "India",
+      shipping_pincode:       a.pincode,
+    }),
+  });
+  // A success can come back with an empty body.
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const detail = data?.errors ? ` ${JSON.stringify(data.errors)}` : "";
+    throw new Error(`${data?.message ?? "Shiprocket address update failed"}${detail}`);
   }
   return data;
 }

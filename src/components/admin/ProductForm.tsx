@@ -1,5 +1,6 @@
 "use client";
 
+import { productParcelError } from "@/lib/shipping/package";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
@@ -123,6 +124,13 @@ export function ProductForm({ categories, subcategories, brands, product }: Prod
     }
     if (sellNum > mrpNum) {
       toast.error("Selling price cannot be more than MRP");
+      return;
+    }
+    // The delivery charge and the Shiprocket parcel are built from these — a 0
+    // silently under-charges delivery.
+    const parcelError = productParcelError(form as unknown as Record<string, unknown>);
+    if (parcelError) {
+      toast.error(parcelError);
       return;
     }
     if (existingImages.length === 0 && newFiles.length === 0) {
@@ -299,20 +307,20 @@ export function ProductForm({ categories, subcategories, brands, product }: Prod
             <input type="number" min="0" className={inputCls} value={form.low_stock_threshold} onChange={(e) => set("low_stock_threshold", e.target.value)} />
           </div>
           <div>
-            <label className={labelCls}>Weight (grams)</label>
-            <input type="number" min="0" className={inputCls} value={form.weight_grams} onChange={(e) => set("weight_grams", e.target.value)} />
+            <label className={labelCls}>Weight (grams) *</label>
+            <input type="number" min="1" className={inputCls} required value={form.weight_grams} onChange={(e) => set("weight_grams", e.target.value)} />
           </div>
           <div>
-            <label className={labelCls}>Length (cm)</label>
-            <input type="number" min="0" step="0.1" className={inputCls} value={form.length_cm} onChange={(e) => set("length_cm", e.target.value)} />
+            <label className={labelCls}>Length (cm) *</label>
+            <input type="number" min="0.1" step="0.1" className={inputCls} required value={form.length_cm} onChange={(e) => set("length_cm", e.target.value)} />
           </div>
           <div>
-            <label className={labelCls}>Breadth (cm)</label>
-            <input type="number" min="0" step="0.1" className={inputCls} value={form.breadth_cm} onChange={(e) => set("breadth_cm", e.target.value)} />
+            <label className={labelCls}>Breadth (cm) *</label>
+            <input type="number" min="0.1" step="0.1" className={inputCls} required value={form.breadth_cm} onChange={(e) => set("breadth_cm", e.target.value)} />
           </div>
           <div>
-            <label className={labelCls}>Height (cm)</label>
-            <input type="number" min="0" step="0.1" className={inputCls} value={form.height_cm} onChange={(e) => set("height_cm", e.target.value)} />
+            <label className={labelCls}>Height (cm) *</label>
+            <input type="number" min="0.1" step="0.1" className={inputCls} required value={form.height_cm} onChange={(e) => set("height_cm", e.target.value)} />
           </div>
         </div>
         <p className="text-xs text-gray-500">

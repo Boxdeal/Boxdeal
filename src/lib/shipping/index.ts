@@ -15,8 +15,19 @@ export function applyDeliveryCap(rate: number): number {
 export { computePackage, type WeighableItem, type ParcelPackage } from "./package";
 
 export type DeliveryQuote =
-  | { serviceable: true;  delivery_charge: number; courier_name: string | null }
-  | { serviceable: false; delivery_charge: null;   courier_name: null };
+  | {
+      serviceable: true;
+      /** What the customer pays: the courier's cost, capped at ₹499. */
+      delivery_charge: number;
+      courier_name: string | null;
+      /** Courier the charge came from — saved on the order and used at pack time. */
+      courier_id: number;
+      /** Shiprocket's full cost for that courier, before the cap. */
+      rate: number;
+      /** Chargeable weight the quote was priced on. */
+      weight_kg: number;
+    }
+  | { serviceable: false; delivery_charge: null; courier_name: null };
 
 /**
  * Compute the delivery charge for a cart shipping to `pincode`.
@@ -26,7 +37,9 @@ export type DeliveryQuote =
  * product's `weight_grams` and dimensions (fetched live from the DB, since cart
  * items don't carry them).
  *
- * The rate is Shiprocket's full debit (freight + COD charge + coverage). COD
+ * The courier is the one with the lowest expected cost (price + RTO risk, see
+ * getDeliveryRate). The rate is Shiprocket's full debit (freight + COD charge +
+ * coverage). COD
  * charge and coverage scale with the order value Shiprocket sees, which is
  * goods + this delivery charge — so the rate is re-fetched on goods + charge
  * until it settles. The customer's charge is the result capped at ₹499.
@@ -97,5 +110,8 @@ export async function getCartDeliveryQuote(
     serviceable:     true,
     delivery_charge: applyDeliveryCap(final.rate),
     courier_name:    final.courierName,
+    courier_id:      final.courierId,
+    rate:            final.rate,
+    weight_kg:       chargeableKg,
   };
 }

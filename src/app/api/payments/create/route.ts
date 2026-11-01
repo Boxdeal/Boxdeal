@@ -1,8 +1,9 @@
+import { saveQuote } from "@/lib/orders/shipping-record";
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { getSupabaseAdminClient } from "@/lib/supabase/server";
 import { createRazorpayOrder } from "@/lib/razorpay/index";
-import { getCartDeliveryQuote } from "@/lib/shipping/index";
+import { getCartDeliveryQuote, type DeliveryQuote } from "@/lib/shipping/index";
 import { computeOrderPricing } from "@/lib/orders/pricing";
 import type { CartItem, Address } from "@/types";
 
@@ -39,8 +40,9 @@ export async function POST(req: NextRequest) {
   // cart weight (live Shiprocket rate, capped at ₹499). Never trust the charge
   // sent by the client. A non-serviceable pincode blocks the order entirely.
   let shipping_charge: number;
+  let quote: DeliveryQuote;
   try {
-    const quote = await getCartDeliveryQuote(admin, items, address.pincode, false, { goods: subtotal - discount });
+    quote = await getCartDeliveryQuote(admin, items, address.pincode, false, { goods: subtotal - discount });
     if (!quote.serviceable) {
       return NextResponse.json(
         { error: "Delivery isn't available to this pincode" },
@@ -100,6 +102,10 @@ export async function POST(req: NextRequest) {
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  // Which courier + cost this charge came from — used at pack time and in the
+  // shipping-cost report. Best-effort; never blocks the order.
+  await saveQuote(admin, dbOrder.id, quote);
 
   // Build batch insert for order items — from server-priced line items, so the
   // stored mrp/selling_price are the real DB prices, not whatever the client sent.

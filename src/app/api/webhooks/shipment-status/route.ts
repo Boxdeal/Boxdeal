@@ -87,6 +87,27 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, ignored: "order not found" });
   }
 
+  // ── 0. Stale shipment ──────────────────────────────────────────────────────
+  // An order can outlive a Shiprocket shipment: re-shipped after a pincode
+  // change, or restored after a cancellation. The old shipment's events
+  // ("CANCELED" above all) still carry our order number, so they match this
+  // order — and would cancel and refund a live order. When the payload names a
+  // Shiprocket order id that isn't the one this order holds, it is about a
+  // shipment we already let go of. With no Shiprocket id stored, it is only
+  // stale when the AWB is gone too (we detached it) — an order whose AWB was
+  // typed in by hand has no id either, and its events must still apply.
+  const stale = srOrderId
+    ? order.shiprocket_order_id
+      ? srOrderId !== String(order.shiprocket_order_id)
+      : !order.tracking_number
+    : false;
+  if (stale) {
+    console.warn("[sr-webhook] ignoring event for a detached shipment", {
+      order: order.order_number, payloadSrOrderId: srOrderId, current: order.shiprocket_order_id,
+    });
+    return NextResponse.json({ ok: true, ignored: "detached shipment" });
+  }
+
   // ── 1. Shipment details (AWB / courier) ────────────────────────────────────
   // Applied BEFORE any status handling and independently of it. A courier
   // reassignment in the Shiprocket panel issues a NEW AWB while the shipment

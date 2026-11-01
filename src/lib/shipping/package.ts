@@ -75,3 +75,68 @@ export function computePackage(items: WeighableItem[]): ParcelPackage {
 
   return { actualKg, volumetricKg, chargeableKg, length, breadth, height };
 }
+
+/** An admin's measured box for one order. Any field may be unset. */
+export interface ParcelOverride {
+  parcel_length_cm?:  number | null;
+  parcel_breadth_cm?: number | null;
+  parcel_height_cm?:  number | null;
+  parcel_weight_kg?:  number | null;
+}
+
+const positive = (v: unknown) => {
+  const n = Number(v);
+  return Number.isFinite(n) && n > 0 ? n : null;
+};
+
+/** True when the order carries a usable box size or weight from the admin. */
+export function hasParcelOverride(o: ParcelOverride): boolean {
+  const box = positive(o.parcel_length_cm) && positive(o.parcel_breadth_cm) && positive(o.parcel_height_cm);
+  return Boolean(box || positive(o.parcel_weight_kg));
+}
+
+/**
+ * The parcel that actually ships. Starts from `computePackage` and applies the
+ * admin's measured box and/or weight when set — the box only if all three
+ * sides are given. Chargeable weight is then re-derived the same way, so the
+ * override reaches Shiprocket's order, the courier choice and the cost record.
+ */
+export function resolveParcel(items: WeighableItem[], override: ParcelOverride = {}): ParcelPackage {
+  const base = computePackage(items);
+  const l = positive(override.parcel_length_cm);
+  const b = positive(override.parcel_breadth_cm);
+  const h = positive(override.parcel_height_cm);
+  const w = positive(override.parcel_weight_kg);
+  if (!(l && b && h) && !w) return base;
+
+  const length  = l && b && h ? Math.ceil(l) : base.length;
+  const breadth = l && b && h ? Math.ceil(b) : base.breadth;
+  const height  = l && b && h ? Math.ceil(h) : base.height;
+  const actualKg     = w ?? base.actualKg;
+  const volumetricKg = (length * breadth * height) / VOLUMETRIC_DIVISOR;
+  const chargeableKg = Math.ceil(Math.max(actualKg, volumetricKg, 0.1) * 100) / 100;
+  return { actualKg, volumetricKg, chargeableKg, length, breadth, height };
+}
+
+const PARCEL_FIELDS = ["weight_grams", "length_cm", "breadth_cm", "height_cm"] as const;
+const PARCEL_LABELS: Record<(typeof PARCEL_FIELDS)[number], string> = {
+  weight_grams: "Weight",
+  length_cm:    "Length",
+  breadth_cm:   "Breadth",
+  height_cm:    "Height",
+};
+
+/**
+ * A product must carry a real weight and box size — the delivery charge and
+ * the Shiprocket parcel are built from them, and a 0 silently under-charges.
+ * `partial` checks only the fields present (a PATCH that toggles a flag sends
+ * none of them). Returns an error message, or null when valid.
+ */
+export function productParcelError(b: Record<string, unknown>, partial = false): string | null {
+  const missing = PARCEL_FIELDS.filter((k) => {
+    if (partial && !(k in b)) return false;
+    return positive(b[k]) === null;
+  });
+  if (missing.length === 0) return null;
+  return `${missing.map((k) => PARCEL_LABELS[k]).join(", ")} must be more than 0 — the delivery charge is calculated from them.`;
+}

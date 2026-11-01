@@ -4,6 +4,9 @@ import { getSupabaseAdminClient } from "@/lib/supabase/server";
 import { OrderStatusUpdater } from "./OrderStatusUpdater";
 import { AdminDiscount } from "./AdminDiscount";
 import { TrackingEditor } from "./TrackingEditor";
+import { AddressEditor } from "./AddressEditor";
+import { ShippingPanel } from "./ShippingPanel";
+import { computePackage, resolveParcel, type WeighableItem } from "@/lib/shipping/package";
 import { InvoiceDownloadButton } from "@/components/shared/InvoiceDownloadButton";
 import { canInvoice } from "@/lib/invoice/availability";
 import { ORDER_STATUS_LABELS, ORDER_STATUS_COLORS } from "@/constants";
@@ -29,13 +32,24 @@ export default async function AdminOrderDetailPage({
     .from("orders")
     .select(`
       *,
-      items:order_items(*),
+      items:order_items(*, product:products(weight_grams, length_cm, breadth_cm, height_cm)),
       status_history:order_status_history(* )
     `)
     .eq("id", id)
     .single();
 
   if (!order) notFound();
+
+  // Parcel as calculated from the products, and as it will ship (with the
+  // admin's measured box, if any).
+  const weighable: WeighableItem[] = (order.items ?? []).map(
+    (it: { quantity: number; product?: Omit<WeighableItem, "quantity"> | null }) => ({ ...(it.product ?? {}), quantity: it.quantity })
+  );
+  const computedParcel = computePackage(weighable);
+  const resolvedParcel = resolveParcel(weighable, order);
+  // The shipping columns exist only once database/shipping_quality.sql has run.
+  const shippingMigrated = "shipping_cost_extra" in order;
+  const notLeft = ["placed", "confirmed", "packed"].includes(order.status);
 
   const { data: userProfile } = await admin
     .from("user_profiles")
@@ -116,6 +130,33 @@ export default async function AdminOrderDetailPage({
             courierName={order.courier_name}
             hasShiprocketOrder={!!order.shiprocket_order_id}
           />
+
+          {/* Quote vs actual shipping cost, and the parcel override */}
+          <ShippingPanel
+            orderId={order.id}
+            migrated={shippingMigrated}
+            customerCharge={Number(order.shipping_charge) || 0}
+            quoted={order.quoted_rate != null
+              ? { courier: order.quoted_courier_name ?? null, rate: Number(order.quoted_rate), weightKg: order.quoted_weight_kg != null ? Number(order.quoted_weight_kg) : null }
+              : null}
+            computed={computedParcel}
+            resolved={resolvedParcel}
+            override={{
+              length:   order.parcel_length_cm  != null ? Number(order.parcel_length_cm)  : null,
+              breadth:  order.parcel_breadth_cm != null ? Number(order.parcel_breadth_cm) : null,
+              height:   order.parcel_height_cm  != null ? Number(order.parcel_height_cm)  : null,
+              weightKg: order.parcel_weight_kg  != null ? Number(order.parcel_weight_kg)  : null,
+            }}
+            parcelEditable={notLeft && !order.shiprocket_order_id}
+            shipped={order.tracking_number
+              ? {
+                  courier:  order.courier_name,
+                  weightKg: order.shipped_weight_kg != null ? Number(order.shipped_weight_kg) : null,
+                  cost:     order.shipping_cost != null ? Number(order.shipping_cost) : null,
+                }
+              : null}
+            extra={Number(order.shipping_cost_extra) || 0}
+          />
         </div>
 
         <div className="space-y-4">
@@ -126,15 +167,21 @@ export default async function AdminOrderDetailPage({
             <p className="text-sm text-gray-500">{order.shipping_phone}</p>
           </div>
 
-          {/* Delivery */}
-          <div className="rounded-2xl border border-gray-100 bg-white p-4">
-            <h2 className="mb-3 font-semibold text-gray-900">Delivery Address</h2>
-            <p className="text-sm text-gray-700">
-              {order.shipping_full_name}<br />
-              {order.shipping_address1}{order.shipping_address2 ? `, ${order.shipping_address2}` : ""}<br />
-              {order.shipping_city}, {order.shipping_state} — {order.shipping_pincode}
-            </p>
-          </div>
+          {/* Delivery — editable until the parcel leaves */}
+          <AddressEditor
+            orderId={order.id}
+            editable={notLeft}
+            onShiprocket={!!order.shiprocket_order_id}
+            address={{
+              full_name: order.shipping_full_name,
+              phone:     order.shipping_phone,
+              address1:  order.shipping_address1,
+              address2:  order.shipping_address2,
+              city:      order.shipping_city,
+              state:     order.shipping_state,
+              pincode:   order.shipping_pincode,
+            }}
+          />
 
           {/* Payment */}
           <div className="rounded-2xl border border-gray-100 bg-white p-4">

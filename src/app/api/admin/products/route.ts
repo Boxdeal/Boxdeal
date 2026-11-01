@@ -1,3 +1,4 @@
+import { productParcelError } from "@/lib/shipping/package";
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServerClient, getSupabaseAdminClient } from "@/lib/supabase/server";
 
@@ -61,6 +62,9 @@ export async function POST(req: NextRequest) {
       { status: 400 }
     );
   }
+
+  const parcelError = productParcelError(b);
+  if (parcelError) return NextResponse.json({ error: parcelError }, { status: 400 });
 
   const mrp = Number(b.mrp);
   const selling = Number(b.selling_price);

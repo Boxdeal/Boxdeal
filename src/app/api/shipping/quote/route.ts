@@ -45,7 +45,14 @@ export async function POST(req: NextRequest) {
     // COD/coverage part of this display quote — order creation recomputes
     // everything server-side.
     const quote = await getCartDeliveryQuote(admin, items, pincode, cod ?? false, { discount });
-    return NextResponse.json({ data: quote });
+    // Only what checkout shows — our Shiprocket cost stays on the server.
+    return NextResponse.json({
+      data: {
+        serviceable:     quote.serviceable,
+        delivery_charge: quote.delivery_charge,
+        courier_name:    quote.courier_name,
+      },
+    });
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Could not fetch delivery rate" },

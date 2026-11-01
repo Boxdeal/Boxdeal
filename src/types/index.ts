@@ -229,6 +229,19 @@ export interface Order {
   // Null until then — the PDF itself is generated on demand, never stored.
   invoice_number: string | null;
   invoice_date: string | null;
+  // Shipping cost tracking (database/shipping_quality.sql). Optional: absent
+  // until that migration has run.
+  quoted_courier_id?: number | null;
+  quoted_courier_name?: string | null;
+  quoted_rate?: number | null;
+  quoted_weight_kg?: number | null;
+  parcel_length_cm?: number | null;
+  parcel_breadth_cm?: number | null;
+  parcel_height_cm?: number | null;
+  parcel_weight_kg?: number | null;
+  shipped_weight_kg?: number | null;
+  shipping_cost?: number | null;
+  shipping_cost_extra?: number | null;
   notes: string | null;
   placed_at: string;
   confirmed_at: string | null;

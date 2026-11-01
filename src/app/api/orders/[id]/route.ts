@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { getSupabaseAdminClient } from "@/lib/supabase/server";
 import { sendOrderShipped, sendOrderDelivered } from "@/lib/resend/index";
-import { computePackage } from "@/lib/shipping/package";
-import { createShiprocketOrder, generateAWB, getDeliveryRate, getShiprocketOrder, getTrackingUrl, type ShipmentItem } from "@/lib/shiprocket/index";
+import { resolveParcel, type WeighableItem } from "@/lib/shipping/package";
+import { saveShipmentCost } from "@/lib/orders/shipping-record";
+import { createShiprocketOrder, generateAWB, getCourierCost, getDeliveryRate, getShiprocketOrder, getTrackingUrl, updateShiprocketAddress, cancelShipmentAwb, cancelShiprocketOrder, type ShipmentItem } from "@/lib/shiprocket/index";
 import { cancelOnShiprocket, collectCodOnDelivery, settleEndedOrder } from "@/lib/orders/fulfillment";
 import { ENDED_STATUSES, mapShiprocketStatus, STATUS_TIMESTAMP_FIELD } from "@/lib/shiprocket/status";
 import type { Order, OrderStatus } from "@/types";
@@ -49,6 +50,20 @@ async function fulfillShiprocket(
       ? Number(srOrder.shiprocket_shipment_id)
       : null;
 
+    // The parcel that ships: computed from every unit of every item, or the
+    // box/weight the admin measured before packing (resolveParcel). One value
+    // for the Shiprocket order, the courier choice and the cost record.
+    const weighable: WeighableItem[] = (srOrder.items ?? []).map(
+      (it: { quantity: number; product?: { weight_grams?: number | null; length_cm?: number | null; breadth_cm?: number | null; height_cm?: number | null } }) => ({
+        quantity:     it.quantity,
+        weight_grams: it.product?.weight_grams,
+        length_cm:    it.product?.length_cm,
+        breadth_cm:   it.product?.breadth_cm,
+        height_cm:    it.product?.height_cm,
+      })
+    );
+    const parcel = resolveParcel(weighable, srOrder);
+
     // Step 1 — create the order on Shiprocket (only if not already pushed).
     if (!srOrder.shiprocket_order_id) {
       const items: ShipmentItem[] = (srOrder.items ?? []).map(
@@ -71,7 +86,7 @@ async function fulfillShiprocket(
         ? srOrder.order_number
         : `${srOrder.order_number}-R${attempt}`;
 
-      const created = await createShiprocketOrder({ ...(srOrder as Order), items }, channelOrderId);
+      const created = await createShiprocketOrder({ ...(srOrder as Order), items }, channelOrderId, parcel);
       shipmentId = created.shipment_id;
       update.shiprocket_order_id    = String(created.order_id);
       update.shiprocket_shipment_id = String(created.shipment_id);
@@ -91,50 +106,38 @@ async function fulfillShiprocket(
 
     // Step 2 — assign courier / generate AWB for the shipment.
     if (shipmentId) {
-      // Force the cheapest courier (the same one whose rate the customer was
-      // quoted at checkout) instead of letting Shiprocket auto-assign — so what
-      // we bill the customer matches what Shiprocket bills us. Best-effort: if
-      // the rate lookup fails, fall back to auto-assign so fulfillment isn't
-      // blocked.
-      let courierId: number | undefined;
+      const isCod = srOrder.payment_method === "cod";
+      const pincode = String(srOrder.shipping_pincode);
+      const declared = Number(srOrder.total_amount) || undefined;
+
+      // Couriers to try, in order:
+      //  1. the one checkout quoted — the customer's delivery charge came from
+      //     its rate, so shipping with it keeps the two equal;
+      //  2. today's best pick (price + RTO risk), in case (1) can't take it now;
+      //  3. Shiprocket's own auto-assign, so a parcel is never stuck.
+      // COD is passed so only couriers that can do COD to the pincode qualify.
+      const candidates: number[] = [];
+      if (srOrder.quoted_courier_id) candidates.push(Number(srOrder.quoted_courier_id));
       try {
-        // Same package sizing as checkout + Shiprocket order creation, so the
-        // courier picked here is the one whose rate the customer was quoted.
-        const wItems = (srOrder.items ?? []) as Array<{
-          quantity: number;
-          product?: { weight_grams?: number | null; length_cm?: number | null; breadth_cm?: number | null; height_cm?: number | null };
-        }>;
-        const { chargeableKg: weightKg } = computePackage(
-          wItems.map((it) => ({
-            quantity:     it.quantity,
-            weight_grams: it.product?.weight_grams,
-            length_cm:    it.product?.length_cm,
-            breadth_cm:   it.product?.breadth_cm,
-            height_cm:    it.product?.height_cm,
-          }))
-        );
-        // Pass the order's COD flag so serviceability picks a courier that can
-        // actually do COD to this pincode — otherwise generateAWB later fails to
-        // assign a prepaid-only courier for a COD shipment ("no courier could be
-        // assigned").
-        const isCod = srOrder.payment_method === "cod";
-        const rate = await getDeliveryRate(String(srOrder.shipping_pincode), weightKg, isCod, Number(srOrder.total_amount) || undefined);
-        if (rate.serviceable) courierId = rate.courierId;
+        const live = await getDeliveryRate(pincode, parcel.chargeableKg, isCod, declared);
+        if (live.serviceable && !candidates.includes(live.courierId)) candidates.push(live.courierId);
       } catch (e) {
-        console.error(`Cheapest-courier lookup failed for order ${id}; using auto-assign:`, e);
+        console.error(`Courier lookup failed for order ${id}; trying quoted courier / auto-assign:`, e);
       }
 
-      // Best-effort: if forcing the quoted cheapest courier can't be assigned
-      // (e.g. it doesn't service COD for this pincode), fall back to letting
-      // Shiprocket auto-assign its recommended courier rather than failing.
-      let awb;
-      try {
-        awb = await generateAWB(shipmentId, courierId);
-      } catch (e) {
-        if (!courierId) throw e;
-        console.error(`Forced courier ${courierId} failed for order ${id}; retrying with auto-assign:`, e);
-        awb = await generateAWB(shipmentId);
+      let awb: Awaited<ReturnType<typeof generateAWB>> | null = null;
+      let assignedId: number | null = null;
+      for (const courierId of candidates) {
+        try {
+          awb = await generateAWB(shipmentId, courierId);
+          assignedId = courierId;
+          break;
+        } catch (e) {
+          console.error(`Courier ${courierId} could not be assigned for order ${id}; trying the next option:`, e);
+        }
       }
+      if (!awb) awb = await generateAWB(shipmentId);   // auto-assign; throws if that fails too
+
       update.tracking_number = awb.awb_code;
       update.courier_name    = awb.courier_name;
       update.tracking_url    = getTrackingUrl(awb.awb_code);
@@ -156,6 +159,20 @@ async function fulfillShiprocket(
       if (!update.courier_name) {
         console.error(`Order ${id} got AWB ${awb.awb_code} with NO courier name — Delivery tab cannot attribute it.`);
       }
+
+      // What this shipment costs us, for the shipping-cost report: Shiprocket's
+      // live price for the courier that got the AWB, on the parcel we declared.
+      // Best-effort — a lookup failure only leaves the cost blank.
+      let shippingCost: number | null = null;
+      const costCourier = awb.courier_id ?? assignedId;
+      if (costCourier) {
+        try {
+          shippingCost = await getCourierCost(pincode, parcel.chargeableKg, isCod, declared, costCourier);
+        } catch (e) {
+          console.error(`Shipping cost lookup failed for order ${id}:`, e);
+        }
+      }
+      await saveShipmentCost(admin, id, { shipped_weight_kg: parcel.chargeableKg, shipping_cost: shippingCost });
     }
 
     return { update, error: null };
@@ -314,6 +331,219 @@ export async function PATCH(
       updated_by: user.id,
     });
     return NextResponse.json({ data: updated });
+  }
+
+  // ── Parcel override ─────────────────────────────────────────────────────
+  // The admin measured the real box / weight before packing. Used for the
+  // Shiprocket order, the courier choice and the cost record. Locked once the
+  // order is on Shiprocket — the parcel has been declared by then.
+  if (action === "set_parcel") {
+    const num = (v: unknown) => (v === null || v === undefined || v === "" ? null : Number(v));
+    const l = num(body.length_cm), b = num(body.breadth_cm), h = num(body.height_cm), w = num(body.weight_kg);
+    for (const v of [l, b, h, w]) {
+      if (v !== null && (!Number.isFinite(v) || v <= 0 || v > 1000)) {
+        return NextResponse.json({ error: "Enter sizes and weight as numbers above 0." }, { status: 400 });
+      }
+    }
+    const boxCount = [l, b, h].filter((v) => v !== null).length;
+    if (boxCount !== 0 && boxCount !== 3) {
+      return NextResponse.json({ error: "Enter all three box sides, or leave all three empty." }, { status: 400 });
+    }
+
+    const { data: o } = await admin.from("orders").select("status, shiprocket_order_id").eq("id", id).single();
+    if (!o) return NextResponse.json({ error: "Order not found" }, { status: 404 });
+    if (o.shiprocket_order_id || !["placed", "confirmed", "packed"].includes(o.status)) {
+      return NextResponse.json(
+        { error: "The parcel was already sent to Shiprocket — change it in the Shiprocket panel." },
+        { status: 400 }
+      );
+    }
+
+    const { error } = await admin.from("orders").update({
+      parcel_length_cm: l, parcel_breadth_cm: b, parcel_height_cm: h, parcel_weight_kg: w,
+    }).eq("id", id);
+    if (error) {
+      return NextResponse.json(
+        { error: `${error.message} — run database/shipping_quality.sql in Supabase first.` },
+        { status: 500 }
+      );
+    }
+    await admin.from("order_status_history").insert({
+      order_id:   id,
+      status:     o.status,
+      note:       boxCount || w
+        ? `Parcel set by admin: ${boxCount ? `${l}×${b}×${h} cm` : "box as computed"}${w ? `, ${w} kg` : ""}`
+        : "Parcel override removed — computed box will be used",
+      updated_by: user.id,
+    });
+    return NextResponse.json({ ok: true });
+  }
+
+  // ── Extra shipping charge ───────────────────────────────────────────────
+  // What Shiprocket charged on top later (weight discrepancy etc.). Their API
+  // doesn't expose it, so the admin copies it from the Shiprocket panel.
+  if (action === "set_shipping_extra") {
+    const amount = Number(body.amount);
+    if (!Number.isFinite(amount) || amount < 0 || amount > 100000) {
+      return NextResponse.json({ error: "Enter a valid amount." }, { status: 400 });
+    }
+    const { error } = await admin.from("orders").update({ shipping_cost_extra: amount }).eq("id", id);
+    if (error) {
+      return NextResponse.json(
+        { error: `${error.message} — run database/shipping_quality.sql in Supabase first.` },
+        { status: 500 }
+      );
+    }
+    return NextResponse.json({ ok: true });
+  }
+
+  // ── Delivery address ────────────────────────────────────────────────────
+  // Allowed until the parcel leaves the warehouse:
+  //  • not on Shiprocket yet  → just the order;
+  //  • on Shiprocket, same pincode → Shiprocket's address-update API too;
+  //  • on Shiprocket, new pincode  → the courier/AWB were chosen for the old
+  //    pincode, so the old shipment is cancelled and a new one created
+  //    (only with `reship: true`, after the admin confirms).
+  // The customer's delivery charge never changes here — it was already paid
+  // or agreed at checkout.
+  if (action === "update_address") {
+    const raw = (body.address ?? {}) as Record<string, unknown>;
+    const t = (v: unknown) => (typeof v === "string" ? v.trim() : "");
+    const a = {
+      shipping_full_name: t(raw.full_name),
+      shipping_phone:     t(raw.phone).replace(/[\s-]/g, "").replace(/^(\+91|91)(?=\d{10}$)/, ""),
+      shipping_address1:  t(raw.address1),
+      shipping_address2:  t(raw.address2) || null,
+      shipping_city:      t(raw.city),
+      shipping_state:     t(raw.state),
+      shipping_pincode:   t(raw.pincode),
+    };
+    if (!a.shipping_full_name || !a.shipping_address1 || !a.shipping_city || !a.shipping_state) {
+      return NextResponse.json({ error: "Name, address, city and state are required." }, { status: 400 });
+    }
+    if (!/^[6-9]\d{9}$/.test(a.shipping_phone)) {
+      return NextResponse.json({ error: "Enter a valid 10-digit mobile number." }, { status: 400 });
+    }
+    if (!/^\d{6}$/.test(a.shipping_pincode)) {
+      return NextResponse.json({ error: "Enter a valid 6-digit pincode." }, { status: 400 });
+    }
+
+    const { data: o } = await admin
+      .from("orders")
+      .select(`*, items:order_items(quantity, product:products(weight_grams, length_cm, breadth_cm, height_cm))`)
+      .eq("id", id)
+      .single();
+    if (!o) return NextResponse.json({ error: "Order not found" }, { status: 404 });
+    if (!["placed", "confirmed", "packed"].includes(o.status)) {
+      return NextResponse.json(
+        { error: "The parcel has already left (or the order has ended) — the address can no longer be changed." },
+        { status: 400 }
+      );
+    }
+
+    const pincodeChanged = a.shipping_pincode !== o.shipping_pincode;
+    const isCod = o.payment_method === "cod";
+
+    // A new pincode must be deliverable for this payment mode before anything
+    // is touched; its best courier becomes the order's quoted courier.
+    let newQuote: Awaited<ReturnType<typeof getDeliveryRate>> | null = null;
+    if (pincodeChanged) {
+      const parcel = resolveParcel(
+        (o.items ?? []).map((it: { quantity: number; product?: WeighableItem }) => ({ ...it.product, quantity: it.quantity })),
+        o
+      );
+      try {
+        newQuote = await getDeliveryRate(a.shipping_pincode, parcel.chargeableKg, isCod, Number(o.total_amount) || undefined);
+      } catch (e) {
+        return NextResponse.json(
+          { error: `Couldn't check the new pincode with Shiprocket: ${e instanceof Error ? e.message : e}` },
+          { status: 502 }
+        );
+      }
+      if (!newQuote.serviceable) {
+        return NextResponse.json(
+          { error: `No courier delivers ${isCod ? "Cash on Delivery " : ""}to pincode ${a.shipping_pincode}.` },
+          { status: 422 }
+        );
+      }
+    }
+
+    const update: Record<string, unknown> = { ...a };
+    let reshipped = false;
+
+    if (o.shiprocket_order_id && !pincodeChanged) {
+      try {
+        await updateShiprocketAddress(o.shiprocket_order_id, {
+          name: a.shipping_full_name, phone: a.shipping_phone,
+          address1: a.shipping_address1, address2: a.shipping_address2,
+          city: a.shipping_city, state: a.shipping_state, pincode: a.shipping_pincode,
+        });
+      } catch (e) {
+        return NextResponse.json(
+          { error: `Shiprocket refused the change, nothing was updated: ${e instanceof Error ? e.message : e}` },
+          { status: 502 }
+        );
+      }
+    } else if (o.shiprocket_order_id && pincodeChanged) {
+      if (body.reship !== true) {
+        return NextResponse.json(
+          {
+            needs_reship: true,
+            error: "The pincode changed after the order went to Shiprocket. The current shipment" +
+              (o.tracking_number ? ` (AWB ${o.tracking_number})` : "") +
+              " will be cancelled and a new one created for the new address.",
+          },
+          { status: 409 }
+        );
+      }
+      try {
+        if (o.tracking_number) await cancelShipmentAwb(o.tracking_number);
+        await cancelShiprocketOrder(o.shiprocket_order_id);
+      } catch (e) {
+        return NextResponse.json(
+          { error: `Couldn't cancel the old shipment, nothing was changed: ${e instanceof Error ? e.message : e}` },
+          { status: 502 }
+        );
+      }
+      // Detach the old shipment; its late webhooks are ignored because they
+      // carry a Shiprocket order id this order no longer holds.
+      Object.assign(update, {
+        shiprocket_order_id: null, shiprocket_shipment_id: null,
+        tracking_number: null, tracking_url: null, courier_name: null,
+      });
+      reshipped = true;
+    }
+
+    const { error } = await admin.from("orders").update(update).eq("id", id);
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+    if (newQuote?.serviceable) {
+      // Best-effort (needs database/shipping_quality.sql).
+      await admin.from("orders").update({
+        quoted_courier_id: newQuote.courierId, quoted_courier_name: newQuote.courierName,
+        quoted_rate: newQuote.rate,
+      }).eq("id", id);
+    }
+
+    const before = `${o.shipping_address1}, ${o.shipping_city} ${o.shipping_pincode}`;
+    const after  = `${a.shipping_address1}, ${a.shipping_city} ${a.shipping_pincode}`;
+    await admin.from("order_status_history").insert({
+      order_id:   id,
+      status:     o.status,
+      note:       `Delivery address changed by admin: ${before} → ${after}` +
+        (reshipped ? ` — old shipment${o.tracking_number ? ` (AWB ${o.tracking_number})` : ""} cancelled` : ""),
+      updated_by: user.id,
+    });
+
+    // A packed order needs a live shipment for the new address straight away.
+    let shiprocketError: string | null = null;
+    if (reshipped && o.status === "packed") {
+      const { update: srUpdate, error: srError } = await fulfillShiprocket(admin, id);
+      if (Object.keys(srUpdate).length > 0) await admin.from("orders").update(srUpdate).eq("id", id);
+      shiprocketError = srError;
+    }
+
+    return NextResponse.json({ ok: true, reshipped, shiprocket_error: shiprocketError });
   }
 
   // Manually set / correct the AWB + courier at ANY status. Shiprocket can fail

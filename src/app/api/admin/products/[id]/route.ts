@@ -1,3 +1,4 @@
+import { productParcelError } from "@/lib/shipping/package";
 import { NextRequest, NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { getSupabaseServerClient, getSupabaseAdminClient } from "@/lib/supabase/server";
@@ -37,6 +38,10 @@ export async function PATCH(
 
   const b = await req.json();
   const admin = getSupabaseAdminClient();
+
+  // Only the parcel fields actually sent are checked — a flag toggle sends none.
+  const parcelError = productParcelError(b, true);
+  if (parcelError) return NextResponse.json({ error: parcelError }, { status: 400 });
 
   // Build the update payload only from fields that were sent.
   const fields: Record<string, unknown> = {};

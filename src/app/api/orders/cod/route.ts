@@ -1,6 +1,7 @@
+import { saveQuote } from "@/lib/orders/shipping-record";
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServerClient, getSupabaseAdminClient } from "@/lib/supabase/server";
-import { getCartDeliveryQuote } from "@/lib/shipping/index";
+import { getCartDeliveryQuote, type DeliveryQuote } from "@/lib/shipping/index";
 import { computeOrderPricing } from "@/lib/orders/pricing";
 import { sendOrderConfirmation } from "@/lib/resend/index";
 import type { CartItem, Address } from "@/types";
@@ -52,8 +53,9 @@ export async function POST(req: NextRequest) {
   // Recompute the COD delivery charge server-side (cod = true). A pincode with no
   // COD courier blocks the order — the customer should use online payment instead.
   let shipping_charge: number;
+  let quote: DeliveryQuote;
   try {
-    const quote = await getCartDeliveryQuote(admin, items, address.pincode, true, { goods: subtotal - discount });
+    quote = await getCartDeliveryQuote(admin, items, address.pincode, true, { goods: subtotal - discount });
     if (!quote.serviceable) {
       return NextResponse.json(
         { error: "Cash on Delivery isn't available for this pincode. Please use online payment." },
@@ -105,6 +107,10 @@ export async function POST(req: NextRequest) {
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  // Which courier + cost this charge came from — used at pack time and in the
+  // shipping-cost report. Best-effort; never blocks the order.
+  await saveQuote(admin, dbOrder.id, quote);
 
   // Build order items from server-priced line items (real DB prices).
   const orderItemsToInsert = pricing.items.map(item => ({
