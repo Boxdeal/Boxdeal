@@ -82,7 +82,7 @@ export function HeroBanner({ banners }: Props) {
           <Image
             key={banner.id}
             src={banner.image_url}
-            alt={banner.title}
+            alt={banner.title || "BoxDeal offer"}
             fill
             priority={i === 0}
             fetchPriority={i === 0 ? "high" : "low"}
@@ -101,7 +101,7 @@ export function HeroBanner({ banners }: Props) {
         {/* Whole-banner click target → product page (sits above images, below controls) */}
         <Link
           href={b.cta_link}
-          aria-label={b.title}
+          aria-label={b.title || "View offer"}
           className="absolute inset-0 z-10"
         />
 

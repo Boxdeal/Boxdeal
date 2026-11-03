@@ -68,7 +68,7 @@ async function getHomeData() {
       .eq("is_active", true)
       .eq("banner_type", "hero")
       .order("sort_order")
-      .limit(5),
+      .limit(6),
     supabase
       .from("banners")
       .select("id, badge, title, mid_heading, subtitle, cta_text, cta_link, image_url, text_theme, sort_order, is_active, starts_at, ends_at, created_at, updated_at")
