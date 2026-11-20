@@ -43,6 +43,8 @@ const SLUG_IMAGE: Record<string, string> = {
   speakers:                "speaker.jpg",
   tablet:                  "tablet.jpg",
   tablets:                 "tablet.jpg",
+  "kitchen-appliances":    "kitchen-appliances.jpg",
+  "kitchen-appliance":     "kitchen-appliances.jpg",
 };
 
 // Fallback icons for slugs without bucket images

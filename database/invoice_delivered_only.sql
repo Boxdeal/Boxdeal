@@ -76,6 +76,7 @@ BEGIN
       AND o.invoice_number IS NULL;
   END IF;
 
+
   RETURN QUERY
     SELECT o.invoice_number, o.invoice_date FROM orders o WHERE o.id = p_order_id;
 END;
