@@ -56,6 +56,7 @@ const categoryBaseColors: Record<string, string> = {
   "graphic-pads": "#f95702",
   "landline-phones": "#5047e5",
   keyboard: "#6c4121",
+  "kitchen-appliances": "#feb302",
 };
 
 // Build a vibrant, glossy left-to-right gradient from a base colour. The full

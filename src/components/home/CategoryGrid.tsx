@@ -43,8 +43,6 @@ const SLUG_IMAGE: Record<string, string> = {
   speakers:                "speaker.jpg",
   tablet:                  "tablet.jpg",
   tablets:                 "tablet.jpg",
-  "kitchen-appliances":    "kitchen-appliances.jpg",
-  "kitchen-appliance":     "kitchen-appliances.jpg",
 };
 
 // Fallback icons for slugs without bucket images
@@ -83,7 +81,14 @@ export function CategoryGrid({ categories }: Props) {
 
         <div className="grid grid-cols-4 gap-3 pb-1 lg:grid-cols-[repeat(auto-fit,minmax(90px,1fr))] lg:overflow-visible lg:pb-0">
           {categories.map((cat) => {
-            const imageFile = SLUG_IMAGE[cat.slug];
+            // Prefer the image set on the category in the DB (image_url).
+            // Fall back to the bundled shop-by-category bucket file, then an icon.
+            const bucketFile = SLUG_IMAGE[cat.slug];
+            const imageSrc = cat.image_url?.trim()
+              ? cat.image_url.trim()
+              : bucketFile
+                ? bucketUrl(bucketFile)
+                : null;
             const FallbackIcon = SLUG_ICON[cat.slug] ?? ShoppingBag;
 
             return (
@@ -93,13 +98,13 @@ export function CategoryGrid({ categories }: Props) {
                 className="group flex flex-shrink-0 flex-col items-center gap-2.5 rounded-xl border border-gray-100 bg-white px-3 py-4 text-center shadow-sm transition-all duration-200 hover:border-brand-200 hover:shadow-md hover:-translate-y-1 lg:flex-shrink"
               >
                 <div className={`flex h-10 sm:h-12 w-10 sm:w-12 items-center justify-center rounded-xl overflow-hidden transition-all duration-200 ${
-                  imageFile
+                  imageSrc
                     ? "bg-orange-50 group-hover:bg-orange-100"
                     : "bg-orange-50 group-hover:bg-brand-500"
                 }`}>
-                  {imageFile ? (
+                  {imageSrc ? (
                     <Image
-                      src={bucketUrl(imageFile)}
+                      src={imageSrc}
                       alt={cat.name}
                       width={48}
                       height={48}
