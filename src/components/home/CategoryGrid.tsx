@@ -81,14 +81,10 @@ export function CategoryGrid({ categories }: Props) {
 
         <div className="grid grid-cols-4 gap-3 pb-1 lg:grid-cols-[repeat(auto-fit,minmax(90px,1fr))] lg:overflow-visible lg:pb-0">
           {categories.map((cat) => {
-            // Prefer the image set on the category in the DB (image_url).
-            // Fall back to the bundled shop-by-category bucket file, then an icon.
+            // Shop by Category uses only the dedicated shop-by-category bucket
+            // images (not the category's banner image_url), falling back to an icon.
             const bucketFile = SLUG_IMAGE[cat.slug];
-            const imageSrc = cat.image_url?.trim()
-              ? cat.image_url.trim()
-              : bucketFile
-                ? bucketUrl(bucketFile)
-                : null;
+            const imageSrc = bucketFile ? bucketUrl(bucketFile) : null;
             const FallbackIcon = SLUG_ICON[cat.slug] ?? ShoppingBag;
 
             return (
